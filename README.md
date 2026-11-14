@@ -45,6 +45,15 @@ Winetricks download hosts. It intentionally fails if an installer or an
 integrity check fails. `WINE_PACKAGE_VERSION` is a build argument if the pinned
 WineHQ package needs to be changed.
 
+## CI and releases
+
+Pull requests build the image and smoke-test the Selkies endpoint and BYOND
+pager, without logging in to a game server. Publishing a GitHub release builds
+and tests the image again, then pushes it to
+`ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also
+update `latest`. Publishing requires Actions permission to write packages;
+check third-party redistribution terms before creating a release.
+
 ## Private single-player experiment
 
 Run the image bound only to localhost:
