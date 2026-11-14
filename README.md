@@ -12,24 +12,36 @@ self-hosting and is not ready for multi-user deployment.
 
 The image uses the Selkies desktop image for a headless X11 display, audio and
 browser streaming. It installs Wine 11, Visual C++ 2022, DirectX components,
-DXVK and the supplied BYOND and WebView2 installers. It targets `linux/amd64`
+DXVK, BYOND and the supplied WebView2 installer. It targets `linux/amd64`
 and an x64 Wine prefix; this combination has not yet been validated end to end.
 
-Download the [Windows BYOND installer](https://www.byond.com/download/)
-matching your game server and Microsoft's
-[**x64 WebView2 Evergreen standalone installer**](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-from their official sources.
-Check the licensing terms for your intended use. Place them in this directory
-as `installers/byond.exe` and `installers/webview2-x64.exe`; do not commit them.
-BuildKit mounts these files during installation rather than copying the
-installers into an image layer. The installed software is still present in the
+Download Microsoft's [**x64 WebView2 Evergreen standalone installer**](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+and place it at `installers/webview2-x64.exe`; do not commit it.
+BuildKit mounts it during installation rather than copying it into an image
+layer. The installed software is still present in the
 image and its redistribution terms must be checked before publishing it.
 
 ```sh
+mkdir -p installers
 docker build --platform linux/amd64 -t tgstation-gateway-player .
 ```
 
-The build requires network access to WineHQ, GitHub, Microsoft and other
+The build downloads the portable Windows BYOND archive from BYOND, defaulting
+to version `516.1688`. To select a version from a shell environment variable,
+set `BYOND_VERSION` and pass it as a build argument:
+
+```sh
+export BYOND_VERSION=516.1688
+docker build --platform linux/amd64 --build-arg BYOND_VERSION \
+  -t tgstation-gateway-player .
+```
+
+Changing the environment of a running container does not replace the client;
+rebuild the image to change versions. You can also pass a trusted checksum with
+`--build-arg BYOND_SHA256=<sha256>`. Without it, the download is checked for ZIP
+corruption but not against a known digest.
+
+The build requires network access to BYOND, WineHQ, GitHub, Microsoft and other
 Winetricks download hosts. It intentionally fails if an installer or an
 integrity check fails. `WINE_PACKAGE_VERSION` is a build argument if the pinned
 WineHQ package needs to be changed.

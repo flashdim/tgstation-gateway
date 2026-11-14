@@ -1,12 +1,10 @@
 #!/bin/sh
 set -eu
 
-for installer in /installers/byond.exe /installers/webview2-x64.exe; do
-    if [ ! -r "$installer" ]; then
-        echo "Missing or unreadable installer: $installer" >&2
-        exit 1
-    fi
-done
+if [ ! -r /installers/webview2-x64.exe ]; then
+    echo "Missing or unreadable installer: /installers/webview2-x64.exe" >&2
+    exit 1
+fi
 
 export WINEDEBUG=-all
 wineboot --init
@@ -15,10 +13,6 @@ winetricks -q vcrun2022 dxtrans dxvk2071
 wine /installers/webview2-x64.exe /silent /install
 wineserver -k
 wineserver --wait
-wine /installers/byond.exe /S
-wineserver -k
-wineserver --wait
-
 if [ ! -f "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" ]; then
     echo "BYOND installation did not produce the expected executable" >&2
     exit 1
