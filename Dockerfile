@@ -23,12 +23,11 @@ RUN selkies-privileged-files release && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
-# The script is pinned; its installers can still change upstream. Fail rather
-# than bypassing Winetricks' integrity checks if an upstream download changes.
+# Pin a Winetricks revision that includes the WebView2 verb.
 RUN curl -fsSL --retry 3 \
-      https://raw.githubusercontent.com/Winetricks/winetricks/20260125/src/winetricks \
+      https://raw.githubusercontent.com/Winetricks/winetricks/f3890f670867b5ffbc3938726db45c0f7d16c8ba/src/winetricks \
       -o /usr/local/bin/winetricks && \
-    echo '431f82fc74000e6c864409f1d8fb495d696c03928808e3e8acffc45179312a7b  /usr/local/bin/winetricks' | sha256sum -c - && \
+    echo '672a1ff4442e8691a3ffc0e6860137e201a1d1227e9b3044245f1731e9e9837e  /usr/local/bin/winetricks' | sha256sum -c - && \
     chmod 755 /usr/local/bin/winetricks
 
 COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
@@ -49,6 +48,4 @@ ENV BYOND_VERSION=${BYOND_VERSION}
 
 RUN /usr/local/bin/install-byond
 
-# The WebView2 installer is supplied locally and mounted only during this step.
-RUN --mount=type=bind,source=installers,target=/installers,readonly \
-    xvfb-run -a /usr/local/bin/install-client
+RUN xvfb-run -a /usr/local/bin/install-client

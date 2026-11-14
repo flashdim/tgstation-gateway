@@ -11,18 +11,17 @@ self-hosting and is not ready for multi-user deployment.
 ## Build the player image
 
 The image uses the Selkies desktop image for a headless X11 display, audio and
-browser streaming. It installs Wine 11, Visual C++ 2022, DirectX components,
-DXVK, BYOND and the supplied WebView2 installer. It targets `linux/amd64`
-and an x64 Wine prefix; this combination has not yet been validated end to end.
+browser streaming. It installs Wine 11 and uses Winetricks to install Visual
+C++ 2022, DirectX components, DXVK and WebView2. It also installs BYOND. It
+targets `linux/amd64` and an x64 Wine prefix; this combination has not yet been
+validated end to end.
 
-Download Microsoft's [**x64 WebView2 Evergreen standalone installer**](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-and place it at `installers/webview2-x64.exe`; do not commit it.
-BuildKit mounts it during installation rather than copying it into an image
-layer. The installed software is still present in the
-image and its redistribution terms must be checked before publishing it.
+Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
+The bootstrapper is not checksum-pinned by Winetricks and downloads a current
+runtime, so builds are not fully reproducible. Third-party software remains in
+the image; check its licensing and redistribution terms before publishing it.
 
 ```sh
-mkdir -p installers
 docker build --platform linux/amd64 -t tgstation-gateway-player .
 ```
 
