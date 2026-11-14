@@ -56,7 +56,18 @@ check third-party redistribution terms before creating a release.
 
 ## Private single-player experiment
 
-Run the image bound only to localhost:
+The Compose example builds and runs one player container bound to localhost:
+
+```sh
+docker compose up --build
+```
+
+Set `BYOND_VERSION` (and optionally `BYOND_SHA256`) before building to select a
+different BYOND version. Set `GATEWAY_PORT` to change the localhost port.
+Rebuild with `docker compose up --build` after changing the BYOND version.
+Run `docker compose down` to remove the container and its player data.
+
+Alternatively, run the image built above directly:
 
 ```sh
 docker run --rm --init --shm-size=2g \
