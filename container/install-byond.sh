@@ -15,11 +15,18 @@ case "$minor" in
     ''|*[!0-9]*) echo "Invalid BYOND_VERSION: expected numeric major.minor" >&2; exit 1 ;;
 esac
 
+base_url="${BYOND_DOWNLOAD_BASE_URL-https://www.byond.com/download/build}"
+case "$base_url" in
+    https://?*) ;;
+    *) echo "Invalid BYOND_DOWNLOAD_BASE_URL: expected an HTTPS URL" >&2; exit 1 ;;
+esac
+base_url="${base_url%/}"
+
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 archive="$workdir/byond.zip"
 curl -fsSL --retry 3 \
-    "https://www.byond.com/download/build/$major/${version}_byond.zip" \
+    "$base_url/$major/${version}_byond.zip" \
     -o "$archive"
 
 if [ -n "${BYOND_SHA256:-}" ]; then

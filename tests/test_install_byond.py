@@ -32,18 +32,22 @@ class InstallByondTest(unittest.TestCase):
             archive.writestr(path, b"BYOND fixture")
             archive.writestr("byond/bin/byondcore.dll", b"fixture DLL")
 
-    def install(self, version="516.1688", checksum=""):
+    def install(self, version="516.1688", checksum="", base_url=None):
+        env = {
+            **os.environ,
+            "BYOND_VERSION": version,
+            "BYOND_SHA256": checksum,
+            "WINEPREFIX": str(self.prefix),
+            "PATH": f"{self.bin}:{os.environ['PATH']}",
+            "FIXTURE": str(self.fixture),
+            "URL_FILE": str(self.url_file),
+        }
+        env.pop("BYOND_DOWNLOAD_BASE_URL", None)
+        if base_url is not None:
+            env["BYOND_DOWNLOAD_BASE_URL"] = base_url
         return subprocess.run(
             ["sh", str(ROOT / "container/install-byond.sh")],
-            env={
-                **os.environ,
-                "BYOND_VERSION": version,
-                "BYOND_SHA256": checksum,
-                "WINEPREFIX": str(self.prefix),
-                "PATH": f"{self.bin}:{os.environ['PATH']}",
-                "FIXTURE": str(self.fixture),
-                "URL_FILE": str(self.url_file),
-            },
+            env=env,
             capture_output=True,
             text=True,
             timeout=10,
@@ -61,6 +65,24 @@ class InstallByondTest(unittest.TestCase):
         byond = self.prefix / "drive_c/Program Files (x86)/BYOND/bin"
         self.assertEqual((byond / "byond.exe").read_bytes(), b"BYOND fixture")
         self.assertTrue((byond / "byondcore.dll").is_file())
+
+    def test_extracts_requested_version_from_mirror(self):
+        self.make_archive()
+        result = self.install(base_url="https://byond-builds.dm-lang.org/")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.url_file.read_text().strip(),
+            "https://byond-builds.dm-lang.org/516/516.1688_byond.zip",
+        )
+        self.assertTrue(
+            (self.prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe").is_file()
+        )
+
+    def test_rejects_non_https_download_url(self):
+        result = self.install(base_url="http://example.org")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Invalid BYOND_DOWNLOAD_BASE_URL", result.stderr)
+        self.assertFalse(self.url_file.exists())
 
     def test_rejects_invalid_versions_before_downloading(self):
         for version in ("516", "516.", ".1688", "516.1688.1", "516:1.1688", "../x"):

@@ -40,6 +40,10 @@ rebuild the image to change versions. You can also pass a trusted checksum with
 `--build-arg BYOND_SHA256=<sha256>`. Without it, the download is checked for ZIP
 corruption but not against a known digest.
 
+Local builds use BYOND's official download host by default. To use the community
+mirror instead, pass `--build-arg BYOND_DOWNLOAD_BASE_URL=https://byond-builds.dm-lang.org`.
+The mirror is independently operated; consider supplying a trusted checksum.
+
 The build requires network access to BYOND, WineHQ, GitHub, Microsoft and other
 Winetricks download hosts. It intentionally fails if an installer or an
 integrity check fails. `WINE_PACKAGE_VERSION` is a build argument if the pinned
@@ -47,7 +51,8 @@ WineHQ package needs to be changed.
 
 ## CI and releases
 
-Pull requests build the image and smoke-test the Selkies endpoint and BYOND
+GitHub Actions builds use the community BYOND mirror. Pull requests build the
+image and smoke-test the Selkies endpoint and BYOND
 pager, without logging in to a game server. Publishing a GitHub release builds
 and tests the image again, then pushes it to
 `ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also

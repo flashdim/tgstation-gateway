@@ -33,6 +33,8 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: tgstation-gateway-player:ci
+          build-args: |
+            BYOND_DOWNLOAD_BASE_URL=https://byond-builds.dm-lang.org
 
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
