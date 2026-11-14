@@ -2,12 +2,11 @@
 
 An experimental browser-accessible BYOND client for tgstation. The intended
 design is a separate, disposable Wine/BYOND container for each player, with a
-session manager and Traefik handling access. The game server and
-tgstation-server remain separate.
+session manager. The game server and tgstation-server remain separate.
 
 **Current scope:** a single-player Docker image framework. Session creation,
-Traefik integration, session ownership checks, resource limits and cleanup
-are not implemented. This is not ready for public or multi-user deployment.
+resource limits and cleanup are not implemented. This is intended for private
+self-hosting and is not ready for multi-user deployment.
 
 ## Build the player image
 
@@ -37,34 +36,30 @@ WineHQ package needs to be changed.
 
 ## Private single-player experiment
 
-Set a unique password in your shell without putting it in the command history,
-then run the image bound only to localhost:
+Run the image bound only to localhost:
 
 ```sh
-read -rs SELKIES_BASIC_AUTH_PASSWORD; echo
-export SELKIES_BASIC_AUTH_PASSWORD
 docker run --rm --init --shm-size=2g \
   -p 127.0.0.1:8080:8080 \
-  -e SELKIES_BASIC_AUTH_USER=player \
-  -e SELKIES_BASIC_AUTH_PASSWORD \
   tgstation-gateway-player
 ```
 
-Open `https://localhost:8080` and accept the self-signed certificate. The
-container starts the BYOND pager; sign in there and connect to your server.
+Open `http://localhost:8080`. The container starts the BYOND pager; sign in
+there and connect to your server.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
 Selkies uses WebSockets by default. Software rendering may be too slow for
 DXVK; GPU access and hardware-specific configuration require separate testing.
 The image exposes a desktop environment, not a hardened application sandbox.
-Do not expose it directly to the internet or share a container between players.
-Traefik authentication must not be mistaken for per-session authorization.
+The stream is unprotected by default. Operators are responsible for restricting
+access and securing connections outside this project. Do not expose it directly
+to the internet or share a container between players.
 
 ## Next milestones
 
 Validate login, map rendering, TGUI/WebView2, sound and input against a real
 server, then measure per-player memory, CPU/GPU usage and bandwidth. Test two
 independent sessions for shared IP and BYOND computer-ID collisions before
-designing ban handling. A future manager must authorize session ownership,
-including streaming connections, and enforce isolation, limits and cleanup.
+designing ban handling. A future manager must enforce isolation, limits and
+cleanup; operators remain responsible for access controls.

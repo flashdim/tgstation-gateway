@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
+# SELKIES_ENABLE_BASIC_AUTH is a boolean, not a secret.
 # The first milestone is one BYOND client per container, not a session manager.
 FROM ghcr.io/selkies-project/selkies/desktop:2.2.1-ubuntu26.04@sha256:f7a7b11dadbeca42114a09ae390457cd7e50af2b8f534c3ebae7b1d14b9851a4
 
@@ -36,6 +38,8 @@ COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/ru
 USER 1000
 ENV WINEPREFIX=/home/ubuntu/.wine \
     WINEARCH=win64 \
+    SELKIES_ENABLE_HTTPS=false \
+    SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false
 
 # Installers are supplied locally and mounted only during this build step.
