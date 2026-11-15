@@ -8,5 +8,6 @@ services:
     shm_size: 2gb
     environment:
       BYOND_SERVER: ${BYOND_SERVER:-}
+      BYOND_WEBVIEW2_GPU: ${BYOND_WEBVIEW2_GPU:-0}
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"

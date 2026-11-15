@@ -205,6 +205,22 @@ host drivers. GPU access and BYOND rendering have not been verified; the
 health check cannot establish either. To return to software rendering, recreate
 the container using only `examples/compose.yaml`.
 
+To also try the experimental WebView2 GPU flags from
+[Wine-Byond-help](https://github.com/kinggoldcatter/Wine-Byond-help/blob/main/issues.md),
+set `BYOND_WEBVIEW2_GPU=1` before recreating the GPU-enabled container:
+
+```sh
+export BYOND_WEBVIEW2_GPU=1
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --force-recreate
+```
+
+This sets a Wine-prefix WebView2 policy for all WebView2 applications in the
+container, bypassing the GPU blocklist and disabling DirectComposition. It may
+increase memory use, and its effect on BYOND rendering is unverified. It does
+not disable Chromium site isolation. To disable the experiment, unset
+`BYOND_WEBVIEW2_GPU` and recreate the container; restarting alone retains its
+modified Wine prefix. This does not resolve server authentication failures.
+
 Selkies uses WebSockets by default. Software rendering may be slow.
 The image exposes a desktop environment, not a hardened application sandbox.
 The stream is unprotected by default. Operators are responsible for restricting
