@@ -19,17 +19,27 @@ choices and performance targets remain open until supported by measurements.
 
 ## 1. Player image foundation — in progress
 
-Provide an independently usable, single-player Wine/BYOND desktop image.
+Provide an independently usable, single-player Wine/BYOND image.
 
 - Build a version-selectable BYOND client from the community mirror with Wine,
   Winetricks dependencies and browser streaming; support an optional checksum.
-- Start the BYOND pager, expose the streaming endpoint and provide a local
-  Compose example.
-- Build and smoke-test the image in CI and publish the tested image on release.
+- Start the BYOND pager or connect directly to an operator-configured server;
+  expose the streaming endpoint and provide local Compose examples.
+- Use a desktop-free X11 session with Openbox and a pager tray; support optional
+  AMD/Intel GPU access.
+- Build and smoke-test the image in CI, publish a tested development image and
+  publish the tested image on release.
+
+**Progress:** CI has built, smoke-tested and published the desktop-free `dev`
+image. A user reports that it works; earlier testing confirmed that removing
+Selkies' `LD_PRELOAD` from Wine restored game and stat-panel rendering, and
+that audio worked with the LXQt image. A direct launch to the configured host
+has been observed. The release publication path and a complete authenticated
+gameplay session remain unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
-build, configuration and limitations documented. CI has demonstrated this
-smoke test; it does not demonstrate interactive play or the release publish.
+build, configuration and limitations documented. The smoke test does not
+demonstrate interactive play or the release publish.
 
 ## 2. Verify real gameplay
 
@@ -38,7 +48,8 @@ building session orchestration around it.
 
 - Manually verify browser connection, BYOND login and joining a test server.
 - Verify map rendering, TGUI/WebView2, keyboard and mouse input, sound,
-  disconnect and reconnect; record supported versions and limitations.
+  dialogs, pager/tray behavior, disconnect and reconnect; record supported
+  versions and limitations.
 - Measure startup time, responsiveness and per-player CPU, memory, GPU and
   bandwidth requirements. Compare software and available GPU rendering rather
   than assuming either is sufficient.

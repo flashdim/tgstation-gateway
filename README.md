@@ -16,8 +16,7 @@ The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It installs
 Wine Staging 11.21 and uses Winetricks to install Visual C++ 2022,
 DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
-It targets `linux/amd64` and an x64 Wine prefix; this combination has not yet
-been validated end to end. DXVK is not installed for this rendering experiment;
+It targets `linux/amd64` and an x64 Wine prefix. DXVK is not installed;
 Wine's built-in Direct3D implementation is used instead. See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
@@ -102,9 +101,10 @@ The formatters update files when needed; run the command again to confirm they
 pass.
 
 Pull requests and pushes to `main` build the image and smoke-test the Selkies
-endpoint, Openbox and BYOND pager, without logging in to a game server. CI caches the
-initialized Wine prefix without BYOND in GitHub Actions; the first successful
-build populates the cache, and branch access and cache eviction affect reuse.
+endpoint, Openbox, pager tray and BYOND pager, without logging in to a game
+server. CI caches the initialized Wine prefix without BYOND in GitHub Actions;
+the first successful build populates the cache, and branch access and cache
+eviction affect reuse.
 After formatting and image checks pass, CI publishes the tested image to
 `ghcr.io/flashdim/tgstation-gateway:dev` for pushes or manual runs on `main`
 and pull requests from this repository. Fork pull requests do not publish.
@@ -143,7 +143,7 @@ Set `GATEWAY_PORT` to change the localhost port. Run
 player data. The published image uses its build-time BYOND version; to select
 another version, build and run a local image as described above and below.
 
-To attempt a direct connection instead of starting the pager, set
+To connect directly instead of starting the pager, set
 `BYOND_SERVER` to a hostname or IP address and port, optionally prefixed with
 `byond://`:
 
@@ -168,8 +168,8 @@ docker run --rm --init --shm-size=2g \
 Open `http://localhost:8080`. Without `BYOND_SERVER`, the container starts the
 BYOND pager; sign in there and connect to your server. With `BYOND_SERVER`, it
 launches Dream Seeker directly; a BYOND account or server-side authentication
-may still be required. Direct connection and interactive gameplay have not
-been validated end to end.
+may still be required. A direct launch to the configured host has been observed,
+but a complete authenticated gameplay session has not been documented.
 The container health check requires the selected BYOND process and the Selkies
 health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
@@ -179,8 +179,11 @@ There is no full desktop in this image. Openbox manages BYOND windows and
 dialogs on the X11 display, which Selkies streams as a whole; this is not
 per-window isolation. When starting the pager rather than a direct server
 connection, a small system tray is provided for its icon. The launcher assumes
-X11, not Selkies' Wayland backend. The desktop-free setup and interactive
-gameplay need user-side verification.
+X11, not Selkies' Wayland backend. The desktop-free image has been reported
+working by a user. Earlier testing restored game and stat-panel rendering by
+removing `LD_PRELOAD`, and confirmed audio with the LXQt-based image. A complete
+gameplay session and the desktop-free image's dialogs and pager/tray behavior
+still need explicit verification.
 
 ### AMD or Intel GPU experiment
 
@@ -212,9 +215,10 @@ docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml exec player
 Substitute the selected node for `renderD128`. An AMD or Intel renderer rather
 than llvmpipe indicates hardware OpenGL; node access alone does not. This
 override exposes the host's DRM devices to the container and requires compatible
-host drivers. GPU access and BYOND rendering have not been verified; the
-health check cannot establish either. To return to software rendering, recreate
-the container using only `examples/compose.yaml`.
+host drivers. A user reported improved performance with the GPU override, but
+the renderer was not independently confirmed. The health check cannot establish
+GPU access or rendering. To return to software rendering, recreate the container
+using only `examples/compose.yaml`.
 
 To also try the experimental WebView2 GPU flags from
 [Wine-Byond-help](https://github.com/kinggoldcatter/Wine-Byond-help/blob/main/issues.md),
@@ -227,7 +231,7 @@ docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --for
 
 This sets a Wine-prefix WebView2 policy for all WebView2 applications in the
 container, bypassing the GPU blocklist and disabling DirectComposition. It may
-increase memory use, and its effect on BYOND rendering is unverified. It does
+increase memory use; a user reported no visible rendering improvement. It does
 not disable Chromium site isolation. To disable the experiment, unset
 `BYOND_WEBVIEW2_GPU` and recreate the container; restarting alone retains its
 modified Wine prefix. This does not resolve server authentication failures.
