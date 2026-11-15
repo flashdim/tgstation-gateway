@@ -20,9 +20,22 @@ class InstallClientTest(unittest.TestCase):
             command = self.bin / name
             command.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
-                + ('[ "${FAIL_WINETRICKS:-0}" != 1 ]\n' if name == "winetricks" else "")
+                + (
+                    '[ "${FAIL_COMPONENT:-}" != "$2" ] || exit 17\n'
+                    if name == "winetricks"
+                    else ""
+                )
             )
             command.chmod(0o755)
+        timeout = self.bin / "timeout"
+        timeout.write_text(
+            '#!/bin/sh\n'
+            'shift 2\n'
+            'if [ -n "${TIMEOUT_COMPONENT:-}" ] && '
+            '[ "$TIMEOUT_COMPONENT" = "${3:-}" ]; then exit 124; fi\n'
+            'exec "$@"\n'
+        )
+        timeout.chmod(0o755)
         self.prefix = self.root / "prefix"
         self.create_file("drive_c/Program Files (x86)/BYOND/bin/byond.exe")
 
@@ -58,15 +71,28 @@ class InstallClientTest(unittest.TestCase):
             [
                 "wineboot --init",
                 "wineserver --wait",
-                "winetricks -q vcrun2022 dxtrans dxvk2071 webview2",
+                "winetricks -q vcrun2022",
+                "winetricks -q dxtrans",
+                "winetricks -q dxvk2071",
+                "winetricks -q webview2",
                 "wineserver -k",
                 "wineserver --wait",
             ],
         )
+        self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
+        self.assertIn("Completed Winetricks webview2", result.stdout)
 
     def test_fails_if_winetricks_fails(self):
-        result = self.install(FAIL_WINETRICKS="1")
-        self.assertNotEqual(result.returncode, 0)
+        result = self.install(FAIL_COMPONENT="dxtrans")
+        self.assertEqual(result.returncode, 17)
+        self.assertIn("Winetricks dxtrans failed with exit code 17", result.stderr)
+        self.assertNotIn("winetricks -q dxvk2071", self.log.read_text())
+        self.assertNotIn("wineserver -k", self.log.read_text())
+
+    def test_reports_component_timeout(self):
+        result = self.install(TIMEOUT_COMPONENT="webview2")
+        self.assertEqual(result.returncode, 124)
+        self.assertIn("Winetricks webview2 timed out after 240s", result.stderr)
         self.assertNotIn("wineserver -k", self.log.read_text())
 
     def test_fails_if_webview_runtime_is_missing(self):

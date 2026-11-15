@@ -47,11 +47,13 @@ The mirror is independently operated; consider supplying a trusted checksum.
 The build requires network access to BYOND, WineHQ, GitHub, Microsoft and other
 Winetricks download hosts. It intentionally fails if an installer or an
 integrity check fails. `WINE_PACKAGE_VERSION` is a build argument if the pinned
-WineHQ package needs to be changed.
+WineHQ package needs to be changed. Wine initialization and each Winetricks
+component log their start and completion and have individual timeouts.
 
 ## CI and releases
 
-GitHub Actions builds use the community BYOND mirror. Pull requests build the
+GitHub Actions jobs have a 15-minute timeout and use the community BYOND mirror.
+Pull requests build the
 image and smoke-test the Selkies endpoint and BYOND
 pager, without logging in to a game server. Publishing a GitHub release builds
 and tests the image again, then pushes it to
