@@ -32,10 +32,11 @@ Provide an independently usable, single-player Wine/BYOND image.
 
 **Progress:** CI has built, smoke-tested and published the desktop-free `dev`
 image. A user report confirms that the menu, dialogs and audio work, but the
-game scene becomes black with a few solid-color tiles after joining, both with
-and without the GPU override. Installing native `d3dx9_43` did not improve the
-reported scene. Earlier testing found that removing Selkies' `LD_PRELOAD`
-restored game and stat-panel
+game scene becomes black with a few solid-color tiles after joining, with and
+without GPU access. Installing native `d3dx9_43` did not improve the scene.
+With DXVK 2.7.1, the map stayed black; Dream Seeker loaded DXVK's D3D9 library
+and logged device resets, but its viewport did not show a DXVK HUD. Earlier
+testing found that removing Selkies' `LD_PRELOAD` restored game and stat-panel
 rendering in that test environment; it does not resolve or rule out the current
 failure. A direct launch to the configured host has been observed. The release
 publication path and a complete playable gameplay session remain unverified.
