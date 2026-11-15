@@ -10,7 +10,7 @@ USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WINE_PACKAGE_VERSION=11.0.0.0~resolute-1
+ARG WINE_PACKAGE_VERSION=11.14~resolute-1
 
 RUN selkies-privileged-files release && \
     mkdir -p /etc/apt/keyrings && \
@@ -21,7 +21,7 @@ RUN selkies-privileged-files release && \
       > /etc/apt/sources.list.d/winehq.list && \
     apt-get update && \
     apt-get install -y --install-recommends \
-      "winehq-stable=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
+      "winehq-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
