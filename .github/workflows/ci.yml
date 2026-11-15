@@ -6,11 +6,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      wine_version:
-        description: Wine Staging version to compare
+      xserver:
+        description: X server to compare
         type: choice
-        options: ["11.21", "11.15"]
-        default: "11.21"
+        options: [selkies, stock]
+        default: selkies
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
 
       - name: Restore Wine prefix cache
         id: wine-cache
-        if: inputs.wine_version != '11.15'
+        if: inputs.xserver != 'stock'
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
@@ -77,22 +77,28 @@ jobs:
           load: true
           tags: tgstation-gateway-player:ci
           build-args: |
-            WINE_PACKAGE_VERSION=${{ inputs.wine_version == '11.15' && '11.15~resolute-1' || '11.21~resolute-1' }}
+            XSERVER_VARIANT=${{ inputs.xserver == 'stock' && 'stock' || 'selkies' }}
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
 
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
 
+      - name: Check stock Xvfb
+        if: inputs.xserver == 'stock'
+        run: |
+          docker run --rm --entrypoint sh tgstation-gateway-player:ci -c \
+            '! /usr/bin/Xvfb -help 2>&1 | grep -q -- "-glamor"'
+
       - name: Archive Wine prefix
-        if: steps.wine-cache.outputs.cache-hit != 'true' && inputs.wine_version != '11.15'
+        if: steps.wine-cache.outputs.cache-hit != 'true' && inputs.xserver != 'stock'
         run: |
           docker run --rm --entrypoint tar tgstation-gateway-player:ci \
             --exclude='./drive_c/Program Files (x86)/BYOND' \
             -C /home/ubuntu/.wine -czf - . > "$RUNNER_TEMP/wine-prefix-cache/prefix.tar.gz"
 
       - name: Save Wine prefix cache
-        if: steps.wine-cache.outputs.cache-hit != 'true' && inputs.wine_version != '11.15'
+        if: steps.wine-cache.outputs.cache-hit != 'true' && inputs.xserver != 'stock'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
@@ -107,7 +113,7 @@ jobs:
       - name: Log in to GHCR
         if: >-
           (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.wine_version == '11.15')) ||
+          (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.xserver == 'stock')) ||
           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -118,10 +124,10 @@ jobs:
       - name: Publish tested development image
         if: >-
           (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.wine_version == '11.15')) ||
+          (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.xserver == 'stock')) ||
           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:${{ inputs.wine_version == '11.15' && 'wine1115-test' || 'dev' }}
+          IMAGE: ghcr.io/${{ github.repository }}:${{ inputs.xserver == 'stock' && 'stock-xvfb-test' || 'dev' }}
         run: |
           docker tag tgstation-gateway-player:ci "$IMAGE"
           docker push "$IMAGE"
