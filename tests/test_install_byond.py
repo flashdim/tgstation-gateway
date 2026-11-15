@@ -60,15 +60,15 @@ class InstallByondTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.url_file.read_text().strip(),
-            "https://www.byond.com/download/build/517/517.1701_byond.zip",
+            "https://byond-builds.dm-lang.org/517/517.1701_byond.zip",
         )
         byond = self.prefix / "drive_c/Program Files (x86)/BYOND/bin"
         self.assertEqual((byond / "byond.exe").read_bytes(), b"BYOND fixture")
         self.assertTrue((byond / "byondcore.dll").is_file())
 
-    def test_extracts_requested_version_from_mirror(self):
+    def test_ignores_legacy_download_base_override(self):
         self.make_archive()
-        result = self.install(base_url="https://byond-builds.dm-lang.org/")
+        result = self.install(base_url="https://example.org")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.url_file.read_text().strip(),
@@ -77,12 +77,6 @@ class InstallByondTest(unittest.TestCase):
         self.assertTrue(
             (self.prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe").is_file()
         )
-
-    def test_rejects_non_https_download_url(self):
-        result = self.install(base_url="http://example.org")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Invalid BYOND_DOWNLOAD_BASE_URL", result.stderr)
-        self.assertFalse(self.url_file.exists())
 
     def test_rejects_invalid_versions_before_downloading(self):
         for version in ("516", "516.", ".1688", "516.1688.1", "516:1.1688", "../x"):

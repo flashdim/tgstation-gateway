@@ -43,8 +43,6 @@ jobs:
           load: true
           tags: tgstation-gateway-player:release
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            BYOND_DOWNLOAD_BASE_URL=https://byond-builds.dm-lang.org
 
       - name: Smoke-test release image
         run: bash tests/smoke-container.sh tgstation-gateway-player:release

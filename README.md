@@ -25,9 +25,10 @@ the image; check its licensing and redistribution terms before publishing it.
 docker build --platform linux/amd64 -t tgstation-gateway-player .
 ```
 
-The build downloads the portable Windows BYOND archive from BYOND, defaulting
-to version `516.1688`. To select a version from a shell environment variable,
-set `BYOND_VERSION` and pass it as a build argument:
+The build downloads the portable Windows BYOND archive from the independently
+operated community mirror at `byond-builds.dm-lang.org`, defaulting to version
+`516.1688`. To select a version from a shell environment variable, set
+`BYOND_VERSION` and pass it as a build argument:
 
 ```sh
 export BYOND_VERSION=516.1688
@@ -40,17 +41,16 @@ rebuild the image to change versions. You can also pass a trusted checksum with
 `--build-arg BYOND_SHA256=<sha256>`. Without it, the download is checked for ZIP
 corruption but not against a known digest.
 
-Local builds use BYOND's official download host by default. To use the community
-mirror instead, pass `--build-arg BYOND_DOWNLOAD_BASE_URL=https://byond-builds.dm-lang.org`.
-The mirror is independently operated; consider supplying a trusted checksum.
+The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
-The build requires network access to BYOND, WineHQ, GitHub, Microsoft and other
-Winetricks download hosts. It intentionally fails if an installer or an
-integrity check fails. `WINE_PACKAGE_VERSION` is a build argument if the pinned
-WineHQ package needs to be changed. Wine initialization and each Winetricks
-component log their start and completion and have individual timeouts. Initial
-prefix creation suppresses Wine's interactive Mono and Gecko setup dialogs;
-the override applies only to initialization, not the running client.
+The build requires network access to the community mirror, WineHQ, GitHub,
+Microsoft and other Winetricks download hosts. It intentionally fails if an
+installer or an integrity check fails. `WINE_PACKAGE_VERSION` is a build
+argument if the pinned WineHQ package needs to be changed. Wine initialization
+and each Winetricks component log their start and completion and have individual
+timeouts. Initial prefix creation suppresses Wine's interactive Mono and Gecko
+setup dialogs; the override applies only to initialization, not the running
+client.
 
 ## CI and releases
 

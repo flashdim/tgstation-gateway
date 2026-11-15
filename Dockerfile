@@ -44,7 +44,6 @@ ENV WINEPREFIX=/home/ubuntu/.wine \
 
 ARG BYOND_VERSION=516.1688
 ARG BYOND_SHA256=""
-ARG BYOND_DOWNLOAD_BASE_URL=https://www.byond.com/download/build
 ENV BYOND_VERSION=${BYOND_VERSION}
 
 RUN /usr/local/bin/install-byond
