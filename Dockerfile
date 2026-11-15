@@ -4,13 +4,13 @@
 # The first milestone is one BYOND client per container, not a session manager.
 FROM scratch AS wine-prefix-cache
 
-FROM ghcr.io/selkies-project/selkies/desktop:2.2.1-ubuntu26.04@sha256:f7a7b11dadbeca42114a09ae390457cd7e50af2b8f534c3ebae7b1d14b9851a4
+FROM ghcr.io/selkies-project/selkies/base:2.2.1-ubuntu26.04@sha256:4b70c739ea5aa650dd35a143d92c4bf80b7a527f2c66ee88718b08a5211267ff
 
 USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WINE_PACKAGE_VERSION=11.0.0.0~resolute-1
+ARG WINE_PACKAGE_VERSION=11.21~resolute-1
 
 RUN selkies-privileged-files release && \
     mkdir -p /etc/apt/keyrings && \
@@ -21,11 +21,13 @@ RUN selkies-privileged-files release && \
       > /etc/apt/sources.list.d/winehq.list && \
     apt-get update && \
     apt-get install -y --install-recommends \
-      "winehq-stable=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
+      "winehq-staging=${WINE_PACKAGE_VERSION}" \
+      "wine-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
+    apt-get install -y --no-install-recommends openbox trayer && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
-# Pin a Winetricks revision that includes the WebView2 verb.
+# Pin the Winetricks revision used by the desktop experiment.
 RUN curl -fsSL --retry 3 \
       https://raw.githubusercontent.com/Winetricks/winetricks/f3890f670867b5ffbc3938726db45c0f7d16c8ba/src/winetricks \
       -o /usr/local/bin/winetricks && \
@@ -61,8 +63,10 @@ ENV BYOND_VERSION=${BYOND_VERSION}
 RUN /usr/local/bin/install-byond
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond
+RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
+COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
+COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

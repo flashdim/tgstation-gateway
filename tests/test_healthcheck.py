@@ -19,7 +19,7 @@ class HealthcheckTest(unittest.TestCase):
         commands = {
             "pgrep": (
                 'printf "pgrep %s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'test "$1" = -f && test "$2" = "[b]yond.exe" && '
+                'test "$1" = -f && test "$2" = "${EXPECTED_PROCESS:-[b]yond.exe}" && '
                 'test "${PAGER_RUNNING:-1}" = 1'
             ),
             "curl": (
@@ -43,7 +43,7 @@ class HealthcheckTest(unittest.TestCase):
             "COMMAND_LOG": str(self.log),
             **extra_env,
         }
-        for key in ("SELKIES_SUBFOLDER", "SUBFOLDER", "SELKIES_PORT"):
+        for key in ("SELKIES_SUBFOLDER", "SUBFOLDER", "SELKIES_PORT", "BYOND_SERVER"):
             if key not in extra_env:
                 env.pop(key, None)
         return subprocess.run(
@@ -63,6 +63,22 @@ class HealthcheckTest(unittest.TestCase):
         result = self.check()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Selkies health endpoint is unavailable", result.stderr)
+
+    def test_requires_dreamseeker_in_direct_mode(self):
+        env = {
+            "BYOND_SERVER": "example.org:1337",
+            "EXPECTED_PROCESS": "[d]reamseeker.exe",
+            "HTTP_OK": "1",
+        }
+        result = self.check(**env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.log.read_text().splitlines()[0], "pgrep -f [d]reamseeker.exe"
+        )
+
+        result = self.check(**env, PAGER_RUNNING="0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Dream Seeker is not running", result.stderr)
 
     def test_http_fallback_uses_configured_port_and_prefix(self):
         result = self.check(

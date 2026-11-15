@@ -12,11 +12,19 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 ## Build the player image
 
-The image uses the Selkies desktop image for a headless X11 display, audio and
-browser streaming. It installs Wine 11 and uses Winetricks to install Visual
-C++ 2022, DirectX components, DXVK and WebView2. It also installs BYOND. It
-targets `linux/amd64` and an x64 Wine prefix; this combination has not yet been
-validated end to end.
+The image uses the Selkies base for a headless X11 display, audio and browser
+streaming, with Openbox managing BYOND windows instead of a desktop. It installs
+Wine Staging 11.21 and uses Winetricks to install Visual C++ 2022,
+DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
+It targets `linux/amd64` and an x64 Wine prefix. DXVK is not installed;
+Wine's built-in Direct3D implementation is used instead. See the community
+[Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
+BYOND-specific Wine troubleshooting.
+
+The BYOND service removes Selkies' `LD_PRELOAD` input and webcam interposers
+from Wine's environment: testing showed that removing them lets the VC runtime
+installer complete and restores BYOND game rendering. Wine applications do not
+receive those injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -66,10 +74,11 @@ corruption but not against a known digest.
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
 The build requires network access to the community mirror, WineHQ, GitHub,
-Microsoft and other Winetricks download hosts. It intentionally fails if an
-installer or an integrity check fails. `WINE_PACKAGE_VERSION` is a build
-argument if the pinned WineHQ package needs to be changed. Wine initialization
-and each Winetricks component log their start and completion and have individual
+Microsoft and other Winetricks download hosts. The RichEdit verbs download large
+Windows service packs and legacy installers from third-party and archive
+mirrors, verified against Winetricks' checksums. The build intentionally fails
+if an installer or an integrity check fails. Wine initialization and each
+Winetricks component log their start and completion and have individual
 timeouts. Initial prefix creation suppresses Wine's interactive Mono and Gecko
 setup dialogs; the override applies only to initialization, not the running
 client. Winetricks downloads are removed after installation in the same image
@@ -77,7 +86,7 @@ layer.
 
 ## CI and releases
 
-The image build and publish jobs have a 15-minute timeout and use the
+The image build and publish jobs have a 30-minute timeout and use the
 community BYOND mirror.
 CI also checks Python, shell, YAML and Markdown formatting. To format the same
 tracked files locally, install Python, Node.js and Git, then run:
@@ -92,9 +101,17 @@ The formatters update files when needed; run the command again to confirm they
 pass.
 
 Pull requests and pushes to `main` build the image and smoke-test the Selkies
-endpoint and BYOND pager, without logging in to a game server. CI caches the
-initialized Wine prefix without BYOND in GitHub Actions; the first successful
-build populates the cache, and branch access and cache eviction affect reuse.
+endpoint, Openbox, pager tray and BYOND pager, without logging in to a game
+server. CI caches the initialized Wine prefix without BYOND in GitHub Actions;
+the first successful build populates the cache, and branch access and cache
+eviction affect reuse.
+After formatting and image checks pass, CI publishes the tested image to
+`ghcr.io/flashdim/tgstation-gateway:dev` for pushes or manual runs on `main`
+and pull requests from this repository. Fork pull requests do not publish.
+The mutable `dev` tag can contain unmerged pull-request code and points to the
+most recently published image, not necessarily the latest commit on `main`.
+Overlapping runs may finish out of order. Pull it again to get updates; it is
+not a release or a Git tag.
 To refresh unpinned components such as WebView2, delete the `wine-prefix-v1-`
 cache in GitHub Actions and run CI on `main` again. Publishing a GitHub release
 can reuse the default-branch cache, builds and tests the image again, then pushes it to
@@ -118,10 +135,27 @@ release tag instead; change the image in the example to use one. GHCR may
 require authentication depending on package visibility. The `pull` command
 refreshes the mutable `latest` tag before starting the container.
 
+Set `GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev` to use the
+experimental development image instead.
+
 Set `GATEWAY_PORT` to change the localhost port. Run
 `docker compose -f examples/compose.yaml down` to remove the container and its
 player data. The published image uses its build-time BYOND version; to select
 another version, build and run a local image as described above and below.
+
+To connect directly instead of starting the pager, set
+`BYOND_SERVER` to a hostname or IP address and port, optionally prefixed with
+`byond://`:
+
+```sh
+BYOND_SERVER=ss13.lazorgator.party:1337 docker compose -f examples/compose.yaml up
+```
+
+Recreate the container to change the server. With `docker run`, pass the same
+setting using `-e BYOND_SERVER=ss13.lazorgator.party:1337`. Leave it unset or
+empty to start the pager as before. This requires an image built with this
+change; an existing published `latest` image will not change until a new
+release is published.
 
 Alternatively, run the image built above directly:
 
@@ -131,16 +165,79 @@ docker run --rm --init --shm-size=2g \
   tgstation-gateway-player
 ```
 
-Open `http://localhost:8080`. The container starts the BYOND pager; sign in
-there and connect to your server.
-The container health check requires both the BYOND process and the Selkies
-health endpoint; it does not verify interactive gameplay.
+Open `http://localhost:8080`. Without `BYOND_SERVER`, the container starts the
+BYOND pager; sign in there and connect to your server. With `BYOND_SERVER`, it
+launches Dream Seeker directly; a BYOND account or server-side authentication
+may still be required. A direct launch to the configured host has been observed,
+but a complete authenticated gameplay session has not been documented.
+The container health check requires the selected BYOND process and the Selkies
+health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
-Selkies uses WebSockets by default. Software rendering may be too slow for
-DXVK; GPU access and hardware-specific configuration require separate testing.
-The image exposes a desktop environment, not a hardened application sandbox.
+There is no full desktop in this image. Openbox manages BYOND windows and
+dialogs on the X11 display, which Selkies streams as a whole; this is not
+per-window isolation. When starting the pager rather than a direct server
+connection, a small system tray is provided for its icon. The launcher assumes
+X11, not Selkies' Wayland backend. The desktop-free image has been reported
+working by a user. Earlier testing restored game and stat-panel rendering by
+removing `LD_PRELOAD`, and confirmed audio with the LXQt-based image. A complete
+gameplay session and the desktop-free image's dialogs and pager/tray behavior
+still need explicit verification.
+
+### AMD or Intel GPU experiment
+
+The default Compose configuration uses software rendering. To try GPU
+acceleration on a Linux Docker host with an AMD or Intel GPU, identify its DRM
+render node under `/dev/dri`, then set its numeric group ID and add the GPU
+override. For example, if the node is `/dev/dri/renderD128`:
+
+```sh
+export DRI_RENDER_GID="$(stat -c '%g' /dev/dri/renderD128)"
+export GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev
+export BYOND_SERVER=ss13.lazorgator.party:1337
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml pull
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --force-recreate
+```
+
+Inspect the available nodes first if the host has multiple GPUs; use the group
+ID of the intended render node. The group ID grants access but does not select
+the GPU. To check whether the container can access that node and which OpenGL
+renderer the X11 session uses:
+
+```sh
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml exec player \
+  sh -c 'test -r /dev/dri/renderD128 && test -w /dev/dri/renderD128 && echo "Render node accessible"'
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml exec player \
+  sh -c '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; glxinfo -B'
+```
+
+Substitute the selected node for `renderD128`. An AMD or Intel renderer rather
+than llvmpipe indicates hardware OpenGL; node access alone does not. This
+override exposes the host's DRM devices to the container and requires compatible
+host drivers. A user reported improved performance with the GPU override, but
+the renderer was not independently confirmed. The health check cannot establish
+GPU access or rendering. To return to software rendering, recreate the container
+using only `examples/compose.yaml`.
+
+To also try the experimental WebView2 GPU flags from
+[Wine-Byond-help](https://github.com/kinggoldcatter/Wine-Byond-help/blob/main/issues.md),
+set `BYOND_WEBVIEW2_GPU=1` before recreating the GPU-enabled container:
+
+```sh
+export BYOND_WEBVIEW2_GPU=1
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --force-recreate
+```
+
+This sets a Wine-prefix WebView2 policy for all WebView2 applications in the
+container, bypassing the GPU blocklist and disabling DirectComposition. It may
+increase memory use; a user reported no visible rendering improvement. It does
+not disable Chromium site isolation. To disable the experiment, unset
+`BYOND_WEBVIEW2_GPU` and recreate the container; restarting alone retains its
+modified Wine prefix. This does not resolve server authentication failures.
+
+Selkies uses WebSockets by default. Software rendering may be slow.
+The image exposes a graphical session, not a hardened application sandbox.
 The stream is unprotected by default. Operators are responsible for restricting
 access and securing connections outside this project. Do not expose it directly
 to the internet or share a container between players.

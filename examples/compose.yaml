@@ -2,9 +2,12 @@ name: tgstation-gateway
 
 services:
   player:
-    image: ghcr.io/flashdim/tgstation-gateway:latest
+    image: ${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}
     platform: linux/amd64
     init: true
     shm_size: 2gb
+    environment:
+      BYOND_SERVER: ${BYOND_SERVER:-}
+      BYOND_WEBVIEW2_GPU: ${BYOND_WEBVIEW2_GPU:-0}
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
