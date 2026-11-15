@@ -10,6 +10,24 @@ permissions:
   contents: read
 
 jobs:
+  formatting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install pre-commit
+        run: |
+          python3 -m venv "$RUNNER_TEMP/format-env"
+          "$RUNNER_TEMP/format-env/bin/python" -m pip install pre-commit==4.3.0
+
+      - name: Check formatting
+        run: |
+          "$RUNNER_TEMP/format-env/bin/pre-commit" run --all-files --show-diff-on-failure
+
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 15

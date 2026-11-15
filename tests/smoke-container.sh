@@ -18,7 +18,7 @@ trap cleanup EXIT
 address="$(docker port "$container" 8080/tcp)"
 for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
-       docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
+        docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
         sleep 3
         if docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
             echo "Selkies is responding and the BYOND pager is running"

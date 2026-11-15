@@ -34,8 +34,8 @@ class InstallClientTest(unittest.TestCase):
             command.chmod(0o755)
         timeout = self.bin / "timeout"
         timeout.write_text(
-            '#!/bin/sh\n'
-            'shift 2\n'
+            "#!/bin/sh\n"
+            "shift 2\n"
             'if [ -n "${TIMEOUT_COMPONENT:-}" ] && '
             '[ "$TIMEOUT_COMPONENT" = "${3:-}" ]; then exit 124; fi\n'
             'exec "$@"\n'

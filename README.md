@@ -56,7 +56,20 @@ client.
 
 ## CI and releases
 
-GitHub Actions jobs have a 15-minute timeout and use the community BYOND mirror.
+The image build and publish jobs have a 15-minute timeout and use the
+community BYOND mirror.
+CI also checks Python, shell, YAML and Markdown formatting. To format the same
+tracked files locally, install Python, Node.js and Git, then run:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install pre-commit==4.3.0
+.venv/bin/pre-commit run --all-files
+```
+
+The formatters update files when needed; run the command again to confirm they
+pass.
+
 Pull requests and pushes to `main` build the image and smoke-test the Selkies
 endpoint and BYOND pager, without logging in to a game server. CI caches the
 initialized Wine prefix without BYOND in GitHub Actions; the first successful

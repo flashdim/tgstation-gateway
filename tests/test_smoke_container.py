@@ -20,11 +20,11 @@ class SmokeContainerTest(unittest.TestCase):
             "docker": (
                 'printf "%s\\n" "$*" >> "$DOCKER_LOG"\n'
                 'case "$1" in\n'
-                '  run) echo test-container ;;\n'
-                '  port) echo 127.0.0.1:12345 ;;\n'
-                '  inspect) echo false ;;\n'
-                '  exec|logs|rm) exit 0 ;;\n'
-                '  *) exit 1 ;;\n'
+                "  run) echo test-container ;;\n"
+                "  port) echo 127.0.0.1:12345 ;;\n"
+                "  inspect) echo false ;;\n"
+                "  exec|logs|rm) exit 0 ;;\n"
+                "  *) exit 1 ;;\n"
                 "esac"
             ),
             "curl": '[ "${FAIL_HEALTH:-0}" != 1 ]',

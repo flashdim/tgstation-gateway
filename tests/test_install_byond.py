@@ -19,8 +19,7 @@ class InstallByondTest(unittest.TestCase):
         self.bin.mkdir()
         curl = self.bin / "curl"
         curl.write_text(
-            '#!/bin/sh\nprintf "%s\\n" "$4" > "$URL_FILE"\n'
-            'cp "$FIXTURE" "$6"\n'
+            '#!/bin/sh\nprintf "%s\\n" "$4" > "$URL_FILE"\ncp "$FIXTURE" "$6"\n'
         )
         curl.chmod(0o755)
         self.fixture = self.root / "fixture.zip"

@@ -6,13 +6,22 @@ major="${version%%.*}"
 minor="${version#*.}"
 case "$version" in
     *.*) ;;
-    *) echo "Invalid BYOND_VERSION: expected major.minor" >&2; exit 1 ;;
+    *)
+        echo "Invalid BYOND_VERSION: expected major.minor" >&2
+        exit 1
+        ;;
 esac
 case "$major" in
-    ''|*[!0-9]*) echo "Invalid BYOND_VERSION: expected numeric major.minor" >&2; exit 1 ;;
+    '' | *[!0-9]*)
+        echo "Invalid BYOND_VERSION: expected numeric major.minor" >&2
+        exit 1
+        ;;
 esac
 case "$minor" in
-    ''|*[!0-9]*) echo "Invalid BYOND_VERSION: expected numeric major.minor" >&2; exit 1 ;;
+    '' | *[!0-9]*)
+        echo "Invalid BYOND_VERSION: expected numeric major.minor" >&2
+        exit 1
+        ;;
 esac
 
 workdir="$(mktemp -d)"
