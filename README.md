@@ -12,9 +12,9 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 ## Build the player image
 
-The image uses the full Selkies KDE EGL desktop for a headless X11 display,
-audio and browser streaming. The pinned base includes Lutris, Wine Staging
-11.21 and Winetricks. The build uses Winetricks to install Visual C++ 2022,
+The image uses the Selkies base for a headless X11 display, audio and browser
+streaming, with Openbox managing BYOND windows instead of a desktop. It installs
+Wine Staging 11.21 and uses Winetricks to install Visual C++ 2022,
 DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
 It targets `linux/amd64` and an x64 Wine prefix; this combination has not yet
 been validated end to end. DXVK is not installed for this rendering experiment;
@@ -22,9 +22,6 @@ Wine's built-in Direct3D implementation is used instead. See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
 
-The full desktop also includes browsers, Steam and other applications. It is
-an experiment, not a minimized image. Wine and Lutris are supplied by the
-digest-pinned base; changing the base can change their versions.
 The BYOND service removes Selkies' `LD_PRELOAD` input and webcam interposers
 from Wine's environment: testing showed that removing them lets the VC runtime
 installer complete and restores BYOND game rendering. Wine applications do not
@@ -105,7 +102,7 @@ The formatters update files when needed; run the command again to confirm they
 pass.
 
 Pull requests and pushes to `main` build the image and smoke-test the Selkies
-endpoint and BYOND pager, without logging in to a game server. CI caches the
+endpoint, Openbox and BYOND pager, without logging in to a game server. CI caches the
 initialized Wine prefix without BYOND in GitHub Actions; the first successful
 build populates the cache, and branch access and cache eviction affect reuse.
 After formatting and image checks pass, CI publishes the tested image to
@@ -178,25 +175,12 @@ health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
-### LXQt comparison image
-
-CI also builds and smoke-tests `ghcr.io/flashdim/tgstation-gateway:lxqt-test`,
-which uses the earlier, smaller Selkies LXQt desktop. It keeps the same Wine
-Staging 11.21, Winetricks revision, BYOND version, installed components and
-launcher behavior; only the Selkies desktop base changes. CI reports both
-image sizes for comparison.
-
-To try it with the same server and GPU settings as the KDE image:
-
-```sh
-export GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:lxqt-test
-docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml pull
-docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --force-recreate
-```
-
-Set `GATEWAY_IMAGE` back to `ghcr.io/flashdim/tgstation-gateway:dev` to return
-to KDE. `SELKIES_BASE_IMAGE` is also a build argument for testing the alternate
-base locally.
+There is no full desktop in this image. Openbox manages BYOND windows and
+dialogs on the X11 display, which Selkies streams as a whole; this is not
+per-window isolation. When starting the pager rather than a direct server
+connection, a small system tray is provided for its icon. The launcher assumes
+X11, not Selkies' Wayland backend. The desktop-free setup and interactive
+gameplay need user-side verification.
 
 ### AMD or Intel GPU experiment
 
@@ -232,43 +216,6 @@ host drivers. GPU access and BYOND rendering have not been verified; the
 health check cannot establish either. To return to software rendering, recreate
 the container using only `examples/compose.yaml`.
 
-### Lutris installer comparison
-
-The KDE image starts the existing BYOND installation automatically. To compare
-the upstream Lutris installer, open Konsole in the streamed desktop and stop
-that client first:
-
-```sh
-s6-svc -d /etc/service/byond
-```
-
-The health check will report unhealthy while that service is stopped. Download
-the pinned upstream recipe and adjust it to use the community BYOND mirror and
-leave its WebView2 GPU and site-isolation flags disabled:
-
-```sh
-curl -fsSL --retry 3 \
-  https://raw.githubusercontent.com/kinggoldcatter/Wine-Byond-help/2fd6274b96e2108f786a6e0c33f634cb3cfb729f/x64byond.yaml \
-  -o "$HOME/byond-lutris.yaml"
-sed -i \
-  -e 's|https://www.byond.com/download/build/516/516.1667_byond.exe|https://byond-builds.dm-lang.org/516/516.1667_byond.exe|' \
-  -e "/^[[:space:]]*value: '--ignore-gpu-blocklist /s|'.*'|''|" \
-  "$HOME/byond-lutris.yaml"
-grep -Fq 'https://byond-builds.dm-lang.org/516/516.1667_byond.exe' "$HOME/byond-lutris.yaml" &&
-  ! grep -Eq 'www\.byond\.com/download/build|ignore-gpu-blocklist|disable-site-isolation-trials' "$HOME/byond-lutris.yaml" &&
-  env -u WINEPREFIX -u LD_PRELOAD lutris -i "$HOME/byond-lutris.yaml"
-```
-
-Select system Wine in Lutris and install into a **separate** prefix, such as
-`/home/ubuntu/Games/byond`. The recipe uses BYOND 516.1667, installs the
-packaged DirectX, and downloads other components including a font and helper
-script from upstream. Those downloads are not all pinned or checksum-verified.
-This interactive installation is not part of the image build and has not been
-validated here. Launch BYOND through Lutris and connect to the same server;
-the server may require a newer BYOND version. Container recreation removes
-the separate prefix and login data. To return to the image's original client
-without recreating the container, run `s6-svc -u /etc/service/byond`.
-
 To also try the experimental WebView2 GPU flags from
 [Wine-Byond-help](https://github.com/kinggoldcatter/Wine-Byond-help/blob/main/issues.md),
 set `BYOND_WEBVIEW2_GPU=1` before recreating the GPU-enabled container:
@@ -286,7 +233,7 @@ not disable Chromium site isolation. To disable the experiment, unset
 modified Wine prefix. This does not resolve server authentication failures.
 
 Selkies uses WebSockets by default. Software rendering may be slow.
-The image exposes a desktop environment, not a hardened application sandbox.
+The image exposes a graphical session, not a hardened application sandbox.
 The stream is unprotected by default. Operators are responsible for restricting
 access and securing connections outside this project. Do not expose it directly
 to the internet or share a container between players.
