@@ -21,6 +21,11 @@ class InstallClientTest(unittest.TestCase):
             command.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
                 + (
+                    'printf "%s\\n" "${WINEDLLOVERRIDES-unset}" >> "$OVERRIDE_LOG"\n'
+                    if name in ("wineboot", "winetricks")
+                    else ""
+                )
+                + (
                     '[ "${FAIL_COMPONENT:-}" != "$2" ] || exit 17\n'
                     if name == "winetricks"
                     else ""
@@ -52,6 +57,8 @@ class InstallClientTest(unittest.TestCase):
                 "WINEPREFIX": str(self.prefix),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
+                "OVERRIDE_LOG": str(self.root / "overrides"),
+                "WINEDLLOVERRIDES": "example=b",
                 **extra_env,
             },
             capture_output=True,
@@ -81,6 +88,10 @@ class InstallClientTest(unittest.TestCase):
         )
         self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
         self.assertIn("Completed Winetricks webview2", result.stdout)
+        self.assertEqual(
+            (self.root / "overrides").read_text().splitlines(),
+            ["mscoree,mshtml=d", "example=b", "example=b", "example=b", "example=b"],
+        )
 
     def test_fails_if_winetricks_fails(self):
         result = self.install(FAIL_COMPONENT="dxtrans")

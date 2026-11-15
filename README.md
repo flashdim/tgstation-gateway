@@ -48,7 +48,9 @@ The build requires network access to BYOND, WineHQ, GitHub, Microsoft and other
 Winetricks download hosts. It intentionally fails if an installer or an
 integrity check fails. `WINE_PACKAGE_VERSION` is a build argument if the pinned
 WineHQ package needs to be changed. Wine initialization and each Winetricks
-component log their start and completion and have individual timeouts.
+component log their start and completion and have individual timeouts. Initial
+prefix creation suppresses Wine's interactive Mono and Gecko setup dialogs;
+the override applies only to initialization, not the running client.
 
 ## CI and releases
 
