@@ -29,6 +29,13 @@ for _ in {1..120}; do
                 exit 1
             fi
             docker exec "$container" /usr/local/bin/healthcheck
+            if ! docker exec "$container" sh -c '
+                test -s "$WINEPREFIX/drive_c/windows/syswow64/d3dx9_43.dll" &&
+                    grep -Fq "\"d3dx9_43\"=\"native\"" "$WINEPREFIX/user.reg"
+            '; then
+                echo "Native 32-bit D3DX9 helper or its Wine override is missing" >&2
+                exit 1
+            fi
             docker exec "$container" s6-svc -d /etc/service/byond
             for _ in {1..20}; do
                 if ! docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then

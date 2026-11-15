@@ -34,6 +34,7 @@ class SmokeContainerTest(unittest.TestCase):
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
                 'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
+                '      sh) [ "${MISSING_D3DX:-0}" = 0 ] ;;\n'
                 "      *) exit 1 ;;\n"
                 "    esac ;;\n"
                 "  logs|rm) exit 0 ;;\n"
@@ -87,6 +88,12 @@ class SmokeContainerTest(unittest.TestCase):
         result = self.smoke(NO_WINDOW_MANAGER="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("exited before it became ready", result.stderr)
+        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
+
+    def test_requires_native_d3dx(self):
+        result = self.smoke(MISSING_D3DX="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Native 32-bit D3DX9 helper", result.stderr)
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
     def test_reports_logs_and_removes_exited_container(self):

@@ -27,7 +27,8 @@ The BYOND service removes Selkies' `LD_PRELOAD` input and webcam interposers
 from Wine's environment: testing showed that removing them lets the VC runtime
 installer complete and restored BYOND game and stat-panel rendering in that
 test environment. A later user-reported session rendered the menu, dialogs and
-audio, but showed a black game scene with a few solid-color tiles after joining.
+audio, but showed a black game scene with a few solid-color tiles after joining,
+with and without the GPU override.
 The rendering failure remains unresolved; Wine applications do not receive
 Selkies' injected gamepad or webcam integrations.
 

@@ -32,7 +32,8 @@ Provide an independently usable, single-player Wine/BYOND image.
 
 **Progress:** CI has built, smoke-tested and published the desktop-free `dev`
 image. A user report confirms that the menu, dialogs and audio work, but the
-game scene becomes black with a few solid-color tiles after joining. Earlier
+game scene becomes black with a few solid-color tiles after joining, both with
+and without the GPU override. Earlier
 testing found that removing Selkies' `LD_PRELOAD` restored game and stat-panel
 rendering in that test environment; it does not resolve or rule out the current
 failure. The image now installs Microsoft's D3DX9 helper as a candidate fix;
