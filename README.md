@@ -15,9 +15,9 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 The image uses the full Selkies KDE EGL desktop for a headless X11 display,
 audio and browser streaming. The pinned base includes Lutris, Wine Staging
 11.21 and Winetricks. The build uses Winetricks to install Visual C++ 2022,
-DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND. It targets
-`linux/amd64` and an x64 Wine prefix; this combination has not yet been
-validated end to end. DXVK is not installed for this rendering experiment;
+DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
+It targets `linux/amd64` and an x64 Wine prefix; this combination has not yet
+been validated end to end. DXVK is not installed for this rendering experiment;
 Wine's built-in Direct3D implementation is used instead. See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
@@ -177,6 +177,26 @@ The container health check requires the selected BYOND process and the Selkies
 health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
+
+### LXQt comparison image
+
+CI also builds and smoke-tests `ghcr.io/flashdim/tgstation-gateway:lxqt-test`,
+which uses the earlier, smaller Selkies LXQt desktop. It keeps the same Wine
+Staging 11.21, Winetricks revision, BYOND version, installed components and
+launcher behavior; only the Selkies desktop base changes. CI reports both
+image sizes for comparison.
+
+To try it with the same server and GPU settings as the KDE image:
+
+```sh
+export GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:lxqt-test
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml pull
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --force-recreate
+```
+
+Set `GATEWAY_IMAGE` back to `ghcr.io/flashdim/tgstation-gateway:dev` to return
+to KDE. `SELKIES_BASE_IMAGE` is also a build argument for testing the alternate
+base locally.
 
 ### AMD or Intel GPU experiment
 
