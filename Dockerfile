@@ -21,7 +21,8 @@ RUN selkies-privileged-files release && \
       > /etc/apt/sources.list.d/winehq.list && \
     apt-get update && \
     apt-get install -y --install-recommends \
-      "winehq-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
+      "winehq-staging=${WINE_PACKAGE_VERSION}" \
+      "wine-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
