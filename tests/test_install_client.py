@@ -82,6 +82,7 @@ class InstallClientTest(unittest.TestCase):
                 "wineserver --wait",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
+                "winetricks -q d3dx9_43",
                 "winetricks -q corefonts",
                 "winetricks -q riched20",
                 "winetricks -q msftedit",
@@ -94,7 +95,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
-            ["mscoree,mshtml=d"] + ["example=b"] * 6,
+            ["mscoree,mshtml=d"] + ["example=b"] * 7,
         )
         cache_paths = (self.root / "cache-paths").read_text().splitlines()
         self.assertEqual(len(set(cache_paths)), 1)
@@ -116,7 +117,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertNotIn("wineserver -k", self.log.read_text())
 
     def test_fails_if_new_component_fails(self):
-        for component in ("corefonts", "riched20", "msftedit"):
+        for component in ("d3dx9_43", "corefonts", "riched20", "msftedit"):
             with self.subTest(component=component):
                 result = self.install(FAIL_COMPONENT=component)
                 self.assertEqual(result.returncode, 17)

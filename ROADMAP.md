@@ -35,7 +35,9 @@ image. A user report confirms that the menu, dialogs and audio work, but the
 game scene becomes black with a few solid-color tiles after joining. Earlier
 testing found that removing Selkies' `LD_PRELOAD` restored game and stat-panel
 rendering in that test environment; it does not resolve or rule out the current
-failure. A direct launch to the configured host has been observed. The release
+failure. The image now installs Microsoft's D3DX9 helper as a candidate fix;
+its effect on the reported scene has not been verified. A direct launch to the
+configured host has been observed. The release
 publication path and a complete playable gameplay session remain unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
