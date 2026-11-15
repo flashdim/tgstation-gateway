@@ -23,6 +23,23 @@ The bootstrapper is not checksum-pinned by Winetricks and downloads a current
 runtime, so builds are not fully reproducible. Third-party software remains in
 the image; check its licensing and redistribution terms before publishing it.
 
+Building requires Docker with BuildKit and the Buildx CLI plugin; the classic
+builder cannot build this Dockerfile. For the Compose example, the Docker
+Compose plugin is also required. Check the installed tools with:
+
+```sh
+docker buildx version
+docker compose version
+```
+
+If Buildx is missing, install it using the packages for your Docker
+installation. For example, on Ubuntu or Debian with
+[Docker's package repository](https://docs.docker.com/engine/install/), install
+`docker-buildx-plugin` with `sudo apt-get install docker-buildx-plugin`.
+Package names may differ for distribution-provided Docker installations.
+Ensure `DOCKER_BUILDKIT` is not set to `0`; installing Buildx is still
+required if the plugin is missing.
+
 ```sh
 docker build --platform linux/amd64 -t tgstation-gateway-player .
 ```
@@ -89,6 +106,10 @@ The Compose example builds and runs one player container bound to localhost:
 ```sh
 docker compose up --build
 ```
+
+After installing Buildx, use `docker compose up --build --force-recreate` to
+rebuild and recreate an existing container. `--force-recreate` alone does not
+force an image rebuild.
 
 Set `BYOND_VERSION` (and optionally `BYOND_SHA256`) before building to select a
 different BYOND version. Set `GATEWAY_PORT` to change the localhost port.
