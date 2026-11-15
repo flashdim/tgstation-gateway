@@ -15,11 +15,9 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It installs
 Wine Staging 11.21 and uses Winetricks to install Visual C++ 2022,
-DirectX components including Microsoft's `d3dx9_43`, core fonts, RichEdit and
-WebView2. It also installs BYOND. The native D3DX helper is a candidate fix for
-the reported black game scene; in-game verification is still required.
-It targets `linux/amd64` and an x64 Wine prefix. DXVK is not installed;
-Wine's built-in Direct3D implementation is used instead. See the community
+DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
+It targets `linux/amd64` and an x64 Wine prefix. By default, DXVK is not
+installed and Wine's built-in Direct3D implementation is used. See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
 
@@ -28,7 +26,8 @@ from Wine's environment: testing showed that removing them lets the VC runtime
 installer complete and restored BYOND game and stat-panel rendering in that
 test environment. A later user-reported session rendered the menu, dialogs and
 audio, but showed a black game scene with a few solid-color tiles after joining,
-with and without the GPU override.
+with and without the GPU override. Installing native `d3dx9_43` did not improve
+the reported scene.
 The rendering failure remains unresolved; Wine applications do not receive
 Selkies' injected gamepad or webcam integrations.
 
@@ -80,11 +79,10 @@ corruption but not against a known digest.
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
 The build requires network access to the community mirror, WineHQ, GitHub,
-Microsoft and other Winetricks download hosts. The D3DX verb downloads Microsoft's
-June 2010 DirectX redistributable. The RichEdit verbs download large Windows
-service packs and legacy installers from third-party and archive mirrors; these
-downloads are verified against Winetricks' checksums. The build intentionally
-fails if an installer or an integrity check fails. Wine initialization and each
+Microsoft and other Winetricks download hosts. The RichEdit verbs download large
+Windows service packs and legacy installers from third-party and archive
+mirrors, verified against Winetricks' checksums. The build intentionally fails
+if an installer or an integrity check fails. Wine initialization and each
 Winetricks component log their start and completion and have individual
 timeouts. Initial prefix creation suppresses Wine's interactive Mono and Gecko
 setup dialogs; the override applies only to initialization, not the running
@@ -125,6 +123,11 @@ can reuse the default-branch cache, builds and tests the image again, then pushe
 `ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also
 update `latest`. Publishing requires Actions permission to write packages;
 check third-party redistribution terms before creating a release.
+
+Manual CI runs can select `dxvk` to build and smoke-test the experimental
+DXVK image, publishing it as the mutable `dxvk-test` tag instead of `dev`.
+The DXVK-modified prefix is never saved to the shared Wine prefix cache. This
+smoke test does not verify in-game rendering.
 
 ## Private single-player experiment
 
@@ -243,6 +246,33 @@ increase memory use; a user reported no visible rendering improvement. It does
 not disable Chromium site isolation. To disable the experiment, unset
 `BYOND_WEBVIEW2_GPU` and recreate the container; restarting alone retains its
 modified Wine prefix. This does not resolve server authentication failures.
+
+### DXVK rendering comparison
+
+The black in-game scene is unresolved; installing native `d3dx9_43` did not
+improve it in the reported test. As a separate experiment, build an image with
+DXVK 2.7.1 instead of Wine's Direct3D implementation:
+
+```sh
+docker build --platform linux/amd64 --build-arg BYOND_DXVK=1 \
+  -t tgstation-gateway-player:dxvk .
+export GATEWAY_IMAGE=tgstation-gateway-player:dxvk
+export DXVK_HUD=devinfo,api
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up --force-recreate
+```
+
+Set `DRI_RENDER_GID` as described above before using the GPU override. Without
+it, omit `-f examples/compose.gpu.yaml` to try a software Vulkan driver instead.
+DXVK requires a compatible Vulkan 1.3 driver and extensions; render-node access
+or an OpenGL renderer alone does not establish Vulkan support. The DXVK HUD
+should identify the device and Direct3D API when DXVK is actually in use;
+inspect container logs for DXVK initialization errors if it does not appear.
+Compare the same in-game scene and also check WebView2: DXVK overrides D3D8,
+D3D9, D3D10, D3D11 and DXGI for the whole Wine prefix, not just the map.
+The experiment may fail or change other graphics behavior; it is not a
+confirmed fix. DXVK warns that substituting Direct3D libraries in multiplayer
+games may violate server rules or trigger bans; check the server's policy.
+Recreate a container with the default image to return to Wine's renderer.
 
 Selkies uses WebSockets by default. Software rendering may be slow.
 The image exposes a graphical session, not a hardened application sandbox.

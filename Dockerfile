@@ -55,6 +55,10 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
       xvfb-run -a /usr/local/bin/install-client; \
     fi
 
+COPY --chmod=755 container/install-dxvk.sh /usr/local/bin/install-dxvk
+ARG BYOND_DXVK=0
+RUN /usr/local/bin/install-dxvk
+
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
 ARG BYOND_VERSION=516.1688
 ARG BYOND_SHA256=""

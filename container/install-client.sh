@@ -30,7 +30,6 @@ run_stage "Wine prefix initialization" 90s \
 run_stage "Wine prefix startup" 30s wineserver --wait
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
 run_stage "Winetricks dxtrans" 120s winetricks -q dxtrans
-run_stage "Winetricks d3dx9_43" 300s winetricks -q d3dx9_43
 run_stage "Winetricks corefonts" 180s winetricks -q corefonts
 run_stage "Winetricks riched20" 300s winetricks -q riched20
 run_stage "Winetricks msftedit" 900s winetricks -q msftedit

@@ -9,5 +9,6 @@ services:
     environment:
       BYOND_SERVER: ${BYOND_SERVER:-}
       BYOND_WEBVIEW2_GPU: ${BYOND_WEBVIEW2_GPU:-0}
+      DXVK_HUD: ${DXVK_HUD:-}
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"

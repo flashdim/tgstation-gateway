@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      renderer:
+        description: Renderer to build and smoke-test
+        type: choice
+        options: [wine, dxvk]
+        default: wine
 
 permissions:
   contents: read
@@ -69,21 +75,31 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: tgstation-gateway-player:ci
+          build-args: |
+            BYOND_DXVK=${{ inputs.renderer == 'dxvk' && '1' || '0' }}
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
 
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
 
+      - name: Check DXVK installation
+        if: inputs.renderer == 'dxvk'
+        run: |
+          docker run --rm --entrypoint sh tgstation-gateway-player:ci -c '
+            test -s "$WINEPREFIX/drive_c/windows/syswow64/d3d9.dll" &&
+            grep -Fq "\"*d3d9\"=\"native\"" "$WINEPREFIX/user.reg"
+          '
+
       - name: Archive Wine prefix
-        if: steps.wine-cache.outputs.cache-hit != 'true'
+        if: steps.wine-cache.outputs.cache-hit != 'true' && inputs.renderer != 'dxvk'
         run: |
           docker run --rm --entrypoint tar tgstation-gateway-player:ci \
             --exclude='./drive_c/Program Files (x86)/BYOND' \
             -C /home/ubuntu/.wine -czf - . > "$RUNNER_TEMP/wine-prefix-cache/prefix.tar.gz"
 
       - name: Save Wine prefix cache
-        if: steps.wine-cache.outputs.cache-hit != 'true'
+        if: steps.wine-cache.outputs.cache-hit != 'true' && inputs.renderer != 'dxvk'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
@@ -97,7 +113,8 @@ jobs:
 
       - name: Log in to GHCR
         if: >-
-          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.renderer == 'dxvk')) ||
           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -107,10 +124,11 @@ jobs:
 
       - name: Publish tested development image
         if: >-
-          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || inputs.renderer == 'dxvk')) ||
           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:dev
+          IMAGE: ghcr.io/${{ github.repository }}:${{ inputs.renderer == 'dxvk' && 'dxvk-test' || 'dev' }}
         run: |
           docker tag tgstation-gateway-player:ci "$IMAGE"
           docker push "$IMAGE"
