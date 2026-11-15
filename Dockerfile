@@ -31,9 +31,6 @@ RUN curl -fsSL --retry 3 \
     chmod 755 /usr/local/bin/winetricks
 
 COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
-COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
-RUN install -d -o 1000 -g 1000 /etc/service/byond
-COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 
 USER 1000
 ENV WINEPREFIX=/home/ubuntu/.wine \
@@ -42,10 +39,16 @@ ENV WINEPREFIX=/home/ubuntu/.wine \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false
 
+RUN xvfb-run -a /usr/local/bin/install-client
+
+COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
 ARG BYOND_VERSION=516.1688
 ARG BYOND_SHA256=""
 ENV BYOND_VERSION=${BYOND_VERSION}
 
 RUN /usr/local/bin/install-byond
 
-RUN xvfb-run -a /usr/local/bin/install-client
+USER root
+RUN install -d -o 1000 -g 1000 /etc/service/byond
+COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
+USER 1000

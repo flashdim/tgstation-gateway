@@ -30,11 +30,6 @@ run_stage "Winetricks dxvk2071" 120s winetricks -q dxvk2071
 run_stage "Winetricks webview2" 240s winetricks -q webview2
 run_stage "Wine process shutdown" 30s wineserver -k
 run_stage "Wine server shutdown" 30s wineserver --wait
-if [ ! -f "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" ]; then
-    echo "BYOND installation did not produce the expected executable" >&2
-    exit 1
-fi
-
 if ! find "$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application" \
     -name msedgewebview2.exe -print -quit | grep -q .; then
     echo "WebView2 installation did not produce the expected runtime" >&2

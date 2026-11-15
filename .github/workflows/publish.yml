@@ -43,6 +43,7 @@ jobs:
           load: true
           tags: tgstation-gateway-player:release
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=player-image
 
       - name: Smoke-test release image
         run: bash tests/smoke-container.sh tgstation-gateway-player:release

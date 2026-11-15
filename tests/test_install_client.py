@@ -42,7 +42,6 @@ class InstallClientTest(unittest.TestCase):
         )
         timeout.chmod(0o755)
         self.prefix = self.root / "prefix"
-        self.create_file("drive_c/Program Files (x86)/BYOND/bin/byond.exe")
 
     def create_file(self, path):
         file = self.prefix / path

@@ -2,7 +2,14 @@ name: Container CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      refresh_cache:
+        description: Rebuild without cached layers
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +40,9 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: tgstation-gateway-player:ci
+          no-cache: ${{ inputs.refresh_cache || false }}
+          cache-from: type=gha,scope=player-image
+          cache-to: type=gha,scope=player-image,mode=min,ignore-error=true
 
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci

@@ -55,10 +55,14 @@ client.
 ## CI and releases
 
 GitHub Actions jobs have a 15-minute timeout and use the community BYOND mirror.
-Pull requests build the
-image and smoke-test the Selkies endpoint and BYOND
-pager, without logging in to a game server. Publishing a GitHub release builds
-and tests the image again, then pushes it to
+Pull requests and pushes to `main` build the image and smoke-test the Selkies
+endpoint and BYOND pager, without logging in to a game server. CI caches image
+layers in GitHub Actions; the first build populates the cache, and branch
+access and cache eviction affect reuse. Cache export failures are non-fatal and
+reported in the build log. A manually dispatched CI run on `main` with
+`refresh_cache` enabled rebuilds the layers and refreshes the shared cache,
+including the unpinned WebView2 runtime. Publishing a GitHub release can reuse
+the default-branch cache, builds and tests the image again, then pushes it to
 `ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also
 update `latest`. Publishing requires Actions permission to write packages;
 check third-party redistribution terms before creating a release.
