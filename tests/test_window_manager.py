@@ -40,8 +40,14 @@ class WindowManagerTest(unittest.TestCase):
             self.assertEqual(result.stdout.strip(), ":42")
 
     def test_tray_only_starts_for_pager(self):
-        for server, expected in (("", "tray :42"), ("example.org:1337", "sleep infinity")):
-            with self.subTest(server=server), tempfile.TemporaryDirectory() as temporary:
+        for server, expected in (
+            ("", "tray :42"),
+            ("example.org:1337", "sleep infinity"),
+        ):
+            with (
+                self.subTest(server=server),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 root = Path(temporary)
                 commands = root / "bin"
                 commands.mkdir()
