@@ -23,8 +23,11 @@ BYOND-specific Wine troubleshooting.
 
 The BYOND service removes Selkies' `LD_PRELOAD` input and webcam interposers
 from Wine's environment: testing showed that removing them lets the VC runtime
-installer complete and restores BYOND game rendering. Wine applications do not
-receive those injected gamepad or webcam integrations.
+installer complete and restored BYOND game and stat-panel rendering in that
+test environment. A later user-reported session rendered the menu, dialogs and
+audio, but showed a black game scene with a few solid-color tiles after joining.
+The rendering failure remains unresolved; Wine applications do not receive
+Selkies' injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -179,11 +182,12 @@ There is no full desktop in this image. Openbox manages BYOND windows and
 dialogs on the X11 display, which Selkies streams as a whole; this is not
 per-window isolation. When starting the pager rather than a direct server
 connection, a small system tray is provided for its icon. The launcher assumes
-X11, not Selkies' Wayland backend. The desktop-free image has been reported
-working by a user. Earlier testing restored game and stat-panel rendering by
-removing `LD_PRELOAD`, and confirmed audio with the LXQt-based image. A complete
-gameplay session and the desktop-free image's dialogs and pager/tray behavior
-still need explicit verification.
+X11, not Selkies' Wayland backend. Earlier testing restored game and stat-panel
+rendering by removing `LD_PRELOAD`, and confirmed audio with the LXQt-based
+image. A later user-reported session rendered the menu, dialogs and audio, but
+showed a black game scene with a few solid-color tiles after joining. This
+rendering failure remains unresolved; the smoke test does not verify gameplay.
+The desktop-free image's pager/tray behavior also needs explicit verification.
 
 ### AMD or Intel GPU experiment
 

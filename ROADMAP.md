@@ -31,11 +31,12 @@ Provide an independently usable, single-player Wine/BYOND image.
   publish the tested image on release.
 
 **Progress:** CI has built, smoke-tested and published the desktop-free `dev`
-image. A user reports that it works; earlier testing confirmed that removing
-Selkies' `LD_PRELOAD` from Wine restored game and stat-panel rendering, and
-that audio worked with the LXQt image. A direct launch to the configured host
-has been observed. The release publication path and a complete authenticated
-gameplay session remain unverified.
+image. A user report confirms that the menu, dialogs and audio work, but the
+game scene becomes black with a few solid-color tiles after joining. Earlier
+testing found that removing Selkies' `LD_PRELOAD` restored game and stat-panel
+rendering in that test environment; it does not resolve or rule out the current
+failure. A direct launch to the configured host has been observed. The release
+publication path and a complete playable gameplay session remain unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
@@ -47,6 +48,8 @@ Prove that the image is usable against an actual tgstation server before
 building session orchestration around it.
 
 - Manually verify browser connection, BYOND login and joining a test server.
+- Reproduce and diagnose the reported black game scene with solid-color tiles;
+  record the client, Wine and rendering configuration for each test.
 - Verify map rendering, TGUI/WebView2, keyboard and mouse input, sound,
   dialogs, pager/tray behavior, disconnect and reconnect; record supported
   versions and limitations.
