@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      wayland_test:
+        description: Smoke-test the experimental Wayland session
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -74,6 +79,10 @@ jobs:
 
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
+
+      - name: Smoke-test experimental Wayland session
+        if: inputs.wayland_test
+        run: bash tests/smoke-wayland.sh tgstation-gateway-player:ci
 
       - name: Archive Wine prefix
         if: steps.wine-cache.outputs.cache-hit != 'true'
