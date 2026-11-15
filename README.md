@@ -30,7 +30,9 @@ with and without GPU access. Neither native `d3dx9_43` nor DXVK 2.7.1 fixed the
 reported scene. DXVK's D3D9 library was loaded and logged device resets, but the
 map showed no DXVK HUD; WebView panels did. The map also remained black with
 Wine 11.15, Ubuntu's stock Xvfb and Selkies' Wayland/XWayland session. The same
-BYOND version was reported working on the same GPU with Proton 11.0-2.
+BYOND version was reported working on the same GPU with Proton 11.0-2, but
+using that Proton installation's D3D9 DXVK library with Wine did not fix the
+map; Dream Seeker loaded the copied library.
 The rendering failure remains unresolved; Wine applications do not receive
 Selkies' injected gamepad or webcam integrations.
 
