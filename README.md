@@ -95,6 +95,13 @@ Pull requests and pushes to `main` build the image and smoke-test the Selkies
 endpoint and BYOND pager, without logging in to a game server. CI caches the
 initialized Wine prefix without BYOND in GitHub Actions; the first successful
 build populates the cache, and branch access and cache eviction affect reuse.
+After formatting and image checks pass, CI publishes the tested image to
+`ghcr.io/flashdim/tgstation-gateway:dev` for pushes or manual runs on `main`
+and pull requests from this repository. Fork pull requests do not publish.
+The mutable `dev` tag can contain unmerged pull-request code and points to the
+most recently published image, not necessarily the latest commit on `main`.
+Overlapping runs may finish out of order. Pull it again to get updates; it is
+not a release or a Git tag.
 To refresh unpinned components such as WebView2, delete the `wine-prefix-v1-`
 cache in GitHub Actions and run CI on `main` again. Publishing a GitHub release
 can reuse the default-branch cache, builds and tests the image again, then pushes it to

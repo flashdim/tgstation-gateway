@@ -29,8 +29,12 @@ jobs:
           "$RUNNER_TEMP/format-env/bin/pre-commit" run --all-files --show-diff-on-failure
 
   image:
+    needs: formatting
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -82,3 +86,23 @@ jobs:
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
           key: ${{ steps.wine-cache.outputs.cache-primary-key }}
+
+      - name: Log in to GHCR
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish tested development image
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:dev
+        run: |
+          docker tag tgstation-gateway-player:ci "$IMAGE"
+          docker push "$IMAGE"
