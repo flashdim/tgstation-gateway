@@ -27,7 +27,10 @@ RUN selkies-privileged-files release && \
     apt-get install -y --no-install-recommends openbox trayer && \
     case "$XSERVER_VARIANT" in \
       selkies) ;; \
-      stock) apt-get install -y --reinstall xvfb ;; \
+      stock) \
+        apt-get install -y --reinstall xvfb && \
+        grep -Fq '"${DISPLAY}" -verbose 1 ' /etc/service/xvfb/run && \
+        sed -i 's/"${DISPLAY}" -verbose 1 /"${DISPLAY}" /' /etc/service/xvfb/run ;; \
       *) echo "Invalid XSERVER_VARIANT: expected selkies or stock" >&2; exit 1 ;; \
     esac && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
