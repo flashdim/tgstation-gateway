@@ -8,6 +8,8 @@ session manager. The game server and tgstation-server remain separate.
 resource limits and cleanup are not implemented. This is intended for private
 self-hosting and is not ready for multi-user deployment.
 
+See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
+
 ## Build the player image
 
 The image uses the Selkies desktop image for a headless X11 display, audio and
@@ -98,11 +100,3 @@ The image exposes a desktop environment, not a hardened application sandbox.
 The stream is unprotected by default. Operators are responsible for restricting
 access and securing connections outside this project. Do not expose it directly
 to the internet or share a container between players.
-
-## Next milestones
-
-Validate login, map rendering, TGUI/WebView2, sound and input against a real
-server, then measure per-player memory, CPU/GPU usage and bandwidth. Test two
-independent sessions for shared IP and BYOND computer-ID collisions before
-designing ban handling. A future manager must enforce isolation, limits and
-cleanup; operators remain responsible for access controls.
