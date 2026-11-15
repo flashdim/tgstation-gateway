@@ -14,9 +14,12 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies desktop image for a headless X11 display, audio and
 browser streaming. It installs Wine 11 and uses Winetricks to install Visual
-C++ 2022, DirectX components, DXVK and WebView2. It also installs BYOND. It
-targets `linux/amd64` and an x64 Wine prefix; this combination has not yet been
-validated end to end.
+C++ 2022, DirectX components and WebView2. It also installs BYOND. It targets
+`linux/amd64` and an x64 Wine prefix; this combination has not yet been
+validated end to end. DXVK is not installed for this rendering experiment;
+Wine's built-in Direct3D implementation is used instead. See the community
+[Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
+BYOND-specific Wine troubleshooting.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -162,8 +165,9 @@ health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
-Selkies uses WebSockets by default. Software rendering may be too slow for
-DXVK; GPU access and hardware-specific configuration require separate testing.
+Selkies uses WebSockets by default. Software rendering may be slow; GPU access
+and hardware-specific configuration require separate testing. Whether removing
+DXVK fixes rendering has not yet been verified.
 The image exposes a desktop environment, not a hardened application sandbox.
 The stream is unprotected by default. Operators are responsible for restricting
 access and securing connections outside this project. Do not expose it directly

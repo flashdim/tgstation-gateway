@@ -82,7 +82,6 @@ class InstallClientTest(unittest.TestCase):
                 "wineserver --wait",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
-                "winetricks -q dxvk2071",
                 "winetricks -q webview2",
                 "wineserver -k",
                 "wineserver --wait",
@@ -92,7 +91,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
-            ["mscoree,mshtml=d", "example=b", "example=b", "example=b", "example=b"],
+            ["mscoree,mshtml=d", "example=b", "example=b", "example=b"],
         )
         cache_paths = (self.root / "cache-paths").read_text().splitlines()
         self.assertEqual(len(set(cache_paths)), 1)
@@ -102,7 +101,7 @@ class InstallClientTest(unittest.TestCase):
         result = self.install(FAIL_COMPONENT="dxtrans")
         self.assertEqual(result.returncode, 17)
         self.assertIn("Winetricks dxtrans failed with exit code 17", result.stderr)
-        self.assertNotIn("winetricks -q dxvk2071", self.log.read_text())
+        self.assertNotIn("winetricks -q webview2", self.log.read_text())
         self.assertNotIn("wineserver -k", self.log.read_text())
         cache_path = (self.root / "cache-paths").read_text().splitlines()[0]
         self.assertFalse(Path(cache_path).exists())
