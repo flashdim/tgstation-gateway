@@ -24,8 +24,9 @@ runtime, so builds are not fully reproducible. Third-party software remains in
 the image; check its licensing and redistribution terms before publishing it.
 
 Building requires Docker with BuildKit and the Buildx CLI plugin; the classic
-builder cannot build this Dockerfile. For the Compose example, the Docker
-Compose plugin is also required. Check the installed tools with:
+builder cannot build this Dockerfile. The Compose example pulls a published
+image instead and requires the Docker Compose plugin. Check the installed tools
+with:
 
 ```sh
 docker buildx version
@@ -103,20 +104,24 @@ check third-party redistribution terms before creating a release.
 
 ## Private single-player experiment
 
-The Compose example builds and runs one player container bound to localhost:
+The Compose example pulls the published image and runs one player container
+bound to localhost:
 
 ```sh
-docker compose up --build
+docker compose -f examples/compose.yaml pull
+docker compose -f examples/compose.yaml up
 ```
 
-After installing Buildx, use `docker compose up --build --force-recreate` to
-rebuild and recreate an existing container. `--force-recreate` alone does not
-force an image rebuild.
+The `latest` tag is updated only by non-prerelease releases and will not be
+available until the first such image is published. Prerelease images use their
+release tag instead; change the image in the example to use one. GHCR may
+require authentication depending on package visibility. The `pull` command
+refreshes the mutable `latest` tag before starting the container.
 
-Set `BYOND_VERSION` (and optionally `BYOND_SHA256`) before building to select a
-different BYOND version. Set `GATEWAY_PORT` to change the localhost port.
-Rebuild with `docker compose up --build` after changing the BYOND version.
-Run `docker compose down` to remove the container and its player data.
+Set `GATEWAY_PORT` to change the localhost port. Run
+`docker compose -f examples/compose.yaml down` to remove the container and its
+player data. The published image uses its build-time BYOND version; to select
+another version, build and run a local image as described above and below.
 
 Alternatively, run the image built above directly:
 
