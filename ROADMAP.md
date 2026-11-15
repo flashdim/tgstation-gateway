@@ -36,9 +36,9 @@ game scene becomes black with a few solid-color tiles after joining, with and
 without GPU access. Installing native `d3dx9_43` did not improve the scene.
 With DXVK 2.7.1, the map stayed black; Dream Seeker loaded DXVK's D3D9 library
 and logged device resets, but its viewport did not show a DXVK HUD. The map
-also remained black with Wine 11.15. Earlier testing found that removing Selkies'
-`LD_PRELOAD` restored game and stat-panel
-rendering in that test environment; it does not resolve or rule out the current
+also remained black with Wine 11.15 and with Ubuntu's stock Xvfb. Earlier testing
+found that removing Selkies' `LD_PRELOAD` restored game and stat-panel rendering
+in that test environment; it does not resolve or rule out the current
 failure. A direct launch to the configured host has been observed. The release
 publication path and a complete playable gameplay session remain unverified.
 

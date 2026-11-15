@@ -11,7 +11,6 @@ SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG WINE_PACKAGE_VERSION=11.21~resolute-1
-ARG XSERVER_VARIANT=selkies
 
 RUN selkies-privileged-files release && \
     mkdir -p /etc/apt/keyrings && \
@@ -25,14 +24,6 @@ RUN selkies-privileged-files release && \
       "winehq-staging=${WINE_PACKAGE_VERSION}" \
       "wine-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
     apt-get install -y --no-install-recommends openbox trayer && \
-    case "$XSERVER_VARIANT" in \
-      selkies) ;; \
-      stock) \
-        apt-get install -y --reinstall xvfb && \
-        grep -Fq '"${DISPLAY}" -verbose 1 ' /etc/service/xvfb/run && \
-        sed -i 's/"${DISPLAY}" -verbose 1 /"${DISPLAY}" /' /etc/service/xvfb/run ;; \
-      *) echo "Invalid XSERVER_VARIANT: expected selkies or stock" >&2; exit 1 ;; \
-    esac && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 

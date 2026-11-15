@@ -28,8 +28,8 @@ test environment. A later user-reported session rendered the menu, dialogs and
 audio, but showed a black game scene with a few solid-color tiles after joining,
 with and without GPU access. Neither native `d3dx9_43` nor DXVK 2.7.1 fixed the
 reported scene. DXVK's D3D9 library was loaded and logged device resets, but the
-map showed no DXVK HUD; WebView panels did.
-The map also remained black in a Wine 11.15 comparison.
+map showed no DXVK HUD; WebView panels did. The map also remained black with
+Wine 11.15 and with Ubuntu's stock Xvfb.
 The rendering failure remains unresolved; Wine applications do not receive
 Selkies' injected gamepad or webcam integrations.
 
@@ -125,11 +125,6 @@ can reuse the default-branch cache, builds and tests the image again, then pushe
 `ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also
 update `latest`. Publishing requires Actions permission to write packages;
 check third-party redistribution terms before creating a release.
-
-For the in-game rendering investigation, a manual CI run can select the stock
-Xvfb server and publish the smoke-tested comparison as the mutable
-`stock-xvfb-test` tag. The comparison does not restore or save the Wine prefix
-cache, which belongs to the default image. It does not verify gameplay.
 
 ## Private single-player experiment
 
@@ -248,26 +243,6 @@ increase memory use; a user reported no visible rendering improvement. It does
 not disable Chromium site isolation. To disable the experiment, unset
 `BYOND_WEBVIEW2_GPU` and recreate the container; restarting alone retains its
 modified Wine prefix. This does not resolve server authentication failures.
-
-### X server comparison
-
-The black in-game scene is unresolved. Wine renders child window surfaces
-offscreen; as a diagnostic, compare the distribution's Xvfb with Selkies'
-custom X server:
-
-```sh
-docker build --platform linux/amd64 \
-  --build-arg XSERVER_VARIANT=stock \
-  -t tgstation-gateway-player:stock-xvfb .
-export GATEWAY_IMAGE=tgstation-gateway-player:stock-xvfb
-docker compose -f examples/compose.yaml up --force-recreate
-```
-
-Use software rendering for this comparison: the stock server does not provide
-Selkies' GPU-enabled X11 path. Recreating the container removes its login and
-session data. Compare the same in-game scene, WebView2 panels and dialogs.
-This is an unverified experiment, not a confirmed fix; display resizing and
-performance may differ. Recreate with the default image to revert.
 
 Selkies uses WebSockets by default. Software rendering may be slow.
 The image exposes a graphical session, not a hardened application sandbox.
