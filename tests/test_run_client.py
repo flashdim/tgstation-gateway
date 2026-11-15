@@ -18,6 +18,10 @@ class RunClientTest(unittest.TestCase):
                 "timeout": 'shift\nexec "$@"',
                 "xdpyinfo": 'test "$1" = "-display" && test "$2" = ":42"',
                 "wine": (
+                    'if [ -n "${LD_PRELOAD:-}" ]; then\n'
+                    '  echo "LD_PRELOAD leaked to Wine" >&2\n'
+                    "  exit 97\n"
+                    "fi\n"
                     'if [ "$1" = reg ]; then\n'
                     '  printf "%s\\n" "$@" > "$WINE_LOG"\n'
                     '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
@@ -44,6 +48,7 @@ class RunClientTest(unittest.TestCase):
                 "XDG_RUNTIME_DIR": str(runtime),
                 "WINE_LOG": str(root / "wine-log"),
                 "FAIL_REGISTRY": "1" if fail_registry else "0",
+                "LD_PRELOAD": "libm.so.6",
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)

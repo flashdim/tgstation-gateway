@@ -25,6 +25,10 @@ BYOND-specific Wine troubleshooting.
 The full desktop also includes browsers, Steam and other applications. It is
 an experiment, not a minimized image. Wine and Lutris are supplied by the
 digest-pinned base; changing the base can change their versions.
+The BYOND service removes Selkies' `LD_PRELOAD` input and webcam interposers
+from Wine's environment: testing showed that removing them lets the VC runtime
+installer complete and restores BYOND game rendering. Wine applications do not
+receive those injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -232,7 +236,7 @@ sed -i \
   "$HOME/byond-lutris.yaml"
 grep -Fq 'https://byond-builds.dm-lang.org/516/516.1667_byond.exe' "$HOME/byond-lutris.yaml" &&
   ! grep -Eq 'www\.byond\.com/download/build|ignore-gpu-blocklist|disable-site-isolation-trials' "$HOME/byond-lutris.yaml" &&
-  env -u WINEPREFIX lutris -i "$HOME/byond-lutris.yaml"
+  env -u WINEPREFIX -u LD_PRELOAD lutris -i "$HOME/byond-lutris.yaml"
 ```
 
 Select system Wine in Lutris and install into a **separate** prefix, such as
