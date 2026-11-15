@@ -22,8 +22,19 @@ class SmokeContainerTest(unittest.TestCase):
                 'case "$1" in\n'
                 "  run) echo test-container ;;\n"
                 "  port) echo 127.0.0.1:12345 ;;\n"
-                "  inspect) echo false ;;\n"
-                "  exec|logs|rm) exit 0 ;;\n"
+                "  inspect)\n"
+                '    if [ "$3" = "{{json .Config.Healthcheck.Test}}" ]; then\n'
+                """      echo '["CMD","/usr/local/bin/healthcheck"]'\n"""
+                "    else echo false; fi ;;\n"
+                "  exec)\n"
+                '    case "$3" in\n'
+                '      pgrep) test ! -f "$SERVICE_STOPPED" ;;\n'
+                '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
+                "      /usr/local/bin/healthcheck) "
+                'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
+                "      *) exit 1 ;;\n"
+                "    esac ;;\n"
+                "  logs|rm) exit 0 ;;\n"
                 "  *) exit 1 ;;\n"
                 "esac"
             ),
@@ -42,6 +53,7 @@ class SmokeContainerTest(unittest.TestCase):
                 **os.environ,
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "DOCKER_LOG": str(self.log),
+                "SERVICE_STOPPED": str(self.root / "stopped"),
                 **extra_env,
             },
             capture_output=True,
@@ -56,9 +68,18 @@ class SmokeContainerTest(unittest.TestCase):
         self.assertEqual(
             commands[0], "run -d --init --shm-size=2g -p 127.0.0.1::8080 example:ci"
         )
-        self.assertEqual(commands.count("exec test-container pgrep -f [b]yond.exe"), 2)
+        self.assertIn("exec test-container s6-svc -d /etc/service/byond", commands)
+        self.assertEqual(
+            commands.count("exec test-container /usr/local/bin/healthcheck"), 2
+        )
         self.assertEqual(commands[-1], "rm -f test-container")
         self.assertNotIn("logs test-container", commands)
+
+    def test_rejects_healthy_status_without_pager(self):
+        result = self.smoke(BROKEN_HEALTH="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Health check passed without the BYOND pager", result.stderr)
+        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
     def test_reports_logs_and_removes_exited_container(self):
         result = self.smoke(FAIL_HEALTH="1")

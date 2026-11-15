@@ -63,4 +63,8 @@ RUN /usr/local/bin/install-byond
 USER root
 RUN install -d -o 1000 -g 1000 /etc/service/byond
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
+COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["/usr/local/bin/healthcheck"]

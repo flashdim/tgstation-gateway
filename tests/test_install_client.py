@@ -26,6 +26,8 @@ class InstallClientTest(unittest.TestCase):
                     else ""
                 )
                 + (
+                    'printf "%s\\n" "$W_CACHE" >> "$CACHE_LOG"\n'
+                    'printf "installer" > "$W_CACHE/installer.exe"\n'
                     '[ "${FAIL_COMPONENT:-}" != "$2" ] || exit 17\n'
                     if name == "winetricks"
                     else ""
@@ -57,6 +59,7 @@ class InstallClientTest(unittest.TestCase):
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
                 "OVERRIDE_LOG": str(self.root / "overrides"),
+                "CACHE_LOG": str(self.root / "cache-paths"),
                 "WINEDLLOVERRIDES": "example=b",
                 **extra_env,
             },
@@ -91,6 +94,9 @@ class InstallClientTest(unittest.TestCase):
             (self.root / "overrides").read_text().splitlines(),
             ["mscoree,mshtml=d", "example=b", "example=b", "example=b", "example=b"],
         )
+        cache_paths = (self.root / "cache-paths").read_text().splitlines()
+        self.assertEqual(len(set(cache_paths)), 1)
+        self.assertFalse(Path(cache_paths[0]).exists())
 
     def test_fails_if_winetricks_fails(self):
         result = self.install(FAIL_COMPONENT="dxtrans")
@@ -98,6 +104,8 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Winetricks dxtrans failed with exit code 17", result.stderr)
         self.assertNotIn("winetricks -q dxvk2071", self.log.read_text())
         self.assertNotIn("wineserver -k", self.log.read_text())
+        cache_path = (self.root / "cache-paths").read_text().splitlines()[0]
+        self.assertFalse(Path(cache_path).exists())
 
     def test_reports_component_timeout(self):
         result = self.install(TIMEOUT_COMPONENT="webview2")

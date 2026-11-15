@@ -52,7 +52,8 @@ argument if the pinned WineHQ package needs to be changed. Wine initialization
 and each Winetricks component log their start and completion and have individual
 timeouts. Initial prefix creation suppresses Wine's interactive Mono and Gecko
 setup dialogs; the override applies only to initialization, not the running
-client.
+client. Winetricks downloads are removed after installation in the same image
+layer.
 
 ## CI and releases
 
@@ -104,6 +105,8 @@ docker run --rm --init --shm-size=2g \
 
 Open `http://localhost:8080`. The container starts the BYOND pager; sign in
 there and connect to your server.
+The container health check requires both the BYOND process and the Selkies
+health endpoint; it does not verify interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 

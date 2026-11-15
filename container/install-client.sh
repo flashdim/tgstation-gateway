@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+cache_dir="$(mktemp -d)"
+trap 'rm -rf "$cache_dir"' EXIT
+export W_CACHE="$cache_dir"
+
 run_stage() {
     name="$1"
     limit="$2"

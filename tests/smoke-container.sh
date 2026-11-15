@@ -21,7 +21,29 @@ for _ in {1..120}; do
         docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
         sleep 3
         if docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
-            echo "Selkies is responding and the BYOND pager is running"
+            health_command="$(docker inspect -f '{{json .Config.Healthcheck.Test}}' "$container")"
+            if [ "$health_command" != '["CMD","/usr/local/bin/healthcheck"]' ]; then
+                echo "Player image has an unexpected health check: $health_command" >&2
+                exit 1
+            fi
+            docker exec "$container" /usr/local/bin/healthcheck
+            docker exec "$container" s6-svc -d /etc/service/byond
+            for _ in {1..20}; do
+                if ! docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
+                    break
+                fi
+                sleep 1
+            done
+            if docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
+                echo "BYOND pager did not stop" >&2
+                exit 1
+            fi
+            curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null
+            if docker exec "$container" /usr/local/bin/healthcheck >/dev/null 2>&1; then
+                echo "Health check passed without the BYOND pager" >&2
+                exit 1
+            fi
+            echo "Selkies and BYOND health checks passed"
             exit 0
         fi
     fi
