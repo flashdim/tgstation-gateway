@@ -1,0 +1,6 @@
+services:
+  player:
+    devices:
+      - "/dev/dri:/dev/dri"
+    group_add:
+      - "${DRI_RENDER_GID:?Set DRI_RENDER_GID to the host render node group ID}"

@@ -131,6 +131,9 @@ release tag instead; change the image in the example to use one. GHCR may
 require authentication depending on package visibility. The `pull` command
 refreshes the mutable `latest` tag before starting the container.
 
+Set `GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev` to use the
+experimental development image instead.
+
 Set `GATEWAY_PORT` to change the localhost port. Run
 `docker compose -f examples/compose.yaml down` to remove the container and its
 player data. The published image uses its build-time BYOND version; to select
@@ -168,9 +171,41 @@ health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
-Selkies uses WebSockets by default. Software rendering may be slow; GPU access
-and hardware-specific configuration require separate testing. Whether Wine
-Staging improves rendering has not yet been verified.
+### AMD or Intel GPU experiment
+
+The default Compose configuration uses software rendering. To try GPU
+acceleration on a Linux Docker host with an AMD or Intel GPU, identify its DRM
+render node under `/dev/dri`, then set its numeric group ID and add the GPU
+override. For example, if the node is `/dev/dri/renderD128`:
+
+```sh
+export DRI_RENDER_GID="$(stat -c '%g' /dev/dri/renderD128)"
+export GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev
+export BYOND_SERVER=ss13.lazorgator.party:1337
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml pull
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml up -d --force-recreate
+```
+
+Inspect the available nodes first if the host has multiple GPUs; use the group
+ID of the intended render node. The group ID grants access but does not select
+the GPU. To check whether the container can access that node and which OpenGL
+renderer the X11 session uses:
+
+```sh
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml exec player \
+  sh -c 'test -r /dev/dri/renderD128 && test -w /dev/dri/renderD128 && echo "Render node accessible"'
+docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml exec player \
+  sh -c '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; glxinfo -B'
+```
+
+Substitute the selected node for `renderD128`. An AMD or Intel renderer rather
+than llvmpipe indicates hardware OpenGL; node access alone does not. This
+override exposes the host's DRM devices to the container and requires compatible
+host drivers. GPU access and BYOND rendering have not been verified; the
+health check cannot establish either. To return to software rendering, recreate
+the container using only `examples/compose.yaml`.
+
+Selkies uses WebSockets by default. Software rendering may be slow.
 The image exposes a desktop environment, not a hardened application sandbox.
 The stream is unprotected by default. Operators are responsible for restricting
 access and securing connections outside this project. Do not expose it directly

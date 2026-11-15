@@ -2,7 +2,7 @@ name: tgstation-gateway
 
 services:
   player:
-    image: ghcr.io/flashdim/tgstation-gateway:latest
+    image: ${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}
     platform: linux/amd64
     init: true
     shm_size: 2gb
