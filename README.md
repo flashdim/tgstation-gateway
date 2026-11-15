@@ -33,6 +33,8 @@ Wine 11.15, Ubuntu's stock Xvfb and Selkies' Wayland/XWayland session. The same
 BYOND version was reported working on the same GPU with Proton 11.0-2, but
 using that Proton installation's D3D9 DXVK library with Wine did not fix the
 map; Dream Seeker loaded the copied library.
+The image includes 32-bit FreeType and Fontconfig libraries: their absence caused
+FreeType errors when initializing Proton Wine in a separate diagnostic.
 The rendering failure remains unresolved; Wine applications do not receive
 Selkies' injected gamepad or webcam integrations.
 

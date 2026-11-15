@@ -75,6 +75,13 @@ jobs:
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
 
+      - name: Check 32-bit font libraries
+        run: |
+          docker run --rm --entrypoint sh tgstation-gateway-player:ci -c '
+            test -r /usr/lib/i386-linux-gnu/libfreetype.so.6 &&
+            test -r /usr/lib/i386-linux-gnu/libfontconfig.so.1
+          '
+
       - name: Archive Wine prefix
         if: steps.wine-cache.outputs.cache-hit != 'true'
         run: |

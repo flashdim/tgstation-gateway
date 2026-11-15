@@ -23,7 +23,8 @@ RUN selkies-privileged-files release && \
     apt-get install -y --install-recommends \
       "winehq-staging=${WINE_PACKAGE_VERSION}" \
       "wine-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
-    apt-get install -y --no-install-recommends openbox trayer && \
+    apt-get install -y --no-install-recommends \
+      openbox trayer libfreetype6:i386 libfontconfig1:i386 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 

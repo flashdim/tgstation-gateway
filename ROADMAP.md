@@ -39,11 +39,14 @@ and logged device resets, but its viewport did not show a DXVK HUD. The map
 also remained black with Wine 11.15, Ubuntu's stock Xvfb and Selkies'
 Wayland/XWayland session. The same BYOND version was reported working on the
 same GPU with Proton 11.0-2. Using Proton's D3D9 DXVK library with Wine did
-not fix the map, although Dream Seeker loaded it. Earlier testing found that
-removing Selkies' `LD_PRELOAD` restored game and stat-panel rendering in that
-test environment; it does not resolve or rule out the current
-failure. A direct launch to the configured host has been observed. The release
-publication path and a complete playable gameplay session remain unverified.
+not fix the map, although Dream Seeker loaded it. The image now installs
+32-bit FreeType and Fontconfig, which removed FreeType errors in a separate
+Proton Wine initialization test; their effect on the game remains unverified.
+Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
+stat-panel rendering in that test environment; it does not resolve or rule out
+the current failure. A direct launch to the configured host has been observed.
+The release publication path and a complete playable gameplay session remain
+unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
