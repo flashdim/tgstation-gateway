@@ -1,8 +1,16 @@
 #!/bin/sh
 set -eu
 
-if ! pgrep -f '[b]yond.exe' >/dev/null; then
-    echo "BYOND pager is not running" >&2
+if [ -n "${BYOND_SERVER:-}" ]; then
+    process='[d]reamseeker.exe'
+    client='Dream Seeker'
+else
+    process='[b]yond.exe'
+    client='BYOND pager'
+fi
+
+if ! pgrep -f "$process" >/dev/null; then
+    echo "$client is not running" >&2
     exit 1
 fi
 

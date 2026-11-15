@@ -123,6 +123,20 @@ Set `GATEWAY_PORT` to change the localhost port. Run
 player data. The published image uses its build-time BYOND version; to select
 another version, build and run a local image as described above and below.
 
+To attempt a direct connection instead of starting the pager, set
+`BYOND_SERVER` to a hostname or IP address and port, optionally prefixed with
+`byond://`:
+
+```sh
+BYOND_SERVER=ss13.lazorgator.party:1337 docker compose -f examples/compose.yaml up
+```
+
+Recreate the container to change the server. With `docker run`, pass the same
+setting using `-e BYOND_SERVER=ss13.lazorgator.party:1337`. Leave it unset or
+empty to start the pager as before. This requires an image built with this
+change; an existing published `latest` image will not change until a new
+release is published.
+
 Alternatively, run the image built above directly:
 
 ```sh
@@ -131,10 +145,13 @@ docker run --rm --init --shm-size=2g \
   tgstation-gateway-player
 ```
 
-Open `http://localhost:8080`. The container starts the BYOND pager; sign in
-there and connect to your server.
-The container health check requires both the BYOND process and the Selkies
-health endpoint; it does not verify interactive gameplay.
+Open `http://localhost:8080`. Without `BYOND_SERVER`, the container starts the
+BYOND pager; sign in there and connect to your server. With `BYOND_SERVER`, it
+launches Dream Seeker directly; a BYOND account or server-side authentication
+may still be required. Direct connection and interactive gameplay have not
+been validated end to end.
+The container health check requires the selected BYOND process and the Selkies
+health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 

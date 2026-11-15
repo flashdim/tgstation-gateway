@@ -6,5 +6,7 @@ services:
     platform: linux/amd64
     init: true
     shm_size: 2gb
+    environment:
+      BYOND_SERVER: ${BYOND_SERVER:-}
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
