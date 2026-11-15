@@ -1,0 +1,10 @@
+name: tgstation-gateway
+
+services:
+  player:
+    image: ghcr.io/flashdim/tgstation-gateway:latest
+    platform: linux/amd64
+    init: true
+    shm_size: 2gb
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"

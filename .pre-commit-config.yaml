@@ -1,0 +1,16 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: ef6cf06c079dd6b299dfc720b0f14400c9d168e1 # v0.17.5
+    hooks:
+      - id: ruff-format
+        types: [python]
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: 479be5958357ba5ab65ce47172117348516860e9 # v3.14.1-1
+    hooks:
+      - id: shfmt
+        args: [-i, "4", -ci, -w]
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: ffb6a759a979008c0e6dff86e39f4745a2d9eac4 # v3.1.0
+    hooks:
+      - id: prettier
+        files: '\.(md|ya?ml)$'
