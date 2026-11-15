@@ -14,7 +14,8 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies desktop image for a headless X11 display, audio and
 browser streaming. It installs Wine Staging 11.14 and uses Winetricks to install
-Visual C++ 2022, DirectX components and WebView2. It also installs BYOND. It targets
+Visual C++ 2022, DirectX components, core fonts, RichEdit and WebView2. It also
+installs BYOND. It targets
 `linux/amd64` and an x64 Wine prefix; this combination has not yet been
 validated end to end. DXVK is not installed for this rendering experiment;
 Wine's built-in Direct3D implementation is used instead. See the community
@@ -69,8 +70,10 @@ corruption but not against a known digest.
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
 The build requires network access to the community mirror, WineHQ, GitHub,
-Microsoft and other Winetricks download hosts. It intentionally fails if an
-installer or an integrity check fails. `WINE_PACKAGE_VERSION` is a build
+Microsoft and other Winetricks download hosts. The RichEdit verbs download large
+Windows service packs and legacy installers from third-party and archive
+mirrors, verified against Winetricks' checksums. The build intentionally fails
+if an installer or an integrity check fails. `WINE_PACKAGE_VERSION` is a build
 argument if the pinned WineHQ package needs to be changed. Wine initialization
 and each Winetricks component log their start and completion and have individual
 timeouts. Initial prefix creation suppresses Wine's interactive Mono and Gecko
@@ -80,7 +83,7 @@ layer.
 
 ## CI and releases
 
-The image build and publish jobs have a 15-minute timeout and use the
+The image build and publish jobs have a 30-minute timeout and use the
 community BYOND mirror.
 CI also checks Python, shell, YAML and Markdown formatting. To format the same
 tracked files locally, install Python, Node.js and Git, then run:
