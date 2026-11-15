@@ -2,6 +2,8 @@
 # check=skip=SecretsUsedInArgOrEnv
 # SELKIES_ENABLE_BASIC_AUTH is a boolean, not a secret.
 # The first milestone is one BYOND client per container, not a session manager.
+FROM scratch AS wine-prefix-cache
+
 FROM ghcr.io/selkies-project/selkies/desktop:2.2.1-ubuntu26.04@sha256:f7a7b11dadbeca42114a09ae390457cd7e50af2b8f534c3ebae7b1d14b9851a4
 
 USER root
@@ -39,7 +41,17 @@ ENV WINEPREFIX=/home/ubuntu/.wine \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false
 
-RUN xvfb-run -a /usr/local/bin/install-client
+RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
+    if [ -f /tmp/wine-prefix-cache/prefix.tar.gz ]; then \
+      mkdir -p "$WINEPREFIX" && \
+      tar -xzf /tmp/wine-prefix-cache/prefix.tar.gz -C "$WINEPREFIX" && \
+      test -s "$WINEPREFIX/system.reg" && \
+      find "$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application" \
+        -name msedgewebview2.exe -print -quit | grep -q . || \
+        { echo "Invalid cached Wine prefix" >&2; exit 1; }; \
+    else \
+      xvfb-run -a /usr/local/bin/install-client; \
+    fi
 
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
 ARG BYOND_VERSION=516.1688
