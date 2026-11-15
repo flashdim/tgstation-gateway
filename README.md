@@ -36,7 +36,9 @@ If Buildx is missing, install it using the packages for your Docker
 installation. For example, on Ubuntu or Debian with
 [Docker's package repository](https://docs.docker.com/engine/install/), install
 `docker-buildx-plugin` with `sudo apt-get install docker-buildx-plugin`.
-Package names may differ for distribution-provided Docker installations.
+On an up-to-date Arch Linux system, install it with
+`sudo pacman -S docker-buildx`. Package names may differ for other
+distribution-provided Docker installations.
 Ensure `DOCKER_BUILDKIT` is not set to `0`; installing Buildx is still
 required if the plugin is missing.
 
