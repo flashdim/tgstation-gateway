@@ -12,15 +12,19 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 ## Build the player image
 
-The image uses the Selkies desktop image for a headless X11 display, audio and
-browser streaming. It installs Wine Staging 11.14 and uses Winetricks to install
-Visual C++ 2022, DirectX components, core fonts, RichEdit and WebView2. It also
-installs BYOND. It targets
+The image uses the full Selkies KDE EGL desktop for a headless X11 display,
+audio and browser streaming. The pinned base includes Lutris, Wine Staging
+11.21 and Winetricks. The build uses Winetricks to install Visual C++ 2022,
+DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND. It targets
 `linux/amd64` and an x64 Wine prefix; this combination has not yet been
 validated end to end. DXVK is not installed for this rendering experiment;
 Wine's built-in Direct3D implementation is used instead. See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
+
+The full desktop also includes browsers, Steam and other applications. It is
+an experiment, not a minimized image. Wine and Lutris are supplied by the
+digest-pinned base; changing the base can change their versions.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -73,9 +77,8 @@ The build requires network access to the community mirror, WineHQ, GitHub,
 Microsoft and other Winetricks download hosts. The RichEdit verbs download large
 Windows service packs and legacy installers from third-party and archive
 mirrors, verified against Winetricks' checksums. The build intentionally fails
-if an installer or an integrity check fails. `WINE_PACKAGE_VERSION` is a build
-argument if the pinned WineHQ package needs to be changed. Wine initialization
-and each Winetricks component log their start and completion and have individual
+if an installer or an integrity check fails. Wine initialization and each
+Winetricks component log their start and completion and have individual
 timeouts. Initial prefix creation suppresses Wine's interactive Mono and Gecko
 setup dialogs; the override applies only to initialization, not the running
 client. Winetricks downloads are removed after installation in the same image
@@ -204,6 +207,43 @@ override exposes the host's DRM devices to the container and requires compatible
 host drivers. GPU access and BYOND rendering have not been verified; the
 health check cannot establish either. To return to software rendering, recreate
 the container using only `examples/compose.yaml`.
+
+### Lutris installer comparison
+
+The KDE image starts the existing BYOND installation automatically. To compare
+the upstream Lutris installer, open Konsole in the streamed desktop and stop
+that client first:
+
+```sh
+s6-svc -d /etc/service/byond
+```
+
+The health check will report unhealthy while that service is stopped. Download
+the pinned upstream recipe and adjust it to use the community BYOND mirror and
+leave its WebView2 GPU and site-isolation flags disabled:
+
+```sh
+curl -fsSL --retry 3 \
+  https://raw.githubusercontent.com/kinggoldcatter/Wine-Byond-help/2fd6274b96e2108f786a6e0c33f634cb3cfb729f/x64byond.yaml \
+  -o "$HOME/byond-lutris.yaml"
+sed -i \
+  -e 's|https://www.byond.com/download/build/516/516.1667_byond.exe|https://byond-builds.dm-lang.org/516/516.1667_byond.exe|' \
+  -e "/^[[:space:]]*value: '--ignore-gpu-blocklist /s|'.*'|''|" \
+  "$HOME/byond-lutris.yaml"
+grep -Fq 'https://byond-builds.dm-lang.org/516/516.1667_byond.exe' "$HOME/byond-lutris.yaml" &&
+  ! grep -Eq 'www\.byond\.com/download/build|ignore-gpu-blocklist|disable-site-isolation-trials' "$HOME/byond-lutris.yaml" &&
+  env -u WINEPREFIX lutris -i "$HOME/byond-lutris.yaml"
+```
+
+Select system Wine in Lutris and install into a **separate** prefix, such as
+`/home/ubuntu/Games/byond`. The recipe uses BYOND 516.1667, installs the
+packaged DirectX, and downloads other components including a font and helper
+script from upstream. Those downloads are not all pinned or checksum-verified.
+This interactive installation is not part of the image build and has not been
+validated here. Launch BYOND through Lutris and connect to the same server;
+the server may require a newer BYOND version. Container recreation removes
+the separate prefix and login data. To return to the image's original client
+without recreating the container, run `s6-svc -u /etc/service/byond`.
 
 To also try the experimental WebView2 GPU flags from
 [Wine-Byond-help](https://github.com/kinggoldcatter/Wine-Byond-help/blob/main/issues.md),
