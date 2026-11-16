@@ -156,11 +156,12 @@ RUN /usr/local/bin/install-byond
 RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \
+RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray /home/ubuntu/.config/openbox && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
 COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run
+COPY --chown=1000:1000 --chmod=644 container/openbox/rc.xml /home/ubuntu/.config/openbox/rc.xml
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

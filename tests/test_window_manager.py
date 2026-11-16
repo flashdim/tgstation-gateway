@@ -3,12 +3,23 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class WindowManagerTest(unittest.TestCase):
+    def test_maximizes_only_normal_steam_proton_windows(self):
+        config = ET.parse(ROOT / "container/openbox/rc.xml").getroot()
+        applications = config.findall("./applications/application")
+
+        self.assertEqual(len(applications), 1)
+        application = applications[0]
+        self.assertEqual(application.attrib, {"class": "steam_proton", "type": "normal"})
+        self.assertEqual(application.findtext("maximized"), "true")
+        self.assertIsNone(application.find("fullscreen"))
+
     def test_launches_on_session_display(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

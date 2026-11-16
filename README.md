@@ -243,6 +243,10 @@ standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
 the WebView panels, but showed extra blank dialogs. The newly built image still
 requires gameplay verification. The smoke test does not verify gameplay.
 The desktop-free image's pager/tray behavior also needs explicit verification.
+Openbox maximizes windows reported as both `steam_proton` and type `normal`,
+matching the observed Dream Seeker game window while leaving dialog-type
+windows unaffected. Interactive confirmation of the maximized game panel is
+still needed.
 
 ### AMD or Intel GPU experiment
 
