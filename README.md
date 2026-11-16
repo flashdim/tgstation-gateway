@@ -14,8 +14,8 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It uses
-Kron4ek's checksum-verified standalone Proton-based Wine 11.0-2 build as the
-Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
+Kron4ek's checksum-verified standalone Proton-based Wine 10.0-4 amd64 build as
+the Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
 core fonts, RichEdit and WebView2. This experiment installs native Ubuntu
 libraries directly for amd64 and i386, without Ubuntu's `wine`, `wine32`,
 `wine64` or `libwine` packages; the standalone runtime and its pinned checksum
@@ -40,13 +40,12 @@ The build checks intentionally exclude these optional modules; current Ubuntu
 libraries do not resolve the inherited gaps, and no compatibility symlinks
 are installed.
 
-Validation on 2026-11-16 passed native package installation, the pinned Wine
-archive checksum, the build-time runtime gates, and fresh-prefix initialization
-and startup. The full image build then stopped at Winetricks `vcrun2022`:
-both `aka.ms` and its `web.archive.org` fallback failed DNS resolution
-(`No address associated with hostname`). No installer or checksum check was
-bypassed. No complete experiment image was produced, so its X11 and Wayland
-smoke tests and real BYOND/WebView gameplay remain unverified.
+The Proton 10.0-4 amd64 archive checksum is pinned for the runtime comparison.
+A user-reported test of Proton 11.0-2 without Ubuntu Wine packages showed no
+major change, though the UI looked cleaner and closer to a local environment.
+Proton 10.0-4 build and client behavior remain unverified. Its archive includes
+`winegstreamer.so` for amd64 but not i386; the build checks the module where
+present and does not claim 32-bit GStreamer-backed media compatibility.
 It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
 installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
 which requires a Vulkan 1.3-capable driver.

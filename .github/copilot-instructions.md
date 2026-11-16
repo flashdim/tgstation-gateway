@@ -23,7 +23,7 @@ planned features or smoke tests as proof of interactive gameplay.
   players. Do not log secrets or include player data in images or caches.
 - BYOND may see shared IP addresses or computer IDs. Investigate and document
   collisions and preserve server ban enforcement; never silently bypass it.
-- The player image uses checksum-pinned standalone Proton-based Wine 11.0-2;
+- The player image uses checksum-pinned standalone Proton-based Wine 10.0-4;
   install native Ubuntu runtime libraries explicitly for amd64 and i386,
   never `wine`, `wine32`, `wine64` or `libwine`. Preserve optional dlopened
   graphics/audio/crypto libraries as well as ELF dependencies; ldd alone is

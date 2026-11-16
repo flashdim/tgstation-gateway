@@ -8,7 +8,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
-    "wine",
     "ntdll.so",
     "win32u.so",
     "winex11.so",
@@ -16,7 +15,6 @@ MODULES = (
     "winealsa.so",
     "winepulse.so",
     "winevulkan.so",
-    "winegstreamer.so",
 )
 LIBRARIES = (
     "libfreetype.so.6",
@@ -42,8 +40,12 @@ class WineRuntimeTest(unittest.TestCase):
         for architecture in ("i386", "x86_64"):
             directory = self.runtime / "lib/wine" / f"{architecture}-unix"
             directory.mkdir(parents=True)
-            for name in (*MODULES, "wine-preloader"):
+            for name in MODULES:
                 path = directory / name
+                path.touch()
+                path.chmod(0o755)
+            if architecture == "x86_64":
+                path = directory / "winegstreamer.so"
                 path.touch()
                 path.chmod(0o755)
             libraries = self.libraries / f"{architecture}-linux-gnu"
@@ -51,8 +53,10 @@ class WineRuntimeTest(unittest.TestCase):
             for name in LIBRARIES:
                 (libraries / name).touch()
         (self.runtime / "bin").mkdir()
-        for name in ("wine", "wineserver"):
-            (self.runtime / "bin" / name).touch()
+        for name in ("wine", "wine-preloader", "wineserver"):
+            path = self.runtime / "bin" / name
+            path.touch()
+            path.chmod(0o755)
         for name, body in {
             "dpkg-query": (
                 '[ "${FAIL_DPKG:-0}" = 0 ] || exit 2\n'
@@ -76,6 +80,18 @@ class WineRuntimeTest(unittest.TestCase):
             "/opt/wine-proton", str(self.runtime)
         )
         self.check = self.check.replace("/usr/lib/", f"{self.libraries}/")
+
+    def test_pins_proton_10_0_4_amd64_archive_and_checksum(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn(
+            "https://github.com/Kron4ek/Wine-Builds/releases/download/"
+            "proton-10.0-4/wine-proton-10.0-4-amd64.tar.xz",
+            dockerfile,
+        )
+        self.assertIn(
+            "ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290",
+            dockerfile,
+        )
 
     def check_runtime(self, **extra_env):
         return subprocess.run(
@@ -101,8 +117,15 @@ class WineRuntimeTest(unittest.TestCase):
                     str(self.runtime / "lib/wine" / f"{architecture}-unix" / module),
                     checked,
                 )
+        self.assertIn(
+            str(self.runtime / "lib/wine/x86_64-unix/winegstreamer.so"), checked
+        )
+        self.assertNotIn(
+            str(self.runtime / "lib/wine/i386-unix/winegstreamer.so"), checked
+        )
         for binary in ("wine", "wineserver"):
             self.assertIn(str(self.runtime / "bin" / binary), checked)
+        self.assertTrue(os.access(self.runtime / "bin/wine-preloader", os.X_OK))
         for optional in ("winedmo", "wpcap"):
             self.assertFalse(any(optional in path for path in checked))
 
@@ -138,6 +161,10 @@ class WineRuntimeTest(unittest.TestCase):
     def test_requires_both_module_architectures(self):
         (self.runtime / "lib/wine/i386-unix/winepulse.so").unlink()
         self.assertNotEqual(self.check_runtime().returncode, 0)
+
+    def test_allows_absent_optional_i386_gstreamer_module(self):
+        result = self.check_runtime()
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_requires_dynamically_loaded_libraries(self):
         (self.libraries / "i386-linux-gnu/libgnutls.so.30").unlink()

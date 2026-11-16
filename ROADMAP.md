@@ -51,18 +51,19 @@ prefix rendered the scene and loaded both panels, but showed two extra blank
 dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
 tracks them. The image now uses that runtime; the rebuilt image still needs
 gameplay verification and the individual cause is unconfirmed.
-The current dependency experiment keeps the same checksum-pinned Proton
-Wine 11.0-2, BYOND and graphics setup, but replaces Ubuntu Wine packages with
-explicit amd64/i386 native runtime libraries. Build-time gates reject distro
-Wine packages and check core loader/display/audio dependencies; optional
+The current runtime comparison uses checksum-pinned Proton Wine 10.0-4 amd64,
+BYOND 516.1689 and the existing graphics setup. It continues to replace Ubuntu
+Wine packages with explicit amd64/i386 native runtime libraries. Build-time
+gates reject distro Wine packages and check core loader/display/audio
+dependencies; `winegstreamer.so` is present in the amd64 Proton runtime but
+absent from i386. Optional
 `winedmo.so` still requires old FFmpeg ABIs and optional `wpcap.so` expects
 `libpcap.so.1`, SONAMEs unavailable in Ubuntu 26.04.
 Neither package checks nor startup smoke tests verify gameplay, WebView panels
 or the blank-dialog report.
-On 2026-11-16 the native runtime gates and fresh-prefix initialization/startup
-passed, but the full build failed at `vcrun2022` because `aka.ms` and
-`web.archive.org` did not resolve. No complete experiment image was available
-for either backend's smoke test.
+The user reported no major change with the previous Proton 11.0-2/no-Ubuntu-Wine
+build, but said the UI looked cleaner and closer to a local environment. The
+Proton 10.0-4 build and client behavior remain unverified.
 The image now defaults to BYOND 516.1689 for a comparison; the mirror download
 and gameplay remain unverified because the mirror did not resolve in the test
 environment.

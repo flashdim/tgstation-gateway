@@ -73,13 +73,13 @@ RUN selkies-privileged-files release && \
     selkies-privileged-files restore
 
 RUN curl -fsSL --retry 3 \
-      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-11.0-2/wine-proton-11.0-2-amd64.tar.xz \
+      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-10.0-4/wine-proton-10.0-4-amd64.tar.xz \
       -o /tmp/wine-proton.tar.xz && \
-    echo '51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
+    echo 'ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
     mkdir -p /opt/wine-proton && \
     tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
     test -x /opt/wine-proton/bin/wine && \
-    test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader && \
+    test -x /opt/wine-proton/bin/wine-preloader && \
     rm /tmp/wine-proton.tar.xz
 
 # Build-time gate shared by CI and releases. winedmo's old FFmpeg ABI and
@@ -89,16 +89,22 @@ RUN set -eu; \
     if printf '%s\n' "$packages" | grep -E '^installed (wine(:|$|-|32|64)|libwine)'; then \
       echo "Distro Wine packages must not be installed" >&2; exit 1; \
     fi; \
+    test -x /opt/wine-proton/bin/wine-preloader; \
     for architecture in i386 x86_64; do \
       directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
-      test -x "$directory/wine-preloader"; \
-      for module in wine ntdll.so win32u.so winex11.so winewayland.so \
-          winealsa.so winepulse.so winevulkan.so winegstreamer.so; do \
+      for module in ntdll.so win32u.so winex11.so winewayland.so \
+          winealsa.so winepulse.so winevulkan.so; do \
         dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/$module")"; \
         if printf '%s\n' "$dependencies" | grep 'not found'; then \
           echo "Missing dependencies for $directory/$module" >&2; exit 1; \
         fi; \
       done; \
+      if [ -f "$directory/winegstreamer.so" ]; then \
+        dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/winegstreamer.so")"; \
+        if printf '%s\n' "$dependencies" | grep 'not found'; then \
+          echo "Missing dependencies for $directory/winegstreamer.so" >&2; exit 1; \
+        fi; \
+      fi; \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
           libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
         test -r "/usr/lib/$architecture-linux-gnu/$library"; \
