@@ -64,7 +64,8 @@ ENV BYOND_VERSION=${BYOND_VERSION}
 RUN /usr/local/bin/install-byond
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray
+RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \
+    install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
 COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run

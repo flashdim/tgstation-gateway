@@ -75,6 +75,9 @@ jobs:
       - name: Smoke-test player image
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
 
+      - name: Smoke-test Wayland session
+        run: bash tests/smoke-wayland.sh tgstation-gateway-player:ci
+
       - name: Check 32-bit font libraries
         run: |
           docker run --rm --entrypoint sh tgstation-gateway-player:ci -c '
