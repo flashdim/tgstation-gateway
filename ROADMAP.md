@@ -63,6 +63,9 @@ On 2026-11-16 the native runtime gates and fresh-prefix initialization/startup
 passed, but the full build failed at `vcrun2022` because `aka.ms` and
 `web.archive.org` did not resolve. No complete experiment image was available
 for either backend's smoke test.
+The image now defaults to BYOND 516.1689 for a comparison; the mirror download
+and gameplay remain unverified because the mirror did not resolve in the test
+environment.
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in that test environment; it does not resolve or rule out
 the current failure. A direct launch to the configured host has been observed.

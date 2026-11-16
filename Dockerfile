@@ -142,7 +142,7 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
 
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
 COPY --chmod=755 container/install-graphics.sh /usr/local/bin/install-graphics
-ARG BYOND_VERSION=516.1688
+ARG BYOND_VERSION=516.1689
 ARG BYOND_SHA256=""
 ENV BYOND_VERSION=${BYOND_VERSION}
 

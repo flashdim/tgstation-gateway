@@ -99,12 +99,12 @@ docker build --platform linux/amd64 -t tgstation-gateway-player .
 
 The build downloads the portable Windows BYOND archive from the independently
 operated community mirror at `byond-builds.dm-lang.org`, defaulting to version
-`516.1688`. The archive must include BYOND's bundled DirectX setup and June 2010
+`516.1689`. The archive must include BYOND's bundled DirectX setup and June 2010
 `d3dx9_43` CAB. To select a version from a shell environment variable, set
 `BYOND_VERSION` and pass it as a build argument:
 
 ```sh
-export BYOND_VERSION=516.1688
+export BYOND_VERSION=516.1689
 docker build --platform linux/amd64 --build-arg BYOND_VERSION \
   -t tgstation-gateway-player .
 ```
@@ -113,6 +113,8 @@ Changing the environment of a running container does not replace the client;
 rebuild the image to change versions. You can also pass a trusted checksum with
 `--build-arg BYOND_SHA256=<sha256>`. Without it, the download is checked for ZIP
 corruption but not against a known digest.
+Version 516.1689 has not yet been verified against the community mirror or in
+gameplay: DNS resolution for the mirror was unavailable in the test environment.
 
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
