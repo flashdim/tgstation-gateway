@@ -50,9 +50,12 @@ chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
 prefix rendered the scene and loaded both panels, but showed two extra blank
 dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
 tracks them. The previously tested image used that runtime; the individual
-cause is unconfirmed. The image is being rebuilt with checksum-pinned
-standalone Proton Experimental 11.0 and a fresh prefix to compare the reported
-behavior; no fix is presumed.
+cause is unconfirmed. The Dockerfile now pins checksum-verified standalone
+Proton Experimental 11.0 for a fresh-prefix comparison. The archive hash and
+Wine version were verified, but a local image build could not complete prefix
+setup because sandbox DNS could not resolve the Winetricks Visual C++ runtime
+hosts. Clean-prefix initialization and client behavior remain unverified; no
+fix is presumed.
 A built-image comparison did not reproduce the persistent dialog pair with
 Dream Seeker alone or a minimal diagnostic world. An untitled browser dialog
 had the same broad X11 properties, so no window-suppression rule is applied.

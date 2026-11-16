@@ -38,9 +38,14 @@ showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github
 tracks them. The rebuilt image and those dialogs still need gameplay
 verification. The individual rendering cause is not isolated. Wine applications
 do not receive Selkies' injected gamepad or webcam integrations.
-The image now uses a fresh-prefix Proton Experimental 11.0 build to compare
-the reported dialogs; this runtime change has not yet been verified against a
-game server.
+The Dockerfile now pins Proton Experimental 11.0 to compare the reported
+dialogs in a fresh prefix; it is not yet a verified game-server test. The
+archive passed its published SHA-256 and its Wine binary reported
+`wine-11.0-g8c33a428032 (Proton)`. A local image build could not finish prefix
+setup because the sandbox could not resolve the Microsoft and Archive.org
+hosts Winetricks needs to download the Visual C++ runtime. A standalone
+`wineboot --init` attempt on the host also timed out, so successful clean-prefix
+initialization and client behavior remain unverified.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
