@@ -39,8 +39,11 @@ tracks them. The rebuilt image and those dialogs still need gameplay
 verification. The individual rendering cause is not isolated. Wine applications
 do not receive Selkies' injected gamepad or webcam integrations.
 The Dockerfile now pins standalone Wine 11.22 for a fresh-prefix comparison of
-the reported dialogs. This runtime change has not yet been verified against a
-game server.
+the reported dialogs. The archive checksum and Wine executable were verified,
+and an attempted image build completed prefix initialization and startup. It
+then failed while Winetricks tried to download `vcrun2022`: DNS resolution for
+Microsoft and Archive.org hosts was unavailable in the build environment. The
+image and client comparison are therefore still unverified.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
