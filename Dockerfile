@@ -20,6 +20,7 @@ RUN selkies-privileged-files release && \
       "wine64=${WINE_PACKAGE_VERSION}" cabextract unzip wget \
       openbox trayer libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 && \
+    ln -s /usr/lib/x86_64-linux-gnu/wine/wineserver /usr/local/bin/wineserver && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
