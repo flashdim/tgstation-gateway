@@ -96,9 +96,7 @@ class WineRuntimeTest(unittest.TestCase):
     def test_ci_checks_proton_10_preloader_location(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertIn("test -x /opt/wine-proton/bin/wine-preloader", workflow)
-        self.assertNotIn(
-            "/opt/wine-proton/lib/wine/i386-unix/wine-preloader", workflow
-        )
+        self.assertNotIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", workflow)
 
     def check_runtime(self, **extra_env):
         return subprocess.run(
