@@ -13,18 +13,31 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 ## Build the player image
 
 The image uses the Selkies base for a headless X11 display, audio and browser
-streaming, with Openbox managing BYOND windows instead of a desktop. It installs
-Wine Staging 11.21 and uses Winetricks to install Visual C++ 2022,
-DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
-It targets `linux/amd64` and an x64 Wine prefix. DXVK is not installed;
-Wine's built-in Direct3D implementation is used instead. See the community
+streaming, with Openbox managing BYOND windows instead of a desktop. It uses
+Kron4ek's checksum-verified standalone Proton-based Wine 11.0-2 build as the
+Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
+core fonts, RichEdit and WebView2. Ubuntu Wine packages provide 32-bit and
+64-bit runtime dependencies; the container runs the standalone build.
+It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
+installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
+which requires a Vulkan 1.3-capable driver.
+See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
 
 The BYOND service removes Selkies' `LD_PRELOAD` input and webcam interposers
 from Wine's environment: testing showed that removing them lets the VC runtime
-installer complete and restores BYOND game rendering. Wine applications do not
-receive those injected gamepad or webcam integrations.
+installer complete and restored BYOND game and stat-panel rendering in that
+test environment. A later user-reported session rendered the menu, dialogs and
+audio, but showed a black game scene with a few solid-color tiles after joining,
+with and without GPU access under Wine Staging. Ubuntu Wine 10 rendered the
+scene but failed to load fancy chat and the stat panel. In a separate container,
+a fresh prefix using standalone Proton-based Wine 11.0-2, BYOND's bundled
+DirectX setup and DXVK 2.7.1 rendered the scene and loaded those panels, but
+showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
+tracks them. The rebuilt image and those dialogs still need gameplay
+verification. The individual rendering cause is not isolated. Wine applications
+do not receive Selkies' injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -57,7 +70,8 @@ docker build --platform linux/amd64 -t tgstation-gateway-player .
 
 The build downloads the portable Windows BYOND archive from the independently
 operated community mirror at `byond-builds.dm-lang.org`, defaulting to version
-`516.1688`. To select a version from a shell environment variable, set
+`516.1688`. The archive must include BYOND's bundled DirectX setup and June 2010
+`d3dx9_43` CAB. To select a version from a shell environment variable, set
 `BYOND_VERSION` and pass it as a build argument:
 
 ```sh
@@ -73,7 +87,7 @@ corruption but not against a known digest.
 
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
-The build requires network access to the community mirror, WineHQ, GitHub,
+The build requires network access to the community mirror, Ubuntu, GitHub,
 Microsoft and other Winetricks download hosts. The RichEdit verbs download large
 Windows service packs and legacy installers from third-party and archive
 mirrors, verified against Winetricks' checksums. The build intentionally fails
@@ -112,7 +126,7 @@ The mutable `dev` tag can contain unmerged pull-request code and points to the
 most recently published image, not necessarily the latest commit on `main`.
 Overlapping runs may finish out of order. Pull it again to get updates; it is
 not a release or a Git tag.
-To refresh unpinned components such as WebView2, delete the `wine-prefix-v1-`
+To refresh unpinned components such as WebView2, delete the `wine-prefix-v2-`
 cache in GitHub Actions and run CI on `main` again. Publishing a GitHub release
 can reuse the default-branch cache, builds and tests the image again, then pushes it to
 `ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also
@@ -120,6 +134,12 @@ update `latest`. Publishing requires Actions permission to write packages;
 check third-party redistribution terms before creating a release.
 
 ## Private single-player experiment
+
+The Compose example, direct Docker command and smoke tests use a custom profile
+based on Docker's default seccomp profile. It adds one exception for the
+32-bit `socket` syscall used by Wine; seccomp remains enabled for all other
+syscalls. The base profile is copied from
+[Moby's seccomp profile](https://github.com/moby/moby/blob/06db1734267bf7770914b417bff6556d835bf8cc/vendor/github.com/moby/profiles/seccomp/default.json).
 
 The Compose example pulls the published image and runs one player container
 bound to localhost:
@@ -160,7 +180,7 @@ release is published.
 Alternatively, run the image built above directly:
 
 ```sh
-docker run --rm --init --shm-size=2g \
+docker run --rm --init --security-opt seccomp=examples/seccomp.json --shm-size=2g \
   -p 127.0.0.1:8080:8080 \
   tgstation-gateway-player
 ```
@@ -179,11 +199,14 @@ There is no full desktop in this image. Openbox manages BYOND windows and
 dialogs on the X11 display, which Selkies streams as a whole; this is not
 per-window isolation. When starting the pager rather than a direct server
 connection, a small system tray is provided for its icon. The launcher assumes
-X11, not Selkies' Wayland backend. The desktop-free image has been reported
-working by a user. Earlier testing restored game and stat-panel rendering by
-removing `LD_PRELOAD`, and confirmed audio with the LXQt-based image. A complete
-gameplay session and the desktop-free image's dialogs and pager/tray behavior
-still need explicit verification.
+X11, not Selkies' Wayland backend. Earlier testing restored game and stat-panel
+rendering by removing `LD_PRELOAD`, and confirmed audio with the LXQt-based
+image. A later user-reported session rendered the menu, dialogs and audio, but
+showed a black game scene with a few solid-color tiles after joining. A separate
+standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
+the WebView panels, but showed extra blank dialogs. The newly built image still
+requires gameplay verification. The smoke test does not verify gameplay.
+The desktop-free image's pager/tray behavior also needs explicit verification.
 
 ### AMD or Intel GPU experiment
 

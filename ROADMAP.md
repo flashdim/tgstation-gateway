@@ -27,15 +27,35 @@ Provide an independently usable, single-player Wine/BYOND image.
   expose the streaming endpoint and provide local Compose examples.
 - Use a desktop-free X11 session with Openbox and a pager tray; support optional
   AMD/Intel GPU access.
+- Keep seccomp enabled with a narrowly scoped exception for Wine's 32-bit
+  `socket` syscall; use the same profile in examples and smoke tests.
 - Build and smoke-test the image in CI, publish a tested development image and
   publish the tested image on release.
 
 **Progress:** CI has built, smoke-tested and published the desktop-free `dev`
-image. A user reports that it works; earlier testing confirmed that removing
-Selkies' `LD_PRELOAD` from Wine restored game and stat-panel rendering, and
-that audio worked with the LXQt image. A direct launch to the configured host
-has been observed. The release publication path and a complete authenticated
-gameplay session remain unverified.
+image. A user report confirms that the menu, dialogs and audio work, but the
+game scene becomes black with a few solid-color tiles after joining, with and
+without GPU access. Installing native `d3dx9_43` did not improve the scene.
+With DXVK 2.7.1, the map stayed black; Dream Seeker loaded DXVK's D3D9 library
+and logged device resets, but its viewport did not show a DXVK HUD. The map
+also remained black with Wine 11.15, Ubuntu's stock Xvfb and Selkies'
+Wayland/XWayland session. The same BYOND version was reported working on the
+same GPU with Proton 11.0-2. Using Proton's D3D9 DXVK library with Wine did
+not fix the map, although Dream Seeker loaded it. The image now installs
+32-bit FreeType and Fontconfig, which removed FreeType errors in a separate
+Proton Wine initialization test, but did not resolve the black map.
+In a disposable container a fresh Ubuntu Wine 10 prefix with BYOND's bundled
+DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the scene, but fancy
+chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
+prefix rendered the scene and loaded both panels, but showed two extra blank
+dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
+tracks them. The image now uses that runtime; the rebuilt image still needs
+gameplay verification and the individual cause is unconfirmed.
+Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
+stat-panel rendering in that test environment; it does not resolve or rule out
+the current failure. A direct launch to the configured host has been observed.
+The release publication path and a complete playable gameplay session remain
+unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
@@ -47,6 +67,8 @@ Prove that the image is usable against an actual tgstation server before
 building session orchestration around it.
 
 - Manually verify browser connection, BYOND login and joining a test server.
+- Reproduce and diagnose the reported black game scene with solid-color tiles;
+  record the client, Wine and rendering configuration for each test.
 - Verify map rendering, TGUI/WebView2, keyboard and mouse input, sound,
   dialogs, pager/tray behavior, disconnect and reconnect; record supported
   versions and limitations.

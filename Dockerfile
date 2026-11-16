@@ -10,22 +10,28 @@ USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WINE_PACKAGE_VERSION=11.21~resolute-1
+ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
 
 RUN selkies-privileged-files release && \
-    mkdir -p /etc/apt/keyrings && \
-    fetch-verified key https://dl.winehq.org/wine-builds/winehq.key \
-      D43F640145369C51D786DDEA76F1A20FF987672F /etc/apt/keyrings/winehq.asc && \
-    printf '%s\n' \
-      'deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ resolute main' \
-      > /etc/apt/sources.list.d/winehq.list && \
+    dpkg --add-architecture i386 && \
     apt-get update && \
-    apt-get install -y --install-recommends \
-      "winehq-staging=${WINE_PACKAGE_VERSION}" \
-      "wine-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
-    apt-get install -y --no-install-recommends openbox trayer && \
+    apt-get install -y --no-install-recommends \
+      "wine=${WINE_PACKAGE_VERSION}" "wine32:i386=${WINE_PACKAGE_VERSION}" \
+      "wine64=${WINE_PACKAGE_VERSION}" cabextract unzip wget xz-utils \
+      openbox trayer libfreetype6:i386 libfontconfig1:i386 \
+      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
+
+RUN curl -fsSL --retry 3 \
+      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-11.0-2/wine-proton-11.0-2-amd64.tar.xz \
+      -o /tmp/wine-proton.tar.xz && \
+    echo '51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
+    mkdir -p /opt/wine-proton && \
+    tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
+    test -x /opt/wine-proton/bin/wine && \
+    test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader && \
+    rm /tmp/wine-proton.tar.xz
 
 # Pin the Winetricks revision used by the desktop experiment.
 RUN curl -fsSL --retry 3 \
@@ -37,7 +43,8 @@ RUN curl -fsSL --retry 3 \
 COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
 
 USER 1000
-ENV WINEPREFIX=/home/ubuntu/.wine \
+ENV PATH=/opt/wine-proton/bin:${PATH} \
+    WINEPREFIX=/home/ubuntu/.wine \
     WINEARCH=win64 \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
@@ -56,14 +63,17 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
     fi
 
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
+COPY --chmod=755 container/install-graphics.sh /usr/local/bin/install-graphics
 ARG BYOND_VERSION=516.1688
 ARG BYOND_SHA256=""
 ENV BYOND_VERSION=${BYOND_VERSION}
 
 RUN /usr/local/bin/install-byond
+RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray
+RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \
+    install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
 COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run
