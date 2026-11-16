@@ -137,9 +137,9 @@ The Compose example, direct Docker command and smoke tests use Docker's default
 seccomp profile. Local X11 and Wayland smoke tests passed with this profile.
 An earlier CI run reported Wine's `socket: Function not implemented`; its cause
 is not yet isolated. If either CI smoke test fails, CI collects startup syscall
-traces from a separate diagnostic image, also using the default profile.
-Tracing can affect application behavior, so these diagnostics do not replace
-the untraced smoke tests or gate a successful build.
+traces from a separate diagnostic image under both the default and unconfined
+profiles. Tracing can affect application behavior, so these diagnostics do not
+replace the untraced smoke tests or gate a successful build.
 
 The Compose example pulls the published image and runs one player container
 bound to localhost:

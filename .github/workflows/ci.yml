@@ -109,20 +109,27 @@ jobs:
           container=""
           trap 'if [ -n "$container" ]; then docker rm -f "$container"; fi' EXIT
           result=0
-          for wayland in false true; do
-            directory="$RUNNER_TEMP/wine-traces/wayland-$wayland"
-            mkdir -p "$directory"
-            container="$(docker run -d --init --shm-size=2g \
-              -e SELKIES_WAYLAND="$wayland" tgstation-gateway-player:trace)"
-            sleep 30
-            docker logs "$container" > "$directory/container.log" 2>&1
-            docker inspect "$container" > "$directory/container.json"
-            if ! docker cp "$container:/tmp/wine.trace" "$directory/wine.trace"; then
-              echo "No startup trace collected for SELKIES_WAYLAND=$wayland" >&2
-              result=1
+          for profile in default unconfined; do
+            security_args=()
+            if [ "$profile" = unconfined ]; then
+              security_args+=(--security-opt seccomp=unconfined)
             fi
-            docker rm -f "$container"
-            container=""
+            for wayland in false true; do
+              directory="$RUNNER_TEMP/wine-traces/$profile/wayland-$wayland"
+              mkdir -p "$directory"
+              container="$(docker run -d --init --shm-size=2g \
+                "${security_args[@]}" \
+                -e SELKIES_WAYLAND="$wayland" tgstation-gateway-player:trace)"
+              sleep 30
+              docker logs "$container" > "$directory/container.log" 2>&1
+              docker inspect "$container" > "$directory/container.json"
+              if ! docker cp "$container:/tmp/wine.trace" "$directory/wine.trace"; then
+                echo "No startup trace collected for seccomp=$profile SELKIES_WAYLAND=$wayland" >&2
+                result=1
+              fi
+              docker rm -f "$container"
+              container=""
+            done
           done
           exit "$result"
 
