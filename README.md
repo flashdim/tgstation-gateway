@@ -42,10 +42,12 @@ The user reports that Wine 11.22 removed the extra windows but brought back the
 rendering issue. The Dockerfile now pins standalone Wine 11.19 to compare an
 intermediate release. Wine 11.20's official release notes report a startup
 segmentation-fault regression on some systems, so 11.19 is the nearest earlier
-release without that warning. The 11.19 archive and client have not been
-verified in this environment. A prior Wine 11.22 image build completed prefix
-initialization and startup but failed while Winetricks tried to download
-`vcrun2022`: DNS resolution for Microsoft and Archive.org hosts was unavailable.
+release without that warning. Its official archive checksum and required Wine
+binaries were verified, and the image build completed Wine prefix
+initialization and startup. The build then failed while Winetricks tried to
+download `vcrun2022`: DNS resolution for Microsoft and Archive.org hosts was
+unavailable. The Dream Seeker rendering and dialog behavior remain untested
+with Wine 11.19.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
