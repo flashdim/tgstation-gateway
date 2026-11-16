@@ -10,21 +10,16 @@ USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WINE_PACKAGE_VERSION=11.21~resolute-1
+ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
 
 RUN selkies-privileged-files release && \
-    mkdir -p /etc/apt/keyrings && \
-    fetch-verified key https://dl.winehq.org/wine-builds/winehq.key \
-      D43F640145369C51D786DDEA76F1A20FF987672F /etc/apt/keyrings/winehq.asc && \
-    printf '%s\n' \
-      'deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ resolute main' \
-      > /etc/apt/sources.list.d/winehq.list && \
+    dpkg --add-architecture i386 && \
     apt-get update && \
-    apt-get install -y --install-recommends \
-      "winehq-staging=${WINE_PACKAGE_VERSION}" \
-      "wine-staging=${WINE_PACKAGE_VERSION}" cabextract unzip wget && \
     apt-get install -y --no-install-recommends \
-      openbox trayer libfreetype6:i386 libfontconfig1:i386 && \
+      "wine=${WINE_PACKAGE_VERSION}" "wine32:i386=${WINE_PACKAGE_VERSION}" \
+      "wine64=${WINE_PACKAGE_VERSION}" cabextract unzip wget \
+      openbox trayer libfreetype6:i386 libfontconfig1:i386 \
+      libgnutls30t64:i386 libgssapi-krb5-2:i386 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
@@ -57,11 +52,13 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
     fi
 
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
+COPY --chmod=755 container/install-graphics.sh /usr/local/bin/install-graphics
 ARG BYOND_VERSION=516.1688
 ARG BYOND_SHA256=""
 ENV BYOND_VERSION=${BYOND_VERSION}
 
 RUN /usr/local/bin/install-byond
+RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
 RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \

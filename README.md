@@ -14,10 +14,11 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It installs
-Wine Staging 11.21 and uses Winetricks to install Visual C++ 2022,
+Ubuntu Wine 10 and uses Winetricks to install Visual C++ 2022,
 DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
-It targets `linux/amd64` and an x64 Wine prefix. DXVK is not installed;
-Wine's built-in Direct3D implementation is used instead. See the community
+It targets `linux/amd64` and an x64 Wine prefix. It installs BYOND's bundled
+DirectX setup and DXVK 2.7.1, which requires a Vulkan 1.3-capable driver.
+See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
 
@@ -26,26 +27,12 @@ from Wine's environment: testing showed that removing them lets the VC runtime
 installer complete and restored BYOND game and stat-panel rendering in that
 test environment. A later user-reported session rendered the menu, dialogs and
 audio, but showed a black game scene with a few solid-color tiles after joining,
-with and without GPU access. Neither native `d3dx9_43` nor DXVK 2.7.1 fixed the
-reported scene. DXVK's D3D9 library was loaded and logged device resets, but the
-map showed no DXVK HUD; WebView panels did. The map also remained black with
-Wine 11.15, Ubuntu's stock Xvfb and Selkies' Wayland/XWayland session. The same
-BYOND version was reported working on the same GPU with Proton 11.0-2, but
-using that Proton installation's D3D9 DXVK library with Wine did not fix the
-map; Dream Seeker loaded the copied library.
-The image includes 32-bit FreeType and Fontconfig libraries: their absence caused
-FreeType errors when initializing Proton Wine in a separate diagnostic. Adding
-them did not resolve the reported black map.
-In a disposable container, a fresh prefix launched with Proton 11.0-2's Wine
-and DXVK rendered the viewport, but showed dark, colored tile artifacts.
-Installing the June 2010 native D3DX9 libraries did not remove the artifacts;
-Dream Seeker loaded native `d3dx9_43` and DXVK's D3D9. After moving the 32-bit
-DXVK D3D9 DLL aside and requesting built-in D3D9, the artifacts changed, but
-neither D3D9 nor WineD3D appeared in Dream Seeker's mapped libraries, so the
-viewport's rendering path is unconfirmed. Running Proton Wine directly in the
-container is not the same as running Steam's full Proton environment.
-The rendering failure remains unresolved; Wine applications do not receive
-Selkies' injected gamepad or webcam integrations.
+with and without GPU access under Wine Staging. In a separate container, the
+same scene rendered correctly using a fresh Ubuntu Wine 10 prefix, BYOND's
+bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1. The individual cause
+is not isolated, and the newly built image still needs gameplay verification.
+Wine applications do not receive Selkies' injected gamepad or webcam
+integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -78,7 +65,8 @@ docker build --platform linux/amd64 -t tgstation-gateway-player .
 
 The build downloads the portable Windows BYOND archive from the independently
 operated community mirror at `byond-builds.dm-lang.org`, defaulting to version
-`516.1688`. To select a version from a shell environment variable, set
+`516.1688`. The archive must include BYOND's bundled DirectX setup and June 2010
+`d3dx9_43` CAB. To select a version from a shell environment variable, set
 `BYOND_VERSION` and pass it as a build argument:
 
 ```sh
@@ -94,7 +82,7 @@ corruption but not against a known digest.
 
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
-The build requires network access to the community mirror, WineHQ, GitHub,
+The build requires network access to the community mirror, Ubuntu, GitHub,
 Microsoft and other Winetricks download hosts. The RichEdit verbs download large
 Windows service packs and legacy installers from third-party and archive
 mirrors, verified against Winetricks' checksums. The build intentionally fails
@@ -133,7 +121,7 @@ The mutable `dev` tag can contain unmerged pull-request code and points to the
 most recently published image, not necessarily the latest commit on `main`.
 Overlapping runs may finish out of order. Pull it again to get updates; it is
 not a release or a Git tag.
-To refresh unpinned components such as WebView2, delete the `wine-prefix-v1-`
+To refresh unpinned components such as WebView2, delete the `wine-prefix-v2-`
 cache in GitHub Actions and run CI on `main` again. Publishing a GitHub release
 can reuse the default-branch cache, builds and tests the image again, then pushes it to
 `ghcr.io/flashdim/tgstation-gateway` with the release tag. Non-prereleases also
@@ -203,8 +191,10 @@ connection, a small system tray is provided for its icon. The launcher assumes
 X11, not Selkies' Wayland backend. Earlier testing restored game and stat-panel
 rendering by removing `LD_PRELOAD`, and confirmed audio with the LXQt-based
 image. A later user-reported session rendered the menu, dialogs and audio, but
-showed a black game scene with a few solid-color tiles after joining. This
-rendering failure remains unresolved; the smoke test does not verify gameplay.
+showed a black game scene with a few solid-color tiles after joining. A separate
+Ubuntu Wine 10 and DXVK comparison rendered that scene correctly, but the
+newly built image still requires gameplay verification. The smoke test does not
+verify gameplay.
 The desktop-free image's pager/tray behavior also needs explicit verification.
 
 ### AMD or Intel GPU experiment
