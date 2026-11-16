@@ -39,15 +39,14 @@ tracks them. The rebuilt image and those dialogs still need gameplay
 verification. The individual rendering cause is not isolated. Wine applications
 do not receive Selkies' injected gamepad or webcam integrations.
 The user reports that Wine 11.22 removed the extra windows but brought back the
-rendering issue. The Dockerfile now pins standalone Wine 11.19 to compare an
-intermediate release. Wine 11.20's official release notes report a startup
-segmentation-fault regression on some systems, so 11.19 is the nearest earlier
-release without that warning. Its official archive checksum and required Wine
-binaries were verified, and the image build completed Wine prefix
-initialization and startup. The build then failed while Winetricks tried to
-download `vcrun2022`: DNS resolution for Microsoft and Archive.org hosts was
-unavailable. The Dream Seeker rendering and dialog behavior remain untested
-with Wine 11.19.
+The user reports the same outcome with standalone Wine 11.19: the extra windows
+are gone, but the rendering issue returned. The Dockerfile remains pinned to
+Wine 11.19 for this comparison. Wine 11.20's official release notes report a
+startup segmentation-fault regression on some systems, so 11.19 is the nearest
+earlier release without that warning. Its archive checksum and required
+binaries were verified here, but the image build could not finish: Winetricks
+could not resolve Microsoft and Archive.org hosts to download `vcrun2022`.
+The 11.19 client result is user-reported, not independently reproduced here.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current

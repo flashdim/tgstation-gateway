@@ -51,15 +51,15 @@ prefix rendered the scene and loaded both panels, but showed two extra blank
 dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
 tracks them. The previously tested image used that runtime; the individual
 cause is unconfirmed. The user reports that standalone Wine 11.22 removed the
-extra windows but restored the rendering issue. The Dockerfile now pins
-checksum-verified standalone Wine 11.19 for an intermediate-release comparison.
-Wine 11.20's release notes warn of a startup segmentation fault on some systems,
-so 11.19 is the nearest earlier release without that warning. Its official
-archive checksum and required Wine binaries were verified, and an image build
-completed Wine prefix initialization and startup. The build then failed to
-download Winetricks' `vcrun2022` dependency because DNS resolution for Microsoft
-and Archive.org hosts was unavailable. Dream Seeker rendering and dialog
-behavior remain unverified with Wine 11.19; no fix is presumed.
+extra windows but restored the rendering issue; the user reports the same
+outcome with standalone Wine 11.19. The Dockerfile remains pinned to
+checksum-verified Wine 11.19 for this comparison. Wine 11.20's release notes
+warn of a startup segmentation fault on some systems, so 11.19 is the nearest
+earlier release without that warning. The 11.19 client result is
+user-reported, not independently reproduced here: an image build completed
+prefix initialization and startup, then failed to download Winetricks'
+`vcrun2022` dependency because DNS resolution for Microsoft and Archive.org
+hosts was unavailable. No fix is presumed.
 A built-image comparison did not reproduce the persistent dialog pair with
 Dream Seeker alone or a minimal diagnostic world. An untitled browser dialog
 had the same broad X11 properties, so no window-suppression rule is applied.
