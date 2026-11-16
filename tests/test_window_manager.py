@@ -16,7 +16,9 @@ class WindowManagerTest(unittest.TestCase):
 
         self.assertEqual(len(applications), 1)
         application = applications[0]
-        self.assertEqual(application.attrib, {"class": "steam_proton", "type": "normal"})
+        self.assertEqual(
+            application.attrib, {"class": "steam_proton", "type": "normal"}
+        )
         self.assertEqual(application.findtext("maximized"), "true")
         self.assertIsNone(application.find("fullscreen"))
 
