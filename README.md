@@ -13,9 +13,10 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 ## Build the player image
 
 The image uses the Selkies base for a headless X11 display, audio and browser
-streaming, with Openbox managing BYOND windows instead of a desktop. It installs
-Ubuntu Wine 10 and uses Winetricks to install Visual C++ 2022,
-DirectX components, core fonts, RichEdit and WebView2. It also installs BYOND.
+streaming, with Openbox managing BYOND windows instead of a desktop. It uses
+Kron4ek's standalone Proton-based Wine 11.0-2 build and Winetricks to install
+Visual C++ 2022, DirectX components, core fonts, RichEdit and WebView2.
+Ubuntu Wine packages provide the runtime dependencies. It also installs BYOND.
 It targets `linux/amd64` and an x64 Wine prefix. It installs BYOND's bundled
 DirectX setup and DXVK 2.7.1, which requires a Vulkan 1.3-capable driver.
 See the community
@@ -27,12 +28,14 @@ from Wine's environment: testing showed that removing them lets the VC runtime
 installer complete and restored BYOND game and stat-panel rendering in that
 test environment. A later user-reported session rendered the menu, dialogs and
 audio, but showed a black game scene with a few solid-color tiles after joining,
-with and without GPU access under Wine Staging. In a separate container, the
-same scene rendered correctly using a fresh Ubuntu Wine 10 prefix, BYOND's
-bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1. The individual cause
-is not isolated, and the newly built image still needs gameplay verification.
-Wine applications do not receive Selkies' injected gamepad or webcam
-integrations.
+with and without GPU access under Wine Staging. Ubuntu Wine 10 rendered the
+scene but failed to load fancy chat and the stat panel. In a separate container,
+a fresh prefix using standalone Proton-based Wine 11.0-2, BYOND's bundled
+DirectX setup and DXVK 2.7.1 rendered the scene and loaded those panels, but
+showed two extra blank dialogs under Wayland/XWayland. The rebuilt image and
+those dialogs still need gameplay verification. The individual rendering
+cause is not isolated. Wine applications do not receive Selkies' injected
+gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -192,9 +195,9 @@ X11, not Selkies' Wayland backend. Earlier testing restored game and stat-panel
 rendering by removing `LD_PRELOAD`, and confirmed audio with the LXQt-based
 image. A later user-reported session rendered the menu, dialogs and audio, but
 showed a black game scene with a few solid-color tiles after joining. A separate
-Ubuntu Wine 10 and DXVK comparison rendered that scene correctly, but the
-newly built image still requires gameplay verification. The smoke test does not
-verify gameplay.
+standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
+the WebView panels, but showed extra blank dialogs. The newly built image still
+requires gameplay verification. The smoke test does not verify gameplay.
 The desktop-free image's pager/tray behavior also needs explicit verification.
 
 ### AMD or Intel GPU experiment

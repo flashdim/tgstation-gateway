@@ -43,9 +43,11 @@ not fix the map, although Dream Seeker loaded it. The image now installs
 32-bit FreeType and Fontconfig, which removed FreeType errors in a separate
 Proton Wine initialization test, but did not resolve the black map.
 In a disposable container a fresh Ubuntu Wine 10 prefix with BYOND's bundled
-DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the same scene
-correctly. This combination is now used by the image, but the rebuilt image
-has not yet been verified in gameplay and the individual cause is unconfirmed.
+DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the scene, but fancy
+chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
+prefix rendered the scene and loaded both panels, but showed two extra blank
+dialogs under Wayland/XWayland. The image now uses that runtime; the rebuilt
+image still needs gameplay verification and the individual cause is unconfirmed.
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in that test environment; it does not resolve or rule out
 the current failure. A direct launch to the configured host has been observed.
