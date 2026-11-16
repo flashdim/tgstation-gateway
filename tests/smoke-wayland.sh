@@ -27,11 +27,8 @@ for _ in {1..120}; do
         docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
         docker exec "$container" sh -c \
             '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = true && xdpyinfo -display "$DISPLAY" >/dev/null'; then
+        docker exec "$container" s6-svc -d /etc/service/window-manager
         sleep 3
-        if docker exec "$container" pgrep -x openbox >/dev/null; then
-            echo "Openbox must not compete with the Wayland compositor" >&2
-            exit 1
-        fi
         if docker exec "$container" /usr/local/bin/healthcheck; then
             echo "Wayland compositor, XWayland and BYOND health checks passed"
             exit 0

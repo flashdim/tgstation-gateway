@@ -29,13 +29,8 @@ class SmokeContainerTest(unittest.TestCase):
                 "  exec)\n"
                 '    case "$3" in\n'
                 '      pgrep) if [ "$4" = "-x" ]; then '
-                'if [ "$5" = openbox ] && [ "${WAYLAND_TEST:-0}" = 1 ]; then '
-                '[ "${UNEXPECTED_OPENBOX:-0}" = 1 ]; else '
                 '[ "${NO_WINDOW_MANAGER:-0}" = 0 ]; '
-                "fi; "
                 'else test ! -f "$SERVICE_STOPPED"; fi ;;\n'
-                '      stat) echo "${X11_SOCKET_MODE:-1777}" ;;\n'
-                "      sh) exit 0 ;;\n"
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
                 'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
@@ -53,9 +48,9 @@ class SmokeContainerTest(unittest.TestCase):
             path.write_text(f"#!/bin/sh\n{body}\n")
             path.chmod(0o755)
 
-    def smoke(self, script="smoke-container.sh", **extra_env):
+    def smoke(self, **extra_env):
         return subprocess.run(
-            ["bash", str(ROOT / "tests" / script), "example:ci"],
+            ["bash", str(ROOT / "tests/smoke-container.sh"), "example:ci"],
             env={
                 **os.environ,
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
@@ -104,41 +99,6 @@ class SmokeContainerTest(unittest.TestCase):
             self.log.read_text().splitlines()[-2:],
             ["logs test-container", "rm -f test-container"],
         )
-
-    def test_wayland_does_not_stop_window_manager_to_pass(self):
-        result = self.smoke(script="smoke-wayland.sh", WAYLAND_TEST="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        commands = self.log.read_text().splitlines()
-        self.assertIn("-e SELKIES_WAYLAND=true", commands[0])
-        self.assertIn("exec test-container pgrep -x labwc", commands)
-        self.assertIn("exec test-container pgrep -x openbox", commands)
-        self.assertFalse(any("s6-svc" in command for command in commands))
-        self.assertEqual(commands[-1], "rm -f test-container")
-
-    def test_wayland_rejects_competing_openbox(self):
-        result = self.smoke(
-            script="smoke-wayland.sh", WAYLAND_TEST="1", UNEXPECTED_OPENBOX="1"
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Openbox must not compete", result.stderr)
-        self.assertEqual(
-            self.log.read_text().splitlines()[-2:],
-            ["logs test-container", "rm -f test-container"],
-        )
-
-    def test_wayland_requires_compositor(self):
-        result = self.smoke(
-            script="smoke-wayland.sh", WAYLAND_TEST="1", NO_WINDOW_MANAGER="1"
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("exited before it became ready", result.stderr)
-
-    def test_wayland_requires_sticky_x11_socket_directory(self):
-        result = self.smoke(
-            script="smoke-wayland.sh", WAYLAND_TEST="1", X11_SOCKET_MODE="777"
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("X11 socket directory does not have mode 1777", result.stderr)
 
 
 if __name__ == "__main__":

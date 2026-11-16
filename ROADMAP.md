@@ -49,25 +49,20 @@ DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the scene, but fancy
 chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
 prefix rendered the scene and loaded both panels, but showed two extra blank
 dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
-tracks them. The previously tested image used that runtime; the individual
-cause is unconfirmed. The user reports that standalone Wine 11.22 removed the
-extra windows but restored the rendering issue; the user reports the same
-outcome with standalone Wine 11.19. The Dockerfile remains pinned to
-checksum-verified Wine 11.19 for this comparison. Wine 11.20's release notes
-warn of a startup segmentation fault on some systems, so 11.19 is the nearest
-earlier release without that warning. The 11.19 client result is
-user-reported, not independently reproduced here: an image build completed
-prefix initialization and startup, then failed to download Winetricks'
-`vcrun2022` dependency because DNS resolution for Microsoft and Archive.org
-hosts was unavailable. No fix is presumed.
-A built-image comparison did not reproduce the persistent dialog pair with
-Dream Seeker alone or a minimal diagnostic world. An untitled browser dialog
-had the same broad X11 properties, so no window-suppression rule is applied.
-Openbox now stays idle under Wayland, where labwc manages XWayland windows,
-instead of repeatedly failing to start. Both backend startup smoke tests
-passed with that script overlaid on the published image; this does not resolve
-issue #4 or verify tgstation gameplay. See the README's dialog investigation
-for results and the remaining manual checks.
+tracks them. The image now uses that runtime; the rebuilt image still needs
+gameplay verification and the individual cause is unconfirmed.
+The current dependency experiment keeps the same checksum-pinned Proton
+Wine 11.0-2, BYOND and graphics setup, but replaces Ubuntu Wine packages with
+explicit amd64/i386 native runtime libraries. Build-time gates reject distro
+Wine packages and check core loader/display/audio dependencies; optional
+`winedmo.so` still requires old FFmpeg ABIs and optional `wpcap.so` expects
+`libpcap.so.1`, SONAMEs unavailable in Ubuntu 26.04.
+Neither package checks nor startup smoke tests verify gameplay, WebView panels
+or the blank-dialog report.
+On 2026-11-16 the native runtime gates and fresh-prefix initialization/startup
+passed, but the full build failed at `vcrun2022` because `aka.ms` and
+`web.archive.org` did not resolve. No complete experiment image was available
+for either backend's smoke test.
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in that test environment; it does not resolve or rule out
 the current failure. A direct launch to the configured host has been observed.

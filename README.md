@@ -14,10 +14,39 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It uses
-Kron4ek's checksum-verified standalone Wine 11.19 build as the
+Kron4ek's checksum-verified standalone Proton-based Wine 11.0-2 build as the
 Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
-core fonts, RichEdit and WebView2. Ubuntu Wine packages provide 32-bit and
-64-bit runtime dependencies; the container runs the standalone build.
+core fonts, RichEdit and WebView2. This experiment installs native Ubuntu
+libraries directly for amd64 and i386, without Ubuntu's `wine`, `wine32`,
+`wine64` or `libwine` packages; the standalone runtime and its pinned checksum
+are unchanged. The package list follows Ubuntu 26.04's `libwine`
+Depends/Recommends metadata, retaining X11/Wayland, Mesa/OpenGL/Vulkan,
+ALSA/PulseAudio, GStreamer, fonts, TLS/Kerberos and device libraries. Libraries
+loaded with `dlopen` are not all visible to `ldd`; keep both architectures when
+updating the list.
+The pinned Selkies base already supplies Mesa Vulkan ICDs for both architectures;
+this is not just a Vulkan-loader-only setup.
+
+Every image build, including releases, rejects installed distro Wine packages
+and checks both loader architectures, core display/audio/GStreamer modules and
+selected dynamically loaded libraries before creating the prefix. This is not
+a gameplay or WebView compatibility test. The pinned standalone runtime's
+optional `winedmo.so` expects FFmpeg SONAMEs `libavcodec.so.58`,
+`libavformat.so.58` and `libavutil.so.56`, unavailable in Ubuntu 26.04.
+Its optional packet-capture module `wpcap.so` expects `libpcap.so.1`, whereas
+Ubuntu's native library exposes `libpcap.so.0.8`. Both gaps affect both
+architectures; installing Ubuntu Wine would not supply those SONAMEs either.
+The build checks intentionally exclude these optional modules; current Ubuntu
+libraries do not resolve the inherited gaps, and no compatibility symlinks
+are installed.
+
+Validation on 2026-11-16 passed native package installation, the pinned Wine
+archive checksum, the build-time runtime gates, and fresh-prefix initialization
+and startup. The full image build then stopped at Winetricks `vcrun2022`:
+both `aka.ms` and its `web.archive.org` fallback failed DNS resolution
+(`No address associated with hostname`). No installer or checksum check was
+bypassed. No complete experiment image was produced, so its X11 and Wayland
+smoke tests and real BYOND/WebView gameplay remain unverified.
 It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
 installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
 which requires a Vulkan 1.3-capable driver.
@@ -38,15 +67,6 @@ showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github
 tracks them. The rebuilt image and those dialogs still need gameplay
 verification. The individual rendering cause is not isolated. Wine applications
 do not receive Selkies' injected gamepad or webcam integrations.
-The user reports that Wine 11.22 removed the extra windows but brought back the
-The user reports the same outcome with standalone Wine 11.19: the extra windows
-are gone, but the rendering issue returned. The Dockerfile remains pinned to
-Wine 11.19 for this comparison. Wine 11.20's official release notes report a
-startup segmentation-fault regression on some systems, so 11.19 is the nearest
-earlier release without that warning. Its archive checksum and required
-binaries were verified here, but the image build could not finish: Winetricks
-could not resolve Microsoft and Archive.org hosts to download `vcrun2022`.
-The 11.19 client result is user-reported, not independently reproduced here.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -127,7 +147,10 @@ Pull requests and pushes to `main` build the image and smoke-test the Selkies
 endpoint, Openbox, pager tray and BYOND pager, without logging in to a game
 server. CI caches the initialized Wine prefix without BYOND in GitHub Actions;
 the first successful build populates the cache, and branch access and cache
-eviction affect reuse.
+eviction affect reuse. The prefix cache key includes the Dockerfile and all
+three installer scripts, so this runtime-library change invalidates old prefixes.
+To test a fresh prefix locally, use the normal build command without a
+`wine-prefix-cache` build context; the scratch stage provides an empty cache.
 After formatting and image checks pass, CI publishes the tested image to
 `ghcr.io/flashdim/tgstation-gateway:dev` for pushes or manual runs on `main`
 and pull requests from this repository. Fork pull requests do not publish.
@@ -216,69 +239,6 @@ standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
 the WebView panels, but showed extra blank dialogs. The newly built image still
 requires gameplay verification. The smoke test does not verify gameplay.
 The desktop-free image's pager/tray behavior also needs explicit verification.
-
-### Blank Dream Seeker dialogs (issue #4)
-
-The original report concerns two persistent, untitled Dream Seeker dialogs in
-a disposable Wayland/XWayland session, not the pager alone. It occurs with or
-without `BYOND_SERVER` once Dream Seeker is launched. Similar windows were
-reported to disappear after connecting under local Arch/Steam Proton.
-
-An investigation on 2026-11-16 used the published player image
-`ghcr.io/flashdim/tgstation-gateway@sha256:628bcf352802010a3bff953e4323db52cad2749192d65b7a193ff29248848f6b`
-(BYOND 516.1688, standalone Proton-based Wine 11.0-2, bundled DirectX and
-DXVK 2.7.1), with seccomp enabled and separate X11 and Wayland containers:
-
-- Launching Dream Seeker without a destination displayed Open Location, but
-  did not reproduce the persistent pair.
-- Connecting to a minimal diagnostic world on a separate disposable BYOND
-  server created a game window and the requested browser panel. The Wayland
-  browser stream displayed the panel's HTML. This was not a tgstation gameplay
-  or TGUI/fancy-chat compatibility test.
-- Windows-side inspection showed an untitled `#32770` dialog containing a
-  `Chrome_WidgetWin_` child for the requested browser panel. Its X11 properties
-  included `steam_proton`, a transient parent, disabled input focus and
-  skip-taskbar. Those properties therefore do **not** safely identify unwanted
-  windows. No title/class-based hiding or window-closing workaround is applied.
-- Openbox repeatedly exited under Wayland because labwc already owned XWayland
-  window management. The window-manager service now stays idle in Wayland mode;
-  X11 still uses Openbox. Both startup smoke tests passed with this script
-  overlaid on the image above. This removes a confirmed backend conflict, but
-  does **not** establish the cause or resolution of the original blank dialogs.
-
-To compare your built image, start a disposable container using the direct-run
-command above, adding `--name gateway-dialog-check` and
-`-e SELKIES_WAYLAND=false`. Repeat with `true` after removing the first
-container. Keep the image, server, GPU settings and launch path identical.
-Test both direct launch with `BYOND_SERVER` and launching Dream Seeker from the
-pager. Wayland is experimental; labwc, not Openbox, must manage XWayland windows.
-
-Before connecting, after connecting, and while an unwanted window remains,
-inspect the session from another terminal:
-
-```sh
-docker exec gateway-dialog-check bash -lc '
-  . "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"
-  unset LD_PRELOAD
-  xwininfo -root -tree
-  winedbg --command "info wnd"
-'
-```
-
-For a suspect X11 window, use `xprop -id <XID>` and
-`xwininfo -id <XID>` in that same session environment. For a Windows handle
-from Wine's tree, use `winedbg --command "info * wnd <HWND>"` to inspect its
-owner, styles and geometry. XIDs and Windows handles are different identifiers.
-Record whether the window is mapped, its children and owning process, and
-whether it disappears on connection, disconnection or closing its parent.
-Review diagnostic output locally; titles and logs may contain player/server
-data and should not be published unredacted.
-
-The original pair's Windows-side purpose remains unidentified. Before treating
-issue #4 as resolved, reproduce it on a built image and verify map rendering,
-fancy chat, stat/TGUI/WebView panels, menus, legitimate modal/non-modal dialogs,
-and disconnect/reconnect under both backends. Startup health and the minimal
-world comparison do not establish those results.
 
 ### AMD or Intel GPU experiment
 

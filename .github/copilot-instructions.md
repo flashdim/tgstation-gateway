@@ -23,12 +23,14 @@ planned features or smoke tests as proof of interactive gameplay.
   players. Do not log secrets or include player data in images or caches.
 - BYOND may see shared IP addresses or computer IDs. Investigate and document
   collisions and preserve server ban enforcement; never silently bypass it.
-- The player image uses checksum-pinned standalone Wine 11.19; Ubuntu Wine
-  packages supply its runtime libraries. Keep the 32-bit runtime dependencies,
-  BYOND's bundled DirectX setup, native `d3dx9_43` and pinned DXVK version
-  consistent when changing the graphics stack. Preserve the X11 socket
-  directory's sticky bit and remove Selkies' `LD_PRELOAD` interposers from
-  Wine's environment.
+- The player image uses checksum-pinned standalone Proton-based Wine 11.0-2;
+  install native Ubuntu runtime libraries explicitly for amd64 and i386,
+  never `wine`, `wine32`, `wine64` or `libwine`. Preserve optional dlopened
+  graphics/audio/crypto libraries as well as ELF dependencies; ldd alone is
+  insufficient. Keep BYOND's bundled DirectX setup, native `d3dx9_43` and
+  pinned DXVK version consistent when changing the graphics stack. Preserve
+  the X11 socket directory's sticky bit and remove Selkies' `LD_PRELOAD`
+  interposers from Wine's environment.
 - Keep seccomp enabled. The custom profile is based on Docker's default and
   permits only the 32-bit `socket` syscall exception Wine needs; keep it aligned
   across the Compose example, direct-run documentation and smoke tests.
