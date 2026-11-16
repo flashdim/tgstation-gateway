@@ -14,11 +14,13 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It uses
-Kron4ek's standalone Proton-based Wine 11.0-2 build and Winetricks to install
-Visual C++ 2022, DirectX components, core fonts, RichEdit and WebView2.
-Ubuntu Wine packages provide the runtime dependencies. It also installs BYOND.
-It targets `linux/amd64` and an x64 Wine prefix. It installs BYOND's bundled
-DirectX setup and DXVK 2.7.1, which requires a Vulkan 1.3-capable driver.
+Kron4ek's checksum-verified standalone Proton-based Wine 11.0-2 build as the
+Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
+core fonts, RichEdit and WebView2. Ubuntu Wine packages provide 32-bit and
+64-bit runtime dependencies; the container runs the standalone build.
+It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
+installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
+which requires a Vulkan 1.3-capable driver.
 See the community
 [Wine-Byond-help guide](https://github.com/kinggoldcatter/Wine-Byond-help) for
 BYOND-specific Wine troubleshooting.
@@ -32,10 +34,10 @@ with and without GPU access under Wine Staging. Ubuntu Wine 10 rendered the
 scene but failed to load fancy chat and the stat panel. In a separate container,
 a fresh prefix using standalone Proton-based Wine 11.0-2, BYOND's bundled
 DirectX setup and DXVK 2.7.1 rendered the scene and loaded those panels, but
-showed two extra blank dialogs under Wayland/XWayland. The rebuilt image and
-those dialogs still need gameplay verification. The individual rendering
-cause is not isolated. Wine applications do not receive Selkies' injected
-gamepad or webcam integrations.
+showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
+tracks them. The rebuilt image and those dialogs still need gameplay
+verification. The individual rendering cause is not isolated. Wine applications
+do not receive Selkies' injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current

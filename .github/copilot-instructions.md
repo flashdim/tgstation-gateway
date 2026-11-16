@@ -23,6 +23,15 @@ planned features or smoke tests as proof of interactive gameplay.
   players. Do not log secrets or include player data in images or caches.
 - BYOND may see shared IP addresses or computer IDs. Investigate and document
   collisions and preserve server ban enforcement; never silently bypass it.
+- The player image uses checksum-pinned standalone Proton-based Wine 11.0-2;
+  Ubuntu Wine packages supply its runtime libraries. Keep the 32-bit runtime
+  dependencies, BYOND's bundled DirectX setup, native `d3dx9_43` and pinned
+  DXVK version consistent when changing the graphics stack. Preserve the X11
+  socket directory's sticky bit and remove Selkies' `LD_PRELOAD` interposers
+  from Wine's environment.
+- Keep seccomp enabled. The custom profile is based on Docker's default and
+  permits only the 32-bit `socket` syscall exception Wine needs; keep it aligned
+  across the Compose example, direct-run documentation and smoke tests.
 - Do not commit proprietary installers, credentials, Wine prefixes or runtime
   player data. Check redistribution and hosted-use terms before publishing
   images containing third-party components.
@@ -40,6 +49,9 @@ planned features or smoke tests as proof of interactive gameplay.
 - Add focused tests for new behavior and failures; run the smallest relevant
   checks. Validate routing, lifecycle and isolation with integration tests,
   and real gameplay separately rather than relying on process health alone.
+  Startup and health smoke tests do not establish game-scene rendering,
+  WebView compatibility or playability; record manual results and unresolved
+  behavior separately.
 - Document configuration, trust boundaries, operational limits and manual
   verification. Report missing prerequisites and unverified compatibility
   explicitly; do not present scaffolding as production-ready.

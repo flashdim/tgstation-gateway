@@ -27,6 +27,8 @@ Provide an independently usable, single-player Wine/BYOND image.
   expose the streaming endpoint and provide local Compose examples.
 - Use a desktop-free X11 session with Openbox and a pager tray; support optional
   AMD/Intel GPU access.
+- Keep seccomp enabled with a narrowly scoped exception for Wine's 32-bit
+  `socket` syscall; use the same profile in examples and smoke tests.
 - Build and smoke-test the image in CI, publish a tested development image and
   publish the tested image on release.
 
@@ -46,8 +48,9 @@ In a disposable container a fresh Ubuntu Wine 10 prefix with BYOND's bundled
 DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the scene, but fancy
 chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
 prefix rendered the scene and loaded both panels, but showed two extra blank
-dialogs under Wayland/XWayland. The image now uses that runtime; the rebuilt
-image still needs gameplay verification and the individual cause is unconfirmed.
+dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
+tracks them. The image now uses that runtime; the rebuilt image still needs
+gameplay verification and the individual cause is unconfirmed.
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in that test environment; it does not resolve or rule out
 the current failure. A direct launch to the configured host has been observed.
