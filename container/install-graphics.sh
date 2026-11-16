@@ -29,5 +29,4 @@ for dll in d3d9 d3d10core d3d11 dxgi; do
     cp --remove-destination "$workdir/dxvk-2.7.1/x64/$dll.dll" "$WINEPREFIX/drive_c/windows/system32/$dll.dll"
     wine reg add 'HKCU\Software\Wine\DllOverrides' /v "*$dll" /t REG_SZ /d native /f
 done
-timeout --kill-after=10s 30s wineserver -k
 timeout --kill-after=10s 30s wineserver --wait

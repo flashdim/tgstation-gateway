@@ -86,7 +86,6 @@ class InstallClientTest(unittest.TestCase):
                 "winetricks -q riched20",
                 "winetricks -q msftedit",
                 "winetricks -q webview2",
-                "wineserver -k",
                 "wineserver --wait",
             ],
         )
@@ -105,7 +104,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertEqual(result.returncode, 17)
         self.assertIn("Winetricks dxtrans failed with exit code 17", result.stderr)
         self.assertNotIn("winetricks -q webview2", self.log.read_text())
-        self.assertNotIn("wineserver -k", self.log.read_text())
+        self.assertEqual(self.log.read_text().count("wineserver --wait"), 1)
         cache_path = (self.root / "cache-paths").read_text().splitlines()[0]
         self.assertFalse(Path(cache_path).exists())
 
@@ -113,7 +112,7 @@ class InstallClientTest(unittest.TestCase):
         result = self.install(TIMEOUT_COMPONENT="webview2")
         self.assertEqual(result.returncode, 124)
         self.assertIn("Winetricks webview2 timed out after 240s", result.stderr)
-        self.assertNotIn("wineserver -k", self.log.read_text())
+        self.assertEqual(self.log.read_text().count("wineserver --wait"), 1)
 
     def test_fails_if_new_component_fails(self):
         for component in ("corefonts", "riched20", "msftedit"):
