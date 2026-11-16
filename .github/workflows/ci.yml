@@ -147,8 +147,8 @@ jobs:
       - name: Check Wine and 32-bit runtime libraries
         run: |
           docker run --rm --entrypoint sh tgstation-gateway-player:ci -c '
-            test "$(command -v wine)" = /opt/wine-proton/bin/wine &&
-            test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader &&
+            test "$(command -v wine)" = /opt/wine/bin/wine &&
+            test -x /opt/wine/lib/wine/i386-unix/wine-preloader &&
             test -r /usr/lib/i386-linux-gnu/libfreetype.so.6 &&
             test -r /usr/lib/i386-linux-gnu/libfontconfig.so.1 &&
             test -r /usr/lib/i386-linux-gnu/libvulkan.so.1

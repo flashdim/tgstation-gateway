@@ -24,14 +24,14 @@ RUN selkies-privileged-files release && \
     selkies-privileged-files restore
 
 RUN curl -fsSL --retry 3 \
-      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-exp-11.0/wine-proton-exp-11.0-amd64.tar.xz \
-      -o /tmp/wine-proton.tar.xz && \
-    echo '75397ffd9d5af889a81209be138a5891d222fc17dc6ca40009df2e8cd2838136  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
-    mkdir -p /opt/wine-proton && \
-    tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
-    test -x /opt/wine-proton/bin/wine && \
-    test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader && \
-    rm /tmp/wine-proton.tar.xz
+      https://github.com/Kron4ek/Wine-Builds/releases/download/11.22/wine-11.22-amd64.tar.xz \
+      -o /tmp/wine.tar.xz && \
+    echo 'cdaaa76c218359d486eb35968892a4c466623b137ed0931ee3f31465ec6539e0  /tmp/wine.tar.xz' | sha256sum -c - && \
+    mkdir -p /opt/wine && \
+    tar -xJf /tmp/wine.tar.xz --strip-components=1 -C /opt/wine && \
+    test -x /opt/wine/bin/wine && \
+    test -x /opt/wine/lib/wine/i386-unix/wine-preloader && \
+    rm /tmp/wine.tar.xz
 
 # Pin the Winetricks revision used by the desktop experiment.
 RUN curl -fsSL --retry 3 \
@@ -43,7 +43,7 @@ RUN curl -fsSL --retry 3 \
 COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
 
 USER 1000
-ENV PATH=/opt/wine-proton/bin:${PATH} \
+ENV PATH=/opt/wine/bin:${PATH} \
     WINEPREFIX=/home/ubuntu/.wine \
     WINEARCH=win64 \
     SELKIES_ENABLE_HTTPS=false \

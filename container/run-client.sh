@@ -10,7 +10,7 @@ done
 # Selkies' input and webcam interposers cause Wine's VC runtime installer to
 # crash and leave BYOND panels blank.
 unset LD_PRELOAD
-export PATH="/opt/wine-proton/bin:$PATH"
+export PATH="/opt/wine/bin:$PATH"
 
 export DISPLAY="${DISPLAY:-:20}"
 until timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; do
