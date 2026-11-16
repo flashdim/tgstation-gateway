@@ -24,9 +24,9 @@ RUN selkies-privileged-files release && \
     selkies-privileged-files restore
 
 RUN curl -fsSL --retry 3 \
-      https://github.com/Kron4ek/Wine-Builds/releases/download/11.22/wine-11.22-amd64.tar.xz \
+      https://github.com/Kron4ek/Wine-Builds/releases/download/11.19/wine-11.19-amd64.tar.xz \
       -o /tmp/wine.tar.xz && \
-    echo 'cdaaa76c218359d486eb35968892a4c466623b137ed0931ee3f31465ec6539e0  /tmp/wine.tar.xz' | sha256sum -c - && \
+    echo '40068b3825887224d4b95364e3f49342d4bf7efac5486614b8bc4e7173bbef3e  /tmp/wine.tar.xz' | sha256sum -c - && \
     mkdir -p /opt/wine && \
     tar -xJf /tmp/wine.tar.xz --strip-components=1 -C /opt/wine && \
     test -x /opt/wine/bin/wine && \

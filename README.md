@@ -14,7 +14,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It uses
-Kron4ek's checksum-verified standalone Wine 11.22 build as the
+Kron4ek's checksum-verified standalone Wine 11.19 build as the
 Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
 core fonts, RichEdit and WebView2. Ubuntu Wine packages provide 32-bit and
 64-bit runtime dependencies; the container runs the standalone build.
@@ -38,12 +38,14 @@ showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github
 tracks them. The rebuilt image and those dialogs still need gameplay
 verification. The individual rendering cause is not isolated. Wine applications
 do not receive Selkies' injected gamepad or webcam integrations.
-The Dockerfile now pins standalone Wine 11.22 for a fresh-prefix comparison of
-the reported dialogs. The archive checksum and Wine executable were verified,
-and an attempted image build completed prefix initialization and startup. It
-then failed while Winetricks tried to download `vcrun2022`: DNS resolution for
-Microsoft and Archive.org hosts was unavailable in the build environment. The
-image and client comparison are therefore still unverified.
+The user reports that Wine 11.22 removed the extra windows but brought back the
+rendering issue. The Dockerfile now pins standalone Wine 11.19 to compare an
+intermediate release. Wine 11.20's official release notes report a startup
+segmentation-fault regression on some systems, so 11.19 is the nearest earlier
+release without that warning. The 11.19 archive and client have not been
+verified in this environment. A prior Wine 11.22 image build completed prefix
+initialization and startup but failed while Winetricks tried to download
+`vcrun2022`: DNS resolution for Microsoft and Archive.org hosts was unavailable.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
