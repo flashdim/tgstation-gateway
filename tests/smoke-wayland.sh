@@ -28,9 +28,11 @@ for _ in {1..120}; do
         docker exec "$container" sh -c \
             '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = true && xdpyinfo -display "$DISPLAY" >/dev/null'; then
         docker exec "$container" s6-svc -d /etc/service/window-manager
-        docker exec "$container" /usr/local/bin/healthcheck
-        echo "Wayland compositor, XWayland and BYOND health checks passed"
-        exit 0
+        sleep 3
+        if docker exec "$container" /usr/local/bin/healthcheck; then
+            echo "Wayland compositor, XWayland and BYOND health checks passed"
+            exit 0
+        fi
     fi
     if [ "$(docker inspect -f '{{.State.Running}}' "$container")" != "true" ]; then
         echo "Wayland comparison container exited before it became ready" >&2
