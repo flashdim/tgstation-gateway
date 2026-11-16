@@ -61,9 +61,11 @@ absent from i386. Optional
 `libpcap.so.1`, SONAMEs unavailable in Ubuntu 26.04.
 Neither package checks nor startup smoke tests verify gameplay, WebView panels
 or the blank-dialog report.
+The Proton 10.0-4 runtime passed the build-time dependency gate. The image build
+stopped at Winetricks because DNS resolution for `aka.ms` and `web.archive.org`
+failed while installing Visual C++ 2022. Client behavior remains unverified.
 The user reported no major change with the previous Proton 11.0-2/no-Ubuntu-Wine
-build, but said the UI looked cleaner and closer to a local environment. The
-Proton 10.0-4 build and client behavior remain unverified.
+build, but said the UI looked cleaner and closer to a local environment.
 The image now defaults to BYOND 516.1689 for a comparison; the mirror download
 and gameplay remain unverified because the mirror did not resolve in the test
 environment.

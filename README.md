@@ -43,9 +43,12 @@ are installed.
 The Proton 10.0-4 amd64 archive checksum is pinned for the runtime comparison.
 A user-reported test of Proton 11.0-2 without Ubuntu Wine packages showed no
 major change, though the UI looked cleaner and closer to a local environment.
-Proton 10.0-4 build and client behavior remain unverified. Its archive includes
-`winegstreamer.so` for amd64 but not i386; the build checks the module where
-present and does not claim 32-bit GStreamer-backed media compatibility.
+Proton 10.0-4 passed the build-time runtime dependency gate, but the full image
+build stopped when Winetricks could not resolve `aka.ms` or `web.archive.org`
+while installing Visual C++ 2022. Client behavior remains unverified. Its
+archive includes `winegstreamer.so` for amd64 but not i386; the build checks the
+module where present and does not claim 32-bit GStreamer-backed media
+compatibility.
 It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
 installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
 which requires a Vulkan 1.3-capable driver.
