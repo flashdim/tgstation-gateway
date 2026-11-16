@@ -47,6 +47,8 @@ jobs:
       - name: Validate Compose example
         run: |
           docker compose -f examples/compose.yaml config --quiet
+          docker compose -f examples/compose.yaml config --format json |
+            python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=unconfined"]'
           DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
 
       - name: Set up Buildx

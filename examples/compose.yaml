@@ -6,6 +6,8 @@ services:
     platform: linux/amd64
     init: true
     shm_size: 2gb
+    security_opt:
+      - seccomp=unconfined
     environment:
       BYOND_SERVER: ${BYOND_SERVER:-}
       BYOND_WEBVIEW2_GPU: ${BYOND_WEBVIEW2_GPU:-0}
