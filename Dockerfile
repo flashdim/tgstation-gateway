@@ -24,9 +24,9 @@ RUN selkies-privileged-files release && \
     selkies-privileged-files restore
 
 RUN curl -fsSL --retry 3 \
-      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-11.0-2/wine-proton-11.0-2-amd64.tar.xz \
+      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-exp-11.0/wine-proton-exp-11.0-amd64.tar.xz \
       -o /tmp/wine-proton.tar.xz && \
-    echo '51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
+    echo '75397ffd9d5af889a81209be138a5891d222fc17dc6ca40009df2e8cd2838136  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
     mkdir -p /opt/wine-proton && \
     tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
     test -x /opt/wine-proton/bin/wine && \
