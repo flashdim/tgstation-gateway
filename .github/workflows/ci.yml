@@ -48,7 +48,8 @@ jobs:
         run: |
           docker compose -f examples/compose.yaml config --quiet
           docker compose -f examples/compose.yaml config --format json |
-            python3 -c 'import json, sys; assert not json.load(sys.stdin)["services"]["player"].get("security_opt")'
+            python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=./seccomp.json"]'
+          python3 -c 'import json; p=json.load(open("examples/seccomp.json")); assert p["defaultAction"] == "SCMP_ACT_ERRNO" and any(rule["names"] == ["socket"] and rule["action"] == "SCMP_ACT_ALLOW" and rule.get("includes", {}).get("arches") == ["SCMP_ARCH_X86"] for rule in p["syscalls"])'
           DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
 
       - name: Set up Buildx
@@ -109,11 +110,12 @@ jobs:
           container=""
           trap 'if [ -n "$container" ]; then docker rm -f "$container"; fi' EXIT
           result=0
-          for profile in default unconfined; do
+          for profile in default custom unconfined; do
             security_args=()
-            if [ "$profile" = unconfined ]; then
-              security_args+=(--security-opt seccomp=unconfined)
-            fi
+            case "$profile" in
+              custom) security_args+=(--security-opt seccomp=examples/seccomp.json) ;;
+              unconfined) security_args+=(--security-opt seccomp=unconfined) ;;
+            esac
             for wayland in false true; do
               directory="$RUNNER_TEMP/wine-traces/$profile/wayland-$wayland"
               mkdir -p "$directory"

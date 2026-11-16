@@ -133,13 +133,11 @@ check third-party redistribution terms before creating a release.
 
 ## Private single-player experiment
 
-The Compose example, direct Docker command and smoke tests use Docker's default
-seccomp profile. Local X11 and Wayland smoke tests passed with this profile.
-An earlier CI run reported Wine's `socket: Function not implemented`; its cause
-is not yet isolated. If either CI smoke test fails, CI collects startup syscall
-traces from a separate diagnostic image under both the default and unconfined
-profiles. Tracing can affect application behavior, so these diagnostics do not
-replace the untraced smoke tests or gate a successful build.
+The Compose example, direct Docker command and smoke tests use a custom profile
+based on Docker's default seccomp profile. It adds one exception for the
+32-bit `socket` syscall used by Wine; seccomp remains enabled for all other
+syscalls. The base profile is copied from
+[Moby's seccomp profile](https://github.com/moby/moby/blob/06db1734267bf7770914b417bff6556d835bf8cc/vendor/github.com/moby/profiles/seccomp/default.json).
 
 The Compose example pulls the published image and runs one player container
 bound to localhost:
@@ -180,7 +178,7 @@ release is published.
 Alternatively, run the image built above directly:
 
 ```sh
-docker run --rm --init --shm-size=2g \
+docker run --rm --init --security-opt seccomp=examples/seccomp.json --shm-size=2g \
   -p 127.0.0.1:8080:8080 \
   tgstation-gateway-player
 ```
