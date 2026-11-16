@@ -208,6 +208,69 @@ the WebView panels, but showed extra blank dialogs. The newly built image still
 requires gameplay verification. The smoke test does not verify gameplay.
 The desktop-free image's pager/tray behavior also needs explicit verification.
 
+### Blank Dream Seeker dialogs (issue #4)
+
+The original report concerns two persistent, untitled Dream Seeker dialogs in
+a disposable Wayland/XWayland session, not the pager alone. It occurs with or
+without `BYOND_SERVER` once Dream Seeker is launched. Similar windows were
+reported to disappear after connecting under local Arch/Steam Proton.
+
+An investigation on 2026-11-16 used the published player image
+`ghcr.io/flashdim/tgstation-gateway@sha256:628bcf352802010a3bff953e4323db52cad2749192d65b7a193ff29248848f6b`
+(BYOND 516.1688, standalone Proton-based Wine 11.0-2, bundled DirectX and
+DXVK 2.7.1), with seccomp enabled and separate X11 and Wayland containers:
+
+- Launching Dream Seeker without a destination displayed Open Location, but
+  did not reproduce the persistent pair.
+- Connecting to a minimal diagnostic world on a separate disposable BYOND
+  server created a game window and the requested browser panel. The Wayland
+  browser stream displayed the panel's HTML. This was not a tgstation gameplay
+  or TGUI/fancy-chat compatibility test.
+- Windows-side inspection showed an untitled `#32770` dialog containing a
+  `Chrome_WidgetWin_` child for the requested browser panel. Its X11 properties
+  included `steam_proton`, a transient parent, disabled input focus and
+  skip-taskbar. Those properties therefore do **not** safely identify unwanted
+  windows. No title/class-based hiding or window-closing workaround is applied.
+- Openbox repeatedly exited under Wayland because labwc already owned XWayland
+  window management. The window-manager service now stays idle in Wayland mode;
+  X11 still uses Openbox. Both startup smoke tests passed with this script
+  overlaid on the image above. This removes a confirmed backend conflict, but
+  does **not** establish the cause or resolution of the original blank dialogs.
+
+To compare your built image, start a disposable container using the direct-run
+command above, adding `--name gateway-dialog-check` and
+`-e SELKIES_WAYLAND=false`. Repeat with `true` after removing the first
+container. Keep the image, server, GPU settings and launch path identical.
+Test both direct launch with `BYOND_SERVER` and launching Dream Seeker from the
+pager. Wayland is experimental; labwc, not Openbox, must manage XWayland windows.
+
+Before connecting, after connecting, and while an unwanted window remains,
+inspect the session from another terminal:
+
+```sh
+docker exec gateway-dialog-check bash -lc '
+  . "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"
+  unset LD_PRELOAD
+  xwininfo -root -tree
+  winedbg --command "info wnd"
+'
+```
+
+For a suspect X11 window, use `xprop -id <XID>` and
+`xwininfo -id <XID>` in that same session environment. For a Windows handle
+from Wine's tree, use `winedbg --command "info * wnd <HWND>"` to inspect its
+owner, styles and geometry. XIDs and Windows handles are different identifiers.
+Record whether the window is mapped, its children and owning process, and
+whether it disappears on connection, disconnection or closing its parent.
+Review diagnostic output locally; titles and logs may contain player/server
+data and should not be published unredacted.
+
+The original pair's Windows-side purpose remains unidentified. Before treating
+issue #4 as resolved, reproduce it on a built image and verify map rendering,
+fancy chat, stat/TGUI/WebView panels, menus, legitimate modal/non-modal dialogs,
+and disconnect/reconnect under both backends. Startup health and the minimal
+world comparison do not establish those results.
+
 ### AMD or Intel GPU experiment
 
 The default Compose configuration uses software rendering. To try GPU

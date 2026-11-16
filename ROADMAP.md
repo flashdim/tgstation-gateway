@@ -51,6 +51,14 @@ prefix rendered the scene and loaded both panels, but showed two extra blank
 dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
 tracks them. The image now uses that runtime; the rebuilt image still needs
 gameplay verification and the individual cause is unconfirmed.
+A built-image comparison did not reproduce the persistent dialog pair with
+Dream Seeker alone or a minimal diagnostic world. An untitled browser dialog
+had the same broad X11 properties, so no window-suppression rule is applied.
+Openbox now stays idle under Wayland, where labwc manages XWayland windows,
+instead of repeatedly failing to start. Both backend startup smoke tests
+passed with that script overlaid on the published image; this does not resolve
+issue #4 or verify tgstation gameplay. See the README's dialog investigation
+for results and the remaining manual checks.
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in that test environment; it does not resolve or rule out
 the current failure. A direct launch to the configured host has been observed.
