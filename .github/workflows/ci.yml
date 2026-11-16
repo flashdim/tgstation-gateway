@@ -48,7 +48,7 @@ jobs:
         run: |
           docker compose -f examples/compose.yaml config --quiet
           docker compose -f examples/compose.yaml config --format json |
-            python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=unconfined"]'
+            python3 -c 'import json, sys; assert not json.load(sys.stdin)["services"]["player"].get("security_opt")'
           DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
 
       - name: Set up Buildx
@@ -75,10 +75,65 @@ jobs:
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
 
       - name: Smoke-test player image
+        id: smoke-x11
         run: bash tests/smoke-container.sh tgstation-gateway-player:ci
 
       - name: Smoke-test Wayland session
+        id: smoke-wayland
+        if: ${{ !cancelled() && steps.smoke-x11.outcome != 'skipped' }}
         run: bash tests/smoke-wayland.sh tgstation-gateway-player:ci
+
+      - name: Trace startup after a smoke-test failure
+        if: ${{ failure() && (steps.smoke-x11.outcome == 'failure' || steps.smoke-wayland.outcome == 'failure') }}
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/wine-traces"
+          docker version > "$RUNNER_TEMP/wine-traces/docker-version.txt"
+          docker info > "$RUNNER_TEMP/wine-traces/docker-info.txt"
+          docker image inspect tgstation-gateway-player:ci > "$RUNNER_TEMP/wine-traces/image.json"
+          docker build -t tgstation-gateway-player:trace - <<'EOF'
+          FROM tgstation-gateway-player:ci
+          USER root
+          RUN selkies-privileged-files release && \
+              apt-get update && \
+              apt-get install -y --no-install-recommends strace && \
+              apt-get clean && rm -rf /var/lib/apt/lists/* && \
+              selkies-privileged-files restore
+          RUN mv /etc/service/byond/run /usr/local/bin/run-byond-untraced && \
+              printf '%s\n' '#!/bin/sh' \
+                'exec strace -f -s 128 -o /tmp/wine.trace /usr/local/bin/run-byond-untraced' \
+                > /etc/service/byond/run && \
+              chmod 755 /etc/service/byond/run
+          USER 1000
+          EOF
+          container=""
+          trap 'if [ -n "$container" ]; then docker rm -f "$container"; fi' EXIT
+          result=0
+          for wayland in false true; do
+            directory="$RUNNER_TEMP/wine-traces/wayland-$wayland"
+            mkdir -p "$directory"
+            container="$(docker run -d --init --shm-size=2g \
+              -e SELKIES_WAYLAND="$wayland" tgstation-gateway-player:trace)"
+            sleep 30
+            docker logs "$container" > "$directory/container.log" 2>&1
+            docker inspect "$container" > "$directory/container.json"
+            if ! docker cp "$container:/tmp/wine.trace" "$directory/wine.trace"; then
+              echo "No startup trace collected for SELKIES_WAYLAND=$wayland" >&2
+              result=1
+            fi
+            docker rm -f "$container"
+            container=""
+          done
+          exit "$result"
+
+      - name: Upload startup diagnostics
+        if: ${{ always() && (steps.smoke-x11.outcome == 'failure' || steps.smoke-wayland.outcome == 'failure') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wine-startup-diagnostics
+          path: ${{ runner.temp }}/wine-traces/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Check Wine and 32-bit runtime libraries
         run: |

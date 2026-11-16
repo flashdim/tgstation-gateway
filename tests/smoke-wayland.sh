@@ -2,7 +2,7 @@
 set -euo pipefail
 
 image="${1:?Pass the image to test}"
-container="$(docker run -d --init --security-opt seccomp=unconfined --shm-size=2g -p 127.0.0.1::8080 -e SELKIES_WAYLAND=true "$image")"
+container="$(docker run -d --init --shm-size=2g -p 127.0.0.1::8080 -e SELKIES_WAYLAND=true "$image")"
 cleanup() {
     result=$?
     if [ "$result" -ne 0 ]; then

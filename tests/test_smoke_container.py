@@ -69,8 +69,7 @@ class SmokeContainerTest(unittest.TestCase):
         commands = self.log.read_text().splitlines()
         self.assertEqual(
             commands[0],
-            "run -d --init --security-opt seccomp=unconfined --shm-size=2g "
-            "-p 127.0.0.1::8080 example:ci",
+            "run -d --init --shm-size=2g -p 127.0.0.1::8080 example:ci",
         )
         self.assertIn("exec test-container s6-svc -d /etc/service/byond", commands)
         self.assertEqual(

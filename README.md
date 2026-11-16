@@ -133,12 +133,13 @@ check third-party redistribution terms before creating a release.
 
 ## Private single-player experiment
 
-The standalone Proton Wine runtime currently requires Docker's seccomp profile
-to be disabled: with the default profile, Wine startup can fail with
-`socket: Function not implemented`. Both the Compose example and smoke tests
-use `seccomp=unconfined` to match this requirement. This disables seccomp
-filtering for the container and weakens its isolation; use this experimental
-image only with trusted content in an appropriately isolated environment.
+The Compose example, direct Docker command and smoke tests use Docker's default
+seccomp profile. Local X11 and Wayland smoke tests passed with this profile.
+An earlier CI run reported Wine's `socket: Function not implemented`; its cause
+is not yet isolated. If either CI smoke test fails, CI collects startup syscall
+traces from a separate diagnostic image, also using the default profile.
+Tracing can affect application behavior, so these diagnostics do not replace
+the untraced smoke tests or gate a successful build.
 
 The Compose example pulls the published image and runs one player container
 bound to localhost:
@@ -179,7 +180,7 @@ release is published.
 Alternatively, run the image built above directly:
 
 ```sh
-docker run --rm --init --security-opt seccomp=unconfined --shm-size=2g \
+docker run --rm --init --shm-size=2g \
   -p 127.0.0.1:8080:8080 \
   tgstation-gateway-player
 ```
