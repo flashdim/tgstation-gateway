@@ -40,6 +40,9 @@ planned features or smoke tests as proof of interactive gameplay.
 
 ## Changes and validation
 
+- Before every commit, run CI's `pre-commit run --all-files --show-diff-on-failure`
+  and resolve any formatter changes; do not commit until the formatting check
+  passes.
 - Keep changes focused on the requested milestone; identify unresolved design
   choices rather than assuming unvalidated features or performance targets.
 - Download BYOND only from the community mirror. Pin external dependencies where
