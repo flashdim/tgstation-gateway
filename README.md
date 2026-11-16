@@ -36,6 +36,14 @@ map; Dream Seeker loaded the copied library.
 The image includes 32-bit FreeType and Fontconfig libraries: their absence caused
 FreeType errors when initializing Proton Wine in a separate diagnostic. Adding
 them did not resolve the reported black map.
+In a disposable container, a fresh prefix launched with Proton 11.0-2's Wine
+and DXVK rendered the viewport, but showed dark, colored tile artifacts.
+Installing the June 2010 native D3DX9 libraries did not remove the artifacts;
+Dream Seeker loaded native `d3dx9_43` and DXVK's D3D9. After moving the 32-bit
+DXVK D3D9 DLL aside and requesting built-in D3D9, the artifacts changed, but
+neither D3D9 nor WineD3D appeared in Dream Seeker's mapped libraries, so the
+viewport's rendering path is unconfirmed. Running Proton Wine directly in the
+container is not the same as running Steam's full Proton environment.
 The rendering failure remains unresolved; Wine applications do not receive
 Selkies' injected gamepad or webcam integrations.
 
