@@ -8,6 +8,8 @@
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker"></a>
   <a href="https://github.com/selkies-project/selkies"><img src="https://img.shields.io/badge/Selkies-desktop%20streaming-0A7EA4?style=flat-square" alt="Selkies desktop streaming"></a>
   <a href="https://www.byond.com/"><img src="https://img.shields.io/badge/BYOND-game%20client-6D52A3?style=flat-square" alt="BYOND game client"></a>
+  <a href="https://www.winehq.org/"><img src="https://img.shields.io/badge/Wine-compatibility%20layer-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Wine compatibility layer"></a>
+  <a href="https://github.com/ValveSoftware/Proton"><img src="https://img.shields.io/badge/Proton-compatibility%20layer-1A9FFF?style=flat-square" alt="Valve Proton compatibility layer"></a>
 </p>
 
 Run the BYOND player in your browser without installing BYOND on your computer. This experimental project streams the player's screen and audio; it does not host a game server.
