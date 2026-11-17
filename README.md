@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Copilot-Robusted-blueviolet?style=flat-square" alt="Copilot: Robusted"><br>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker"></a>
   <a href="https://github.com/selkies-project/selkies"><img src="assets/selkies-logo.png" alt="Selkies" height="24"></a>
-  <a href="https://www.byond.com/"><img src="https://img.shields.io/badge/BYOND-game%20client-6D52A3?style=flat-square" alt="BYOND game client"></a>
+  <a href="https://www.byond.com/"><img src="assets/byond-logo.png" alt="BYOND" height="24"></a>
   <a href="https://www.winehq.org/"><img src="https://img.shields.io/badge/Wine-10.0-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Wine 10.0"></a>
   <a href="https://github.com/ValveSoftware/Proton"><img src="https://img.shields.io/badge/Proton-10.0--4-1A9FFF?style=flat-square" alt="Proton 10.0-4"></a>
 </p>
