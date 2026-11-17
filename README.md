@@ -70,7 +70,6 @@ in the Wine prefix.
 
 - This is an early, single-player experiment. Each player needs a separate container; session management, resource limits, and persistent player data are not provided.
 - BYOND rendering and gameplay are not fully verified. A successful start does not guarantee that every game or interface will work correctly.
-- Dialog, resize and fullscreen repaint failures are under investigation; see the [controlled UAT comparison and verification procedure](.github/workflows/README.md#issue-7-repaint-uat). No repaint correction is verified yet.
 - The example is bound to your local machine. The browser stream is not protected by default; do not expose it directly to the internet. Arrange your own access controls and secure connection if you need remote access.
 
 See the [roadmap](ROADMAP.md) for planned work and known gaps.
