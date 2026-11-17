@@ -119,8 +119,7 @@ class UatTest(unittest.TestCase):
                 if state == "absent":
                     self.assertIn("push ghcr.io/example/player:uat", commands)
                     self.assertIn(
-                        "pull ghcr.io/example/player@sha256:"
-                        + "a" * 64,
+                        "pull ghcr.io/example/player@sha256:" + "a" * 64,
                         commands,
                     )
                     self.assertEqual(

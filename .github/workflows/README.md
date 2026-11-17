@@ -40,8 +40,8 @@ added per the subsequent comparison decision. Build argument
 from each [upstream release](https://github.com/Kron4ek/Wine-Builds/releases)
 for the amd64 archive, not x86 or wow64 artifacts:
 
-| Runtime | AMD64 archive SHA-256 |
-| ------- | --------------------- |
+| Runtime | AMD64 archive SHA-256                                              |
+| ------- | ------------------------------------------------------------------ |
 | 10.0-4  | `ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290` |
 | 9.0-4   | `0f72d7e176c9f5b4a98080f67e4dda3a908c80744c20452259236aa1b1b1fe83` |
 | 8.0-5   | `685884cfc70b63c3ab18bede39329d99cefff7d563ff105be720ca907797f789` |

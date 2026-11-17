@@ -89,7 +89,7 @@ class WineRuntimeTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
         self.assertIn("tests/check-wine-runtime.sh", workflow)
-        self.assertIn('10.0-4 | 9.0-4 | 8.0-5)', check)
+        self.assertIn("10.0-4 | 9.0-4 | 8.0-5)", check)
         self.assertIn('loaders="/opt/wine-proton/bin/wine-preloader"', check)
         self.assertIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", check)
 
