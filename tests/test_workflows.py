@@ -15,8 +15,8 @@ class WorkflowTest(unittest.TestCase):
         for filename, tag in (("ci.yml", "ci"), ("publish.yml", "release")):
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
-                self.assertIn("key: wine-prefix-v4-proton-", workflow)
-                self.assertIn("wine-download-v1-", workflow)
+                self.assertIn("key: wine-prefix-v5-ge-proton-", workflow)
+                self.assertIn("ge-proton-download-v1-", workflow)
                 self.assertNotIn("WINE_PACKAGE_SOURCE", workflow)
                 self.assertIn("load: true", workflow)
                 self.assertNotIn("push: true", workflow)
@@ -39,7 +39,12 @@ class WorkflowTest(unittest.TestCase):
             dockerfile,
             re.S,
         )[1].replace("\\\n", " ")
-        for cached_version in ("10.0-3", "10.0-4", "11.22", None):
+        for cached_version in (
+            "GE-Proton10-33",
+            "GE-Proton10-34",
+            "GE-Proton11-2",
+            None,
+        ):
             with self.subTest(cached_version=cached_version):
                 with tempfile.TemporaryDirectory() as temporary:
                     root = Path(temporary)
@@ -53,7 +58,7 @@ class WorkflowTest(unittest.TestCase):
                     webview.mkdir(parents=True)
                     (webview / "msedgewebview2.exe").touch()
                     if cached_version:
-                        (source / ".gateway-proton-version").write_text(cached_version)
+                        (source / ".gateway-ge-proton-version").write_text(cached_version)
                     cache = root / "cache"
                     cache.mkdir()
                     with tarfile.open(cache / "prefix.tar.gz", "w:gz") as archive:
@@ -67,14 +72,14 @@ class WorkflowTest(unittest.TestCase):
                         env={
                             **os.environ,
                             "WINEPREFIX": str(root / "prefix"),
-                            "WINE_PROTON_VERSION": "10.0-4",
+                            "GE_PROTON_VERSION": "GE-Proton10-34",
                         },
                         capture_output=True,
                         text=True,
                     )
                     self.assertEqual(
                         result.returncode == 0,
-                        cached_version == "10.0-4",
+                        cached_version == "GE-Proton10-34",
                         result.stderr,
                     )
 

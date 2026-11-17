@@ -17,11 +17,11 @@ class RunClientTest(unittest.TestCase):
             for name, body in {
                 "timeout": 'shift\nexec "$@"',
                 "xdpyinfo": 'test "$1" = "-display" && test "$2" = ":42"',
-                "wine": (
-                    'case "$PATH" in /opt/wine-proton/bin:*) ;; '
+                "proton-wine": (
+                    'case "$PATH" in /opt/ge-proton/files/bin:*) ;; '
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
-                    'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
-                    'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
+                    'test "$WINELOADER" = /opt/ge-proton/files/bin/wine && '
+                    'test "$WINESERVER" = /opt/ge-proton/files/bin/wineserver || exit 96\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
@@ -33,6 +33,12 @@ class RunClientTest(unittest.TestCase):
                     "fi\n"
                     'printf "%s\\n" "$DISPLAY" "$@"'
                 ),
+                "proton": (
+                    'test "$1" = run || exit 95\n'
+                    'test "$UMU_ID" = umu-default || exit 94\n'
+                    'test "$STEAM_COMPAT_DATA_PATH" = /home/ubuntu/.wine || exit 93\n'
+                    'printf "%s\\n" "$DISPLAY" "$@"'
+                ),
             }.items():
                 command = commands / name
                 command.write_text(f"#!/bin/sh\n{body}\n")
@@ -40,10 +46,15 @@ class RunClientTest(unittest.TestCase):
 
             runtime = root / "runtime"
             runtime.mkdir()
+            ge_proton = runtime / "ge-proton"
+            ge_proton.mkdir()
+            (ge_proton / "proton").symlink_to(commands / "proton")
             prefix = root / "wine prefix"
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
-                "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
+                "export GE_PROTON_PATH='" + str(ge_proton) + "'\n"
+                "export STEAM_COMPAT_DATA_PATH='/home/ubuntu/.wine'\n"
+                "export UMU_ID='umu-default'\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
             )
@@ -77,7 +88,8 @@ class RunClientTest(unittest.TestCase):
                     result.stdout.splitlines(),
                     [
                         ":42",
-                        str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
+                        "run",
+                        r"C:\Program Files (x86)\BYOND\bin\byond.exe",
                     ],
                 )
 
@@ -94,10 +106,8 @@ class RunClientTest(unittest.TestCase):
                     result.stdout.splitlines(),
                     [
                         ":42",
-                        str(
-                            prefix
-                            / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
-                        ),
+                        "run",
+                        r"C:\Program Files (x86)\BYOND\bin\dreamseeker.exe",
                         url,
                     ],
                 )
@@ -140,7 +150,8 @@ class RunClientTest(unittest.TestCase):
             result.stdout.splitlines(),
             [
                 ":42",
-                str(prefix / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"),
+                "run",
+                r"C:\Program Files (x86)\BYOND\bin\dreamseeker.exe",
                 "byond://example.org:1337",
             ],
         )

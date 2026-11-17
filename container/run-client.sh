@@ -10,9 +10,10 @@ done
 # Selkies' input and webcam interposers cause Wine's VC runtime installer to
 # crash and leave BYOND panels blank.
 unset LD_PRELOAD
-export PATH="/opt/wine-proton/bin:$PATH"
-export WINELOADER="/opt/wine-proton/bin/wine"
-export WINESERVER="/opt/wine-proton/bin/wineserver"
+export PATH="/opt/ge-proton/files/bin:$PATH"
+export WINE=/usr/local/bin/proton-wine
+export WINELOADER="/opt/ge-proton/files/bin/wine"
+export WINESERVER="/opt/ge-proton/files/bin/wineserver"
 
 export DISPLAY="${DISPLAY:-:20}"
 until timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; do
@@ -22,7 +23,7 @@ done
 case "${BYOND_WEBVIEW2_GPU:-0}" in
     0 | "") ;;
     1)
-        if ! wine reg add 'HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments' \
+        if ! proton-wine reg add 'HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments' \
             /v '*' /t REG_SZ \
             /d '--ignore-gpu-blocklist --use-gl=angle --use-angle=d3d11 --disable-direct-composition' /f; then
             echo "Failed to configure WebView2 GPU acceleration" >&2
@@ -42,7 +43,8 @@ if [ -n "${BYOND_SERVER:-}" ]; then
         echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
         exit 1
     fi
-    exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe" "byond://$server"
+    exec "$GE_PROTON_PATH/proton" run \
+        'C:\Program Files (x86)\BYOND\bin\dreamseeker.exe' "byond://$server"
 fi
 
-exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+exec "$GE_PROTON_PATH/proton" run 'C:\Program Files (x86)\BYOND\bin\byond.exe'
