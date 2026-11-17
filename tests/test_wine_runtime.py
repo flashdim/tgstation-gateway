@@ -148,7 +148,7 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertIn("sha512sum -c -", downloader)
         self.assertIn("GE_PROTON_VERSION=${GE_PROTON_VERSION}", dockerfile)
         self.assertIn("/opt/ge-proton/files/bin", dockerfile)
-        self.assertIn("FROM scratch AS ge-proton-download-cache", dockerfile)
+        self.assertIn('FROM scratch AS ge-proton-download-cache', dockerfile)
         self.assertNotIn("winehq-staging", dockerfile)
         self.assertNotIn("/opt/wine-proton", dockerfile)
 

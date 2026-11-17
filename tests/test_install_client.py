@@ -98,7 +98,8 @@ class InstallClientTest(unittest.TestCase):
         )
         self.assertEqual(
             (self.root / "runtime").read_text().splitlines(),
-            ["/opt/ge-proton/files/bin/wine|/opt/ge-proton/files/bin/wineserver"] * 7,
+            ["/opt/ge-proton/files/bin/wine|/opt/ge-proton/files/bin/wineserver"]
+            * 7,
         )
         self.assertIn(
             "Starting Wine prefix initialization (timeout: 300s)", result.stdout
