@@ -27,9 +27,11 @@ export WINEDEBUG=-all,err+all
 export PATH="/opt/wine-proton/bin:$PATH"
 export WINELOADER="/opt/wine-proton/bin/wine"
 export WINESERVER="/opt/wine-proton/bin/wineserver"
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}tabtip.exe=d"
+# Disable TabTip's UI Automation handler, which can stall older Proton prefixes.
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
 run_stage "Wine prefix initialization" 300s \
-    env WINEDLLOVERRIDES=mscoree,mshtml=d wineboot --init
+    env 'WINEDLLOVERRIDES=mscoree,mshtml=d;tabtip.exe=d' wineboot --init
 run_stage "Wine prefix startup" 30s wineserver --wait
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
 run_stage "Winetricks dxtrans" 120s winetricks -q dxtrans

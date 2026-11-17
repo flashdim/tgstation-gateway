@@ -106,7 +106,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
-            ["mscoree,mshtml=d"] + ["example=b"] * 6,
+            ["mscoree,mshtml=d;tabtip.exe=d"] + ["example=b;tabtip.exe=d"] * 6,
         )
         cache_paths = (self.root / "cache-paths").read_text().splitlines()
         self.assertEqual(len(set(cache_paths)), 1)
