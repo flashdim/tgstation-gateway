@@ -4,6 +4,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import textwrap
 import unittest
 
 
@@ -60,6 +61,68 @@ class UatTest(unittest.TestCase):
             "install-graphics.sh",
         ):
             self.assertIn(source, workflow)
+
+    def test_publication_refuses_existing_or_uncertain_tags(self):
+        workflow = (ROOT / ".github/workflows/uat.yml").read_text()
+        self.assertIn(
+            'echo "EVIDENCE=$RUNNER_TEMP/uat-evidence" >> "$GITHUB_ENV"', workflow
+        )
+        self.assertNotIn("      EVIDENCE: ${{ runner.temp }}", workflow)
+        publish = textwrap.dedent(
+            re.search(
+                r"- name: Publish once and verify pull by digest\n        run: \|\n(.*?)\n      - name:",
+                workflow,
+                re.S,
+            )[1]
+        )
+        for state in ("absent", "exists", "unauthorized", "network"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                docker = root / "docker"
+                docker.write_text(
+                    '#!/bin/sh\nprintf "%s\\n" "$*" >> "$DOCKER_LOG"\n'
+                    'if [ "$1" = buildx ]; then\n'
+                    '  case "$REGISTRY_STATE" in\n'
+                    "    exists) exit 0 ;;\n"
+                    '    absent) echo "ERROR: example: not found" >&2 ;;\n'
+                    '    unauthorized) echo "unauthorized" >&2 ;;\n'
+                    '    network) echo "dial tcp: lookup ghcr.io: no such host" >&2 ;;\n'
+                    "  esac\n"
+                    "  exit 1\n"
+                    "fi\n"
+                    'if [ "$1" = image ]; then echo "ghcr.io/example/player@sha256:abc"; fi\n'
+                )
+                docker.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-c", publish],
+                    env={
+                        **os.environ,
+                        "PATH": f"{root}:{os.environ['PATH']}",
+                        "REGISTRY_STATE": state,
+                        "DOCKER_LOG": str(root / "docker.log"),
+                        "IMAGE": "ghcr.io/example/player:uat",
+                        "EVIDENCE": str(root),
+                        "GITHUB_SHA": "a" * 40,
+                        "WINE_PROTON_VERSION": "11.0-2",
+                        "GITHUB_STEP_SUMMARY": str(root / "summary"),
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    result.returncode == 0, state == "absent", result.stderr
+                )
+                commands = (root / "docker.log").read_text()
+                if state == "absent":
+                    self.assertIn("push ghcr.io/example/player:uat", commands)
+                    self.assertIn("pull ghcr.io/example/player@sha256:abc", commands)
+                    self.assertEqual(
+                        (root / "published-digest.txt").read_text().strip(),
+                        "ghcr.io/example/player@sha256:abc",
+                    )
+                else:
+                    self.assertNotIn("push ", commands)
+                    self.assertNotIn("tag ", commands)
 
     def test_cached_prefix_requires_selected_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

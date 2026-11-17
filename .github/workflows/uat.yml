@@ -41,12 +41,16 @@ jobs:
       WINE_PROTON_VERSION: ${{ matrix.proton }}
       SELKIES_WAYLAND: ${{ matrix.display == 'wayland' && 'true' || 'false' }}
       IMAGE: ghcr.io/${{ github.repository }}:uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-${{ matrix.display }}
-      EVIDENCE: ${{ runner.temp }}/uat-evidence
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+
+      - name: Prepare evidence directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/uat-evidence"
+          echo "EVIDENCE=$RUNNER_TEMP/uat-evidence" >> "$GITHUB_ENV"
 
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v

@@ -123,6 +123,15 @@ yet. The repository's earlier Wine/DXVK/LD_PRELOAD experiments in `ROADMAP.md`
 are not evidence for the cause of this particular failure. No window hiding,
 Openbox replacement or compositor workaround has been applied.
 
+Local validation of source `4b33669f6b7703588ac064042fc4aa6bb4366dfa`
+downloaded and checksum-verified both actual Proton archives. The Proton
+11.0-2/Wayland build passed the runtime dependency gate and Wine prefix
+initialization, then stopped at Winetricks vcrun2022 because this sandbox
+could not resolve `aka.ms` or its `web.archive.org` fallback. No integrity
+checks or installer stages were bypassed. A complete local image, compositor
+session, gameplay reproduction and image publication were therefore not
+validated by that attempt; use the workflow on a runner with download access.
+
 For **each** matrix entry, repeat this sequence at least five times:
 
 1. Join the same game and wait for the same scene and UI to finish loading.
