@@ -81,9 +81,7 @@ class DownloadWineTest(unittest.TestCase):
 
     def test_release_workflow_saves_download_cache_on_miss(self):
         content = (ROOT / ".github/workflows/publish.yml").read_text()
-        self.assertIn(
-            "if: steps.wine-download.outputs.cache-hit != 'true'", content
-        )
+        self.assertIn("if: steps.wine-download.outputs.cache-hit != 'true'", content)
         self.assertIn(
             "key: ${{ steps.wine-download.outputs.cache-primary-key }}", content
         )
