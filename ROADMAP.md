@@ -61,26 +61,25 @@ failed during core-font registration after a Wine connection reset, but the
 retry passed. These checks do not prove interactive gameplay, game-scene
 rendering, WebView compatibility, or complete dialog behavior.
 
-The current experiment replaces checksum-pinned standalone Proton Wine 10.0-4
-with GE-Proton10-34, verified against GE's published SHA-512 checksum. The
-bundle is installed under `/opt/ge-proton`; Wine setup commands use GE-Proton's
-`runinprefix` launcher and BYOND sessions use its `run` verb. Wine's
-compatibility prefix is stored at `/home/ubuntu/.wine/pfx` and has its own
-GE-Proton version marker, so the prior Proton Wine prefix is not reused.
-Ubuntu Wine 10 packages remain dependencies, not the selected runtime.
-
-Graphics setup remains unchanged: it uses BYOND's bundled DirectX installer
-for `d3dx9_43`, verified against the BYOND CAB, and the Winetricks `dxvk` verb;
-the Winetricks `d3dx9`/`d3dx9_43` verbs and pinned DXVK archive installation
-are not used. The pinned Winetricks script resolves the latest upstream DXVK
-release when a fresh prefix is created, so that DXVK release is not
-version-pinned. The user previously reported that restoring BYOND's bundled
-DirectX installer fixed lighting with the prior runtime. Whether GE-Proton
-changes rendering or restores that result remains to be tested interactively.
-CI startup and runtime checks do not prove gameplay or rendering. A Mesa
-Vulkan experiment added i386 and x86_64 drivers and lavapipe ICD manifests, but
-did not improve rendering; those additions have been removed. Compatibility
-on other configurations remains unverified.
+The active runtime is restored to checksum-pinned standalone Proton Wine
+10.0-4, with Ubuntu Wine 10 packages retained as runtime dependencies. The
+WineHQ staging experiment is no longer in use, and its prefix cache is not
+reused. BYOND is unchanged. Graphics setup now uses BYOND's bundled DirectX
+installer for `d3dx9_43` and the Winetricks `dxvk` verb; the previous Winetricks
+`d3dx9`/`d3dx9_43` verbs and pinned DXVK archive installation are not used.
+The pinned Winetricks script
+resolves the latest upstream DXVK release when a fresh prefix is created, so
+that DXVK release is not version-pinned. Lighting has not yet been reverified
+with this setup before the following change. **Update:** the user reports that re-adding BYOND's bundled
+DirectX installer fixed the lighting rendering issue. This points to installing
+BYOND's native `d3dx9_43` as important for lighting in the tested setup; it
+does not establish the underlying mechanism or guarantee compatibility across
+other hosts/configurations. CI startup and runtime checks still do not prove
+gameplay or rendering. A Mesa Vulkan experiment added i386 and x86_64 drivers
+and lavapipe ICD manifests, but did not improve rendering; those additions
+have been removed.
+Build and interactive compatibility on other configurations remain to be
+verified; prior results are not proof of universal gameplay compatibility.
 
 The image defaults to fixed 1920x1080 Selkies resolution. This display-size
 experiment was prompted by reported first-connection scaling distortion;

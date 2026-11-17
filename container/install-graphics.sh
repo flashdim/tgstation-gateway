@@ -10,13 +10,13 @@ test -f "$directx/DXSETUP.exe" && test -f "$directx/Jun2010_d3dx9_43_x86.cab" ||
     exit 1
 }
 
-(cd "$directx" && timeout --kill-after=10s 300s proton-wine DXSETUP.exe /silent)
+(cd "$directx" && timeout --kill-after=10s 300s wine DXSETUP.exe /silent)
 cabextract -q -L -F d3dx9_43.dll -d "$workdir" "$directx/Jun2010_d3dx9_43_x86.cab"
 cmp "$workdir/d3dx9_43.dll" "$WINEPREFIX/drive_c/windows/syswow64/d3dx9_43.dll" || {
     echo "Bundled DirectX setup did not install the expected D3DX9 library" >&2
     exit 1
 }
-proton-wine reg add 'HKCU\Software\Wine\DllOverrides' /v '*d3dx9_43' /t REG_SZ /d native /f
+wine reg add 'HKCU\Software\Wine\DllOverrides' /v '*d3dx9_43' /t REG_SZ /d native /f
 
 export W_CACHE="$workdir/winetricks-cache"
 mkdir -p "$W_CACHE"

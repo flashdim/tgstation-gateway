@@ -24,14 +24,13 @@ run_stage() {
 }
 
 export WINEDEBUG=-all,err+all
-export PATH="/opt/ge-proton/files/bin:$PATH"
-export WINE=/usr/local/bin/proton-wine
-export WINELOADER="/opt/ge-proton/files/bin/wine"
-export WINESERVER="/opt/ge-proton/files/bin/wineserver"
+export PATH="/opt/wine-proton/bin:$PATH"
+export WINELOADER="/opt/wine-proton/bin/wine"
+export WINESERVER="/opt/wine-proton/bin/wineserver"
 unset LD_PRELOAD
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
 run_stage "Wine prefix initialization" 300s \
-    env 'WINEDLLOVERRIDES=mscoree,mshtml=d' proton-wine wineboot --update
+    env 'WINEDLLOVERRIDES=mscoree,mshtml=d' wineboot --update
 run_stage "Wine prefix startup" 30s wineserver --wait
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
 run_stage "Winetricks dxtrans" 120s winetricks -q dxtrans

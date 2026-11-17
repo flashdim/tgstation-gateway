@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_VERSION = "10.0~repack-12ubuntu1"
-GE_PROTON_VERSION = "GE-Proton10-34"
+PROTON_VERSION = "10.0-4"
 MODULES = (
     "ntdll.so",
     "win32u.so",
@@ -37,11 +37,11 @@ class WineRuntimeTest(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.bin = self.root / "bin"
         self.bin.mkdir()
-        self.runtime = self.root / "ge-proton"
+        self.runtime = self.root / "wine-proton"
         self.libraries = self.root / "libraries"
         self.log = self.root / "ldd.log"
         for architecture in ("i386", "x86_64"):
-            directory = self.runtime / "files/lib/wine" / f"{architecture}-unix"
+            directory = self.runtime / "lib/wine" / f"{architecture}-unix"
             directory.mkdir(parents=True)
             for name in (*MODULES, "wine", "wine-preloader"):
                 path = directory / name
@@ -51,14 +51,11 @@ class WineRuntimeTest(unittest.TestCase):
             libraries.mkdir(parents=True)
             for name in LIBRARIES:
                 (libraries / name).touch()
-        (self.runtime / "files/bin").mkdir(parents=True)
-        for name in ("wine", "wine64", "wineserver"):
-            path = self.runtime / "files/bin" / name
+        (self.runtime / "bin").mkdir()
+        for name in ("wine", "wine-preloader", "wineserver"):
+            path = self.runtime / "bin" / name
             path.touch()
             path.chmod(0o755)
-        proton = self.runtime / "proton"
-        proton.touch()
-        proton.chmod(0o755)
         for name, body in {
             "dpkg-query": 'printf "%s" "${INSTALLED_WINE_PACKAGE_VERSION:-10.0~repack-12ubuntu1}"',
             "ldd": (
@@ -66,7 +63,7 @@ class WineRuntimeTest(unittest.TestCase):
                 'test -r "$1" || exit 1\n'
                 '[ "${FAIL_LDD:-0}" = 0 ] || exit 2\n'
                 'case "$1" in */wine/*.so) '
-                'case "$LD_LIBRARY_PATH" in "${1%/*}"*) ;; *) exit 3;; esac;; esac\n'
+                'test "$LD_LIBRARY_PATH" = "${1%/*}" || exit 3;; esac\n'
                 'printf "%s\\n" "${DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"'
             ),
         }.items():
@@ -80,12 +77,12 @@ class WineRuntimeTest(unittest.TestCase):
         )[1]
         self.docker_check = check_block.replace("\\\n", " ")
         self.docker_check = self.docker_check.replace(
-            "/opt/ge-proton", str(self.runtime)
+            "/opt/wine-proton", str(self.runtime)
         ).replace("/usr/lib/", f"{self.libraries}/")
 
         runtime_check = (ROOT / "tests/check-wine-runtime.sh").read_text()
         self.runtime_check = runtime_check.replace(
-            "/opt/ge-proton", str(self.runtime)
+            "/opt/wine-proton", str(self.runtime)
         ).replace("/usr/lib/", f"{self.libraries}/")
 
     def run_check(self, script, **extra_env):
@@ -93,14 +90,10 @@ class WineRuntimeTest(unittest.TestCase):
             ["sh", "-c", script],
             env={
                 **os.environ,
-                "PATH": f"{self.runtime / 'files/bin'}:{self.bin}:{os.environ['PATH']}",
+                "PATH": f"{self.runtime / 'bin'}:{self.bin}:{os.environ['PATH']}",
                 "LDD_LOG": str(self.log),
                 "WINE_PACKAGE_VERSION": PACKAGE_VERSION,
-                "GE_PROTON_VERSION": GE_PROTON_VERSION,
-                "WINE": "/usr/local/bin/proton-wine",
-                "STEAM_COMPAT_DATA_PATH": str(self.root / "compat"),
-                "UMU_ID": "umu-default",
-                "WINEPREFIX": str(self.root / "compat" / "pfx"),
+                "WINE_PROTON_VERSION": PROTON_VERSION,
                 **extra_env,
             },
             capture_output=True,
@@ -115,17 +108,11 @@ class WineRuntimeTest(unittest.TestCase):
         for architecture in ("i386", "x86_64"):
             for module in MODULES:
                 self.assertIn(
-                    str(
-                        self.runtime
-                        / "files/lib/wine"
-                        / f"{architecture}-unix"
-                        / module
-                    ),
+                    str(self.runtime / "lib/wine" / f"{architecture}-unix" / module),
                     checked,
                 )
-        self.assertIn(str(self.runtime / "files/bin/wine"), checked)
-        self.assertIn(str(self.runtime / "files/bin/wine64"), checked)
-        self.assertIn(str(self.runtime / "files/bin/wineserver"), checked)
+        self.assertIn(str(self.runtime / "bin/wine"), checked)
+        self.assertIn(str(self.runtime / "bin/wineserver"), checked)
 
     def test_requires_all_ubuntu_wine_packages_at_pinned_version(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
@@ -141,26 +128,25 @@ class WineRuntimeTest(unittest.TestCase):
 
     def test_requires_checksum_pinned_proton_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
-        pin = (ROOT / "container/ge-proton.env").read_text()
-        downloader = (ROOT / "container/download-ge-proton.sh").read_text()
-        self.assertIn(f"GE_PROTON_VERSION={GE_PROTON_VERSION}", pin)
-        self.assertRegex(pin, r"GE_PROTON_SHA512=[0-9a-f]{128}")
-        self.assertIn("sha512sum -c -", downloader)
-        self.assertIn("GE_PROTON_VERSION=${GE_PROTON_VERSION}", dockerfile)
-        self.assertIn("/opt/ge-proton/files/bin", dockerfile)
-        self.assertIn('FROM scratch AS ge-proton-download-cache', dockerfile)
+        pin = (ROOT / "container/wine-proton.env").read_text()
+        downloader = (ROOT / "container/download-wine.sh").read_text()
+        self.assertIn(f"WINE_PROTON_VERSION={PROTON_VERSION}", pin)
+        self.assertRegex(pin, r"WINE_PROTON_SHA256=[0-9a-f]{64}")
+        self.assertIn("sha256sum -c -", downloader)
+        self.assertIn("WINE_PROTON_VERSION=${WINE_PROTON_VERSION}", dockerfile)
+        self.assertIn("/opt/wine-proton/bin", dockerfile)
         self.assertNotIn("winehq-staging", dockerfile)
-        self.assertNotIn("/opt/wine-proton", dockerfile)
+        self.assertNotIn("/opt/wine-staging", dockerfile)
 
     def test_downloader_verifies_downloaded_and_cached_archives(self):
         content = b"pinned Proton archive"
         script_dir = self.root / "download"
         script_dir.mkdir()
-        script = script_dir / "download-ge-proton.sh"
-        script.write_text((ROOT / "container/download-ge-proton.sh").read_text())
-        (script_dir / "ge-proton.env").write_text(
-            "GE_PROTON_VERSION=test\n"
-            f"GE_PROTON_SHA512={hashlib.sha512(content).hexdigest()}\n"
+        script = script_dir / "download-wine.sh"
+        script.write_text((ROOT / "container/download-wine.sh").read_text())
+        (script_dir / "wine-proton.env").write_text(
+            "WINE_PROTON_VERSION=test\n"
+            f"WINE_PROTON_SHA256={hashlib.sha256(content).hexdigest()}\n"
         )
         curl = self.bin / "curl"
         curl.write_text(
@@ -184,7 +170,7 @@ class WineRuntimeTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        archive = destination / "test.tar.gz"
+        archive = destination / "wine-proton.tar.xz"
         self.assertEqual(archive.read_bytes(), content)
 
         result = subprocess.run(
@@ -204,22 +190,23 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
     def test_runtime_check_requires_correct_path_packages_and_prefix(self):
-        prefix = self.root / "compat/pfx"
-        prefix.mkdir(parents=True)
-        marker = prefix / ".gateway-ge-proton-version"
-        marker.write_text(GE_PROTON_VERSION)
+        prefix = self.root / "prefix"
+        prefix.mkdir()
+        marker = prefix / ".gateway-proton-version"
+        marker.write_text(PROTON_VERSION)
         result = self.run_check(
             self.runtime_check,
+            WINEPREFIX=str(prefix),
             INSTALLED_WINE_PACKAGE_VERSION=PACKAGE_VERSION,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        marker.write_text("GE-Proton10-33")
-        result = self.run_check(self.runtime_check)
+        marker.write_text("11.22")
+        result = self.run_check(self.runtime_check, WINEPREFIX=str(prefix))
         self.assertNotEqual(result.returncode, 0)
 
     def test_rejects_missing_modules_and_linked_dependencies(self):
-        module = self.runtime / "files/lib/wine/i386-unix/winewayland.so"
+        module = self.runtime / "lib/wine/i386-unix/winewayland.so"
         module.unlink()
         result = self.run_check(self.docker_check)
         self.assertNotEqual(result.returncode, 0)

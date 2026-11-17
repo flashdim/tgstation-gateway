@@ -27,8 +27,8 @@ class InstallGraphicsTest(unittest.TestCase):
 
         commands = {
             "timeout": 'shift 2\nexec "$@"\n',
-            "proton-wine": (
-                'printf "proton-wine %s\\n" "$*" >> "$COMMAND_LOG"\n'
+            "wine": (
+                'printf "wine %s\\n" "$*" >> "$COMMAND_LOG"\n'
                 'if [ "$1" = DXSETUP.exe ]; then\n'
                 '  [ "${FAIL_COMPONENT:-}" != DXSETUP ] || exit 17\n'
                 '  destination="$WINEPREFIX/drive_c/windows/syswow64"\n'
@@ -79,12 +79,12 @@ class InstallGraphicsTest(unittest.TestCase):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.log.read_text().splitlines()
-        self.assertEqual(commands[0], "proton-wine DXSETUP.exe /silent")
+        self.assertEqual(commands[0], "wine DXSETUP.exe /silent")
         self.assertTrue(commands[1].startswith("cabextract -q -L -F d3dx9_43.dll -d "))
         self.assertEqual(
             commands[2:],
             [
-                "proton-wine reg add HKCU\\Software\\Wine\\DllOverrides /v *d3dx9_43 "
+                "wine reg add HKCU\\Software\\Wine\\DllOverrides /v *d3dx9_43 "
                 "/t REG_SZ /d native /f",
                 "winetricks -q dxvk",
                 "wineserver --wait",
@@ -100,7 +100,7 @@ class InstallGraphicsTest(unittest.TestCase):
 
     def test_stops_on_directx_setup_or_dxvk_failure(self):
         for environment, expected in (
-            ({"FAIL_COMPONENT": "DXSETUP"}, "proton-wine DXSETUP.exe /silent"),
+            ({"FAIL_COMPONENT": "DXSETUP"}, "wine DXSETUP.exe /silent"),
             ({"FAIL_VERB": "dxvk"}, "winetricks -q dxvk"),
         ):
             with self.subTest(environment=environment):

@@ -16,7 +16,7 @@ class InstallClientTest(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.log = self.root / "commands"
-        for name in ("proton-wine", "wineserver", "winetricks"):
+        for name in ("wineboot", "wineserver", "winetricks"):
             command = self.bin / name
             command.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
@@ -25,7 +25,7 @@ class InstallClientTest(unittest.TestCase):
                 'printf "%s\\n" "${LD_PRELOAD-unset}" >> "$PRELOAD_LOG"\n'
                 + (
                     'printf "%s\\n" "${WINEDLLOVERRIDES-unset}" >> "$OVERRIDE_LOG"\n'
-                    if name in ("proton-wine", "winetricks")
+                    if name in ("wineboot", "winetricks")
                     else ""
                 )
                 + (
@@ -87,7 +87,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
-                "proton-wine wineboot --update",
+                "wineboot --update",
                 "wineserver --wait",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
@@ -98,8 +98,7 @@ class InstallClientTest(unittest.TestCase):
         )
         self.assertEqual(
             (self.root / "runtime").read_text().splitlines(),
-            ["/opt/ge-proton/files/bin/wine|/opt/ge-proton/files/bin/wineserver"]
-            * 7,
+            ["/opt/wine-proton/bin/wine|/opt/wine-proton/bin/wineserver"] * 7,
         )
         self.assertIn(
             "Starting Wine prefix initialization (timeout: 300s)", result.stdout
