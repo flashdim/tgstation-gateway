@@ -64,10 +64,11 @@ rendering, WebView compatibility, or complete dialog behavior.
 The current experiment replaces checksum-pinned standalone Proton Wine 10.0-4
 with GE-Proton10-34, verified against GE's published SHA-512 checksum. The
 bundle is installed under `/opt/ge-proton`; Wine setup commands use GE-Proton's
-`runinprefix` launcher and BYOND sessions use its `run` verb. Wine's
-compatibility prefix is stored at `/home/ubuntu/.wine/pfx` and has its own
-GE-Proton version marker, so the prior Proton Wine prefix is not reused.
-Ubuntu Wine 10 packages remain dependencies, not the selected runtime.
+`run` verb and BYOND sessions use the same verb. Stopping the BYOND service
+shuts down the GE-Proton Wine prefix before exiting. Wine's compatibility
+prefix is stored at `/home/ubuntu/.wine/pfx` and has its own GE-Proton version
+marker, so the prior Proton Wine prefix is not reused. Ubuntu Wine 10 packages
+remain dependencies, not the selected runtime.
 
 Graphics setup remains unchanged: it uses BYOND's bundled DirectX installer
 for `d3dx9_43`, verified against the BYOND CAB, and the Winetricks `dxvk` verb;
