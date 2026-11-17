@@ -63,8 +63,7 @@ class WineRuntimeTest(unittest.TestCase):
             path.chmod(0o755)
         for name, body in {
             "dpkg-query": (
-                'printf "%s" '
-                '"${INSTALLED_WINE_PACKAGE_VERSION:-11.22~resolute-1}"'
+                'printf "%s" "${INSTALLED_WINE_PACKAGE_VERSION:-11.22~resolute-1}"'
             ),
             "ldd": (
                 'printf "%s\\n" "$1" >> "$LDD_LOG"\n'
@@ -123,7 +122,9 @@ class WineRuntimeTest(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text()
         self.assertIn(f"ARG WINE_PACKAGE_VERSION={PACKAGE_VERSION}", dockerfile)
         self.assertIn('"winehq-staging=$WINE_PACKAGE_VERSION"', dockerfile)
-        self.assertIn("wine-builds/ubuntu/dists/resolute/winehq-resolute.sources", dockerfile)
+        self.assertIn(
+            "wine-builds/ubuntu/dists/resolute/winehq-resolute.sources", dockerfile
+        )
         self.assertIn("ENV PATH=/opt/wine-staging/bin:${PATH}", dockerfile)
         result = self.run_check(
             self.docker_check,
@@ -160,7 +161,7 @@ class WineRuntimeTest(unittest.TestCase):
         module.unlink()
         result = self.run_check(self.docker_check)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("No such file", result.stderr)
+        self.assertIn("Missing or unreadable", result.stderr)
         module.touch()
         result = self.run_check(
             self.docker_check, DEPENDENCIES="libpulse.so.0 => not found"

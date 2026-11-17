@@ -82,6 +82,8 @@ RUN set -eu; \
       done; \
       for module in ntdll.so win32u.so winex11.so winewayland.so \
           winealsa.so winepulse.so winevulkan.so; do \
+        test -r "$directory/$module" || \
+          { echo "Missing or unreadable $directory/$module" >&2; exit 1; }; \
         dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/$module")"; \
         if printf '%s\n' "$dependencies" | grep 'not found'; then \
           echo "Missing dependencies for $directory/$module" >&2; exit 1; \
