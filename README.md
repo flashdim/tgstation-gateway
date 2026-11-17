@@ -1,9 +1,14 @@
 # tgstation-gateway
 
-[![Build status](https://github.com/flashdim/tgstation-gateway/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/flashdim/tgstation-gateway/actions/workflows/ci.yml)
-![Status: mostly broken](https://img.shields.io/badge/Status-mostly%20broken-red?style=flat-square)
-![Gameplay: risky](https://img.shields.io/badge/Gameplay-risky-orange?style=flat-square)
-![Copilot: Robusted](https://img.shields.io/badge/Copilot-Robusted-blueviolet?style=flat-square)
+<p align="center">
+  <a href="https://github.com/flashdim/tgstation-gateway/actions/workflows/ci.yml"><img src="https://github.com/flashdim/tgstation-gateway/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build status"></a>
+  <img src="https://img.shields.io/badge/Status-mostly%20broken-red?style=flat-square" alt="Status: mostly broken">
+  <img src="https://img.shields.io/badge/Gameplay-risky-orange?style=flat-square" alt="Gameplay: risky">
+  <img src="https://img.shields.io/badge/Copilot-Robusted-blueviolet?style=flat-square" alt="Copilot: Robusted">
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker"></a>
+  <a href="https://github.com/selkies-project/selkies"><img src="https://img.shields.io/badge/Selkies-desktop%20streaming-0A7EA4?style=flat-square" alt="Selkies desktop streaming"></a>
+  <a href="https://www.byond.com/"><img src="https://img.shields.io/badge/BYOND-game%20client-6D52A3?style=flat-square" alt="BYOND game client"></a>
+</p>
 
 An experimental browser-accessible BYOND client for tgstation. The intended
 design is a separate, disposable Wine/BYOND container for each player, with a
