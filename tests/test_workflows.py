@@ -17,6 +17,10 @@ class WorkflowTest(unittest.TestCase):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
                 self.assertIn("key: wine-prefix-v5-ge-proton-", workflow)
                 self.assertIn("ge-proton-download-v1-", workflow)
+                self.assertIn(
+                    "steps.ge-proton-version.outputs.version }}.tar.gz", workflow
+                )
+                self.assertNotIn("GE-Proton10-34.tar.gz", workflow)
                 self.assertNotIn("WINE_PACKAGE_SOURCE", workflow)
                 self.assertIn("load: true", workflow)
                 self.assertNotIn("push: true", workflow)

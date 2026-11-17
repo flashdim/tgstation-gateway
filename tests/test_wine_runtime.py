@@ -145,6 +145,7 @@ class WineRuntimeTest(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text()
         pin = (ROOT / "container/ge-proton.env").read_text()
         downloader = (ROOT / "container/download-ge-proton.sh").read_text()
+        wrapper = (ROOT / "container/proton-wine.sh").read_text()
         self.assertIn(f"GE_PROTON_VERSION={GE_PROTON_VERSION}", pin)
         self.assertRegex(pin, r"GE_PROTON_SHA512=[0-9a-f]{128}")
         self.assertIn("sha512sum -c -", downloader)
@@ -153,6 +154,7 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertIn("FROM scratch AS ge-proton-download-cache", dockerfile)
         self.assertNotIn("winehq-staging", dockerfile)
         self.assertNotIn("/opt/wine-proton", dockerfile)
+        self.assertIn('exec "$GE_PROTON_PATH/proton" run "$@"', wrapper)
 
     def test_downloader_verifies_downloaded_and_cached_archives(self):
         content = b"pinned Proton archive"
@@ -241,6 +243,7 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(str(library), result.stderr)
 
+        library.touch()
         library = self.libraries / "i386-linux-gnu" / "libwayland-cursor.so.0"
         library.unlink()
         result = self.run_check(self.docker_check)
