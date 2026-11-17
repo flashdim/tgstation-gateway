@@ -22,6 +22,7 @@ class InstallClientTest(unittest.TestCase):
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
                 'printf "%s|%s\\n" "${WINELOADER-unset}" "${WINESERVER-unset}" '
                 '>> "$RUNTIME_LOG"\n'
+                'printf "%s\\n" "${LD_PRELOAD-unset}" >> "$PRELOAD_LOG"\n'
                 + (
                     'printf "%s\\n" "${WINEDLLOVERRIDES-unset}" >> "$OVERRIDE_LOG"\n'
                     if name in ("wineboot", "winetricks")
@@ -61,8 +62,10 @@ class InstallClientTest(unittest.TestCase):
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
                 "RUNTIME_LOG": str(self.root / "runtime"),
+                "PRELOAD_LOG": str(self.root / "preload"),
                 "OVERRIDE_LOG": str(self.root / "overrides"),
                 "CACHE_LOG": str(self.root / "cache-paths"),
+                "LD_PRELOAD": "selkies-interposer.so",
                 "WINEDLLOVERRIDES": "example=b",
                 **extra_env,
             },
@@ -105,8 +108,11 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
+            (self.root / "preload").read_text().splitlines(), ["unset"] * 9
+        )
+        self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
-            ["mscoree,mshtml=d;tabtip.exe=d"] + ["example=b;tabtip.exe=d"] * 6,
+            ["mscoree,mshtml=d"] + ["example=b"] * 6,
         )
         cache_paths = (self.root / "cache-paths").read_text().splitlines()
         self.assertEqual(len(set(cache_paths)), 1)
