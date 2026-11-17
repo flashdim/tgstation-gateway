@@ -33,13 +33,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - wine_package_version: 11.22~resolute-1
-            tag_variant: winehq-staging-11.22
+          - wine_proton_version: 10.0-4
+            tag_variant: proton-10.0-4
     concurrency:
       group: uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland
       cancel-in-progress: false
     env:
-      WINE_PACKAGE_VERSION: ${{ matrix.wine_package_version }}
+      WINE_PROTON_VERSION: ${{ matrix.wine_proton_version }}
       SELKIES_WAYLAND: "true"
       IMAGE: ghcr.io/${{ github.repository }}:uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland
     steps:
@@ -64,12 +64,29 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
-          key: uat-wine-prefix-v4-staging-${{ matrix.wine_package_version }}-wayland-${{ hashFiles('Dockerfile', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+          key: uat-wine-prefix-v3-proton-${{ matrix.wine_proton_version }}-wayland-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
 
       - name: Prepare prefix directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
 
-      - name: Build WineHQ staging image
+      - name: Restore Proton Wine download cache
+        id: wine-download
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
+          key: wine-download-v1-${{ hashFiles('container/wine-proton.env') }}
+
+      - name: Download or verify Proton Wine
+        run: sh container/download-wine.sh "$RUNNER_TEMP/wine-download-cache"
+
+      - name: Save Proton Wine download cache
+        if: steps.wine-download.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
+          key: ${{ steps.wine-download.outputs.cache-primary-key }}
+
+      - name: Build Proton image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -78,33 +95,37 @@ jobs:
           tags: tgstation-gateway-player:uat
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            io.tgstation-gateway.uat.wine-package=${{ matrix.wine_package_version }}
+            io.tgstation-gateway.uat.wine-proton=${{ matrix.wine_proton_version }}
             io.tgstation-gateway.uat.display=wayland
           build-args: |
-            WINE_PACKAGE_VERSION=${{ matrix.wine_package_version }}
+            WINE_PROTON_VERSION=${{ matrix.wine_proton_version }}
             SELKIES_WAYLAND=${{ env.SELKIES_WAYLAND }}
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
+            wine-download-cache=${{ runner.temp }}/wine-download-cache
 
-      - name: Record and verify WineHQ staging identity
+      - name: Record and verify Proton identity
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE"
-          printf 'source=%s\nimage=%s\nwine_package=%s\ndisplay=%s\n' \
-            "$GITHUB_SHA" "$IMAGE" "$WINE_PACKAGE_VERSION" "$SELKIES_WAYLAND" > "$EVIDENCE/identity.txt"
+          printf 'source=%s\nimage=%s\nwine_proton=%s\ndisplay=%s\n' \
+            "$GITHUB_SHA" "$IMAGE" "$WINE_PROTON_VERSION" "$SELKIES_WAYLAND" > "$EVIDENCE/identity.txt"
           docker image inspect tgstation-gateway-player:uat > "$EVIDENCE/image.json"
           docker info > "$EVIDENCE/docker-info.txt"
           docker run --rm --entrypoint sh tgstation-gateway-player:uat -ec '
-            printf "wine_package=%s\nwayland=%s\nresolution=%sx%s\nbyond=%s\n" \
-              "$WINE_PACKAGE_VERSION" "$SELKIES_WAYLAND" \
+            printf "wine_proton=%s\nwine_package=%s\nwayland=%s\nresolution=%sx%s\nbyond=%s\n" \
+              "$WINE_PROTON_VERSION" "$WINE_PACKAGE_VERSION" "$SELKIES_WAYLAND" \
               "$SELKIES_MANUAL_WIDTH" "$SELKIES_MANUAL_HEIGHT" "$BYOND_VERSION"
-            test "$(cat "$WINEPREFIX/.gateway-wine-package-version")" = "$WINE_PACKAGE_VERSION"
-            test "$(dpkg-query -W winehq-staging | cut -f2)" = "$WINE_PACKAGE_VERSION"
-            test "$(command -v wine)" = /opt/wine-staging/bin/wine
+            test "$(cat "$WINEPREFIX/.gateway-proton-version")" = "$WINE_PROTON_VERSION"
+            test "$WINE_PROTON_VERSION" = 10.0-4
+            test "$(dpkg-query -W -f="\${Version}" wine)" = "$WINE_PACKAGE_VERSION"
+            test "$(dpkg-query -W -f="\${Version}" wine32:i386)" = "$WINE_PACKAGE_VERSION"
+            test "$(dpkg-query -W -f="\${Version}" wine64)" = "$WINE_PACKAGE_VERSION"
+            test "$(command -v wine)" = /opt/wine-proton/bin/wine
             wine --version
             dpkg-query -W
           ' > "$EVIDENCE/runtime-packages.txt"
-          grep -Fx "wine_package=$WINE_PACKAGE_VERSION" "$EVIDENCE/runtime-packages.txt"
+          grep -Fx "wine_proton=$WINE_PROTON_VERSION" "$EVIDENCE/runtime-packages.txt"
           grep -Fx "wayland=$SELKIES_WAYLAND" "$EVIDENCE/runtime-packages.txt"
           docker run --rm --entrypoint sh \
             -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
@@ -159,7 +180,7 @@ jobs:
           docker pull "$reference"
           printf '%s\n' "$reference" > "$EVIDENCE/published-digest.txt"
           {
-            printf '### WineHQ staging %s / Wayland\n\n' "$WINE_PACKAGE_VERSION"
+            printf '### Proton Wine %s / Wayland\n\n' "$WINE_PROTON_VERSION"
             printf -- '- Source: `%s`\n- Tag: `%s`\n- Digest reference: `%s`\n' "$GITHUB_SHA" "$IMAGE" "$reference"
             printf -- '- Authenticated runner pull: passed. Tester pull and interactive results: pending.\n'
             printf -- '- Dialog / resize / fullscreen: **not tested interactively**.\n'

@@ -18,10 +18,10 @@ class RunClientTest(unittest.TestCase):
                 "timeout": 'shift\nexec "$@"',
                 "xdpyinfo": 'test "$1" = "-display" && test "$2" = ":42"',
                 "wine": (
-                    'case "$PATH" in /opt/wine-staging/bin:*) ;; '
+                    'case "$PATH" in /opt/wine-proton/bin:*) ;; '
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
-                    'test "$WINELOADER" = /opt/wine-staging/bin/wine && '
-                    'test "$WINESERVER" = /opt/wine-staging/bin/wineserver || exit 96\n'
+                    'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
+                    'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
