@@ -58,7 +58,9 @@ class WorkflowTest(unittest.TestCase):
                     webview.mkdir(parents=True)
                     (webview / "msedgewebview2.exe").touch()
                     if cached_version:
-                        (source / ".gateway-ge-proton-version").write_text(cached_version)
+                        (source / ".gateway-ge-proton-version").write_text(
+                            cached_version
+                        )
                     cache = root / "cache"
                     cache.mkdir()
                     with tarfile.open(cache / "prefix.tar.gz", "w:gz") as archive:
