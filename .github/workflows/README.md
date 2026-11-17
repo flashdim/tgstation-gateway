@@ -198,12 +198,12 @@ Publication and interactive acceptance are **pending**, not implied by this
 workflow or by startup smoke tests. Fill in and post this table to issue #7
 after dispatch and user testing:
 
-| Proton / system Wine | Display | Source SHA / tag / published digest | Tester pull | Dialog results | Resize results | Fullscreen results |
-| -------------------- | ------- | ----------------------------------- | ----------- | -------------- | -------------- | ------------------ |
-| 10.0-4 / Ubuntu 10   | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
-| 9.0-4 / Ubuntu 10    | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
-| 8.0-5 / Ubuntu 10    | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
-| 11.0-2 / WineHQ 11.22 | Wayland | Pending publication               | Pending     | Not tested     | Not tested     | Not tested         |
+| Proton / system Wine  | Display | Source SHA / tag / published digest | Tester pull | Dialog results | Resize results | Fullscreen results |
+| --------------------- | ------- | ----------------------------------- | ----------- | -------------- | -------------- | ------------------ |
+| 10.0-4 / Ubuntu 10    | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
+| 9.0-4 / Ubuntu 10     | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
+| 8.0-5 / Ubuntu 10     | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
+| 11.0-2 / WineHQ 11.22 | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
 
 Include occurrence counts, measured delay, recovery behavior and evidence
 links per cell, plus runtime/compositor versions and any configuration changes.
