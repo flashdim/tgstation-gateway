@@ -60,10 +60,27 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
-          key: wine-prefix-v2-${{ hashFiles('Dockerfile', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+          key: wine-prefix-v2-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/download-wine.sh', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
 
       - name: Prepare Wine prefix cache directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
+
+      - name: Restore Proton Wine download cache
+        id: wine-download
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
+          key: wine-download-v1-${{ hashFiles('container/wine-proton.env') }}
+
+      - name: Download or verify Proton Wine
+        run: sh container/download-wine.sh "$RUNNER_TEMP/wine-download-cache"
+
+      - name: Save Proton Wine download cache
+        if: steps.wine-download.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
+          key: ${{ steps.wine-download.outputs.cache-primary-key }}
 
       - name: Build player image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
@@ -74,6 +91,7 @@ jobs:
           tags: tgstation-gateway-player:ci
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
+            wine-download-cache=${{ runner.temp }}/wine-download-cache
 
       - name: Smoke-test player image
         id: smoke-x11
@@ -146,13 +164,9 @@ jobs:
 
       - name: Check Wine and 32-bit runtime libraries
         run: |
-          docker run --rm --entrypoint sh tgstation-gateway-player:ci -c '
-            test "$(command -v wine)" = /opt/wine-proton/bin/wine &&
-            test -x /opt/wine-proton/bin/wine-preloader &&
-            test -r /usr/lib/i386-linux-gnu/libfreetype.so.6 &&
-            test -r /usr/lib/i386-linux-gnu/libfontconfig.so.1 &&
-            test -r /usr/lib/i386-linux-gnu/libvulkan.so.1
-          '
+          docker run --rm --entrypoint sh \
+            -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
+            tgstation-gateway-player:ci /tmp/check-wine-runtime.sh
 
       - name: Archive Wine prefix
         if: steps.wine-cache.outputs.cache-hit != 'true'

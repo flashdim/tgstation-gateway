@@ -78,21 +78,19 @@ class WineRuntimeTest(unittest.TestCase):
         self.check = self.check.replace("/usr/lib/", f"{self.libraries}/")
 
     def test_pins_proton_10_0_4_amd64_archive_and_checksum(self):
-        dockerfile = (ROOT / "Dockerfile").read_text()
-        self.assertIn(
-            "https://github.com/Kron4ek/Wine-Builds/releases/download/"
-            "proton-10.0-4/wine-proton-10.0-4-amd64.tar.xz",
-            dockerfile,
-        )
+        manifest = (ROOT / "container/wine-proton.env").read_text()
+        self.assertIn("WINE_PROTON_VERSION=10.0-4", manifest)
         self.assertIn(
             "ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290",
-            dockerfile,
+            manifest,
         )
 
     def test_ci_checks_proton_10_preloader_location(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertIn("test -x /opt/wine-proton/bin/wine-preloader", workflow)
-        self.assertNotIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", workflow)
+        check = (ROOT / "tests/check-wine-runtime.sh").read_text()
+        self.assertIn("tests/check-wine-runtime.sh", workflow)
+        self.assertIn("-x /opt/wine-proton/bin/wine-preloader", check)
+        self.assertNotIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", check)
 
     def check_runtime(self, **extra_env):
         return subprocess.run(
@@ -156,7 +154,37 @@ class WineRuntimeTest(unittest.TestCase):
 
     def test_requires_dynamically_loaded_libraries(self):
         (self.libraries / "i386-linux-gnu/libgnutls.so.30").unlink()
-        self.assertNotEqual(self.check_runtime().returncode, 0)
+        result = self.check_runtime()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("i386-linux-gnu/libgnutls.so.30", result.stderr)
+
+    def test_ci_runtime_diagnostics_name_each_missing_requirement(self):
+        check = (ROOT / "tests/check-wine-runtime.sh").read_text()
+        check = check.replace("/opt/wine-proton", str(self.runtime)).replace(
+            "/usr/lib/", f"{self.libraries}/"
+        )
+        env = {**os.environ, "PATH": f"{self.runtime / 'bin'}:{os.environ['PATH']}"}
+
+        def run():
+            return subprocess.run(
+                ["sh", "-c", check], env=env, capture_output=True, text=True
+            )
+
+        self.assertEqual(run().returncode, 0)
+        for path in (
+            self.runtime / "bin/wine",
+            self.runtime / "bin/wine-preloader",
+            *(
+                self.libraries / "i386-linux-gnu" / name
+                for name in ("libfreetype.so.6", "libfontconfig.so.1", "libvulkan.so.1")
+            ),
+        ):
+            with self.subTest(path=path):
+                path.rename(path.with_suffix(path.suffix + ".missing"))
+                result = run()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(str(path), result.stderr)
+                path.with_suffix(path.suffix + ".missing").rename(path)
 
 
 if __name__ == "__main__":

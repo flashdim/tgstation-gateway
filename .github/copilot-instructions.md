@@ -43,7 +43,9 @@ planned features or smoke tests as proof of interactive gameplay.
 
 - Before every commit, run CI's `pre-commit run --all-files --show-diff-on-failure`
   and resolve any formatter changes; do not commit until the formatting check
-  passes.
+  passes. After pushing each commit, verify that the formatting workflow
+  completed successfully for that exact commit; a prior commit's result does
+  not validate a later commit.
 - Keep changes focused on the requested milestone; identify unresolved design
   choices rather than assuming unvalidated features or performance targets.
 - Download BYOND only from the community mirror. Pin external dependencies where
@@ -52,6 +54,8 @@ planned features or smoke tests as proof of interactive gameplay.
 - Keep CI and release behavior consistent: smoke-test the image that will be
   published. Cache only build-time, non-player data; invalidate cached Wine
   prefixes when their inputs change and document how to refresh them.
+- Keep CI-specific documentation in `.github/workflows/README.md`, not the
+  main `README.md`.
 - Add focused tests for new behavior and failures; run the smallest relevant
   checks. Validate routing, lifecycle and isolation with integration tests,
   and real gameplay separately rather than relying on process health alone.
