@@ -9,6 +9,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WindowManagerTest(unittest.TestCase):
+    def test_default_display_size_matches_compose(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        compose = (ROOT / "examples/compose.yaml").read_text()
+        for setting, value in (
+            ("SELKIES_MANUAL_WIDTH", "1920"),
+            ("SELKIES_MANUAL_HEIGHT", "1080"),
+        ):
+            with self.subTest(setting=setting):
+                self.assertIn(f"{setting}={value}", dockerfile)
+                self.assertIn(f"{setting}: ${{{setting}:-{value}}}", compose)
+
     def test_launches_on_session_display(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

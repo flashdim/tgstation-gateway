@@ -14,10 +14,42 @@ See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria.
 
 The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It uses
-Kron4ek's checksum-verified standalone Proton-based Wine 11.0-2 build as the
-Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
-core fonts, RichEdit and WebView2. Ubuntu Wine packages provide 32-bit and
-64-bit runtime dependencies; the container runs the standalone build.
+Kron4ek's checksum-verified standalone Proton-based Wine 10.0-4 amd64 build as
+the Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
+core fonts, RichEdit and WebView2. Ubuntu's pinned `wine`, `wine32:i386` and
+`wine64` packages supply runtime dependencies, with explicit supplemental
+32-bit font, TLS/Kerberos and Vulkan libraries. This restores the earlier
+package-based setup instead of maintaining the complete native library list.
+Proton remains the active runtime through `/opt/wine-proton/bin` at the front
+of PATH; its archive and checksum are unchanged. Libraries loaded with `dlopen`
+are not all visible to `ldd`; package installation and dependency checks alone
+do not establish compatibility.
+The pinned Selkies base already supplies Mesa Vulkan ICDs for both architectures;
+this is not just a Vulkan-loader-only setup.
+
+Every image build, including releases, checks both loader architectures,
+core display/audio/GStreamer modules and
+selected dynamically loaded libraries before creating the prefix. This is not
+a gameplay or WebView compatibility test. The pinned standalone runtime's
+optional `winedmo.so` expects FFmpeg SONAMEs `libavcodec.so.58`,
+`libavformat.so.58` and `libavutil.so.56`, unavailable in Ubuntu 26.04.
+Its optional packet-capture module `wpcap.so` expects `libpcap.so.1`, whereas
+Ubuntu's native library exposes `libpcap.so.0.8`. Both gaps affect both
+architectures; installing Ubuntu Wine would not supply those SONAMEs either.
+The build checks intentionally exclude these optional modules; current Ubuntu
+libraries do not resolve the inherited gaps, and no compatibility symlinks
+are installed.
+
+The Proton 10.0-4 amd64 archive checksum is pinned for the runtime comparison.
+A user-reported test of Proton 11.0-2 without Ubuntu Wine packages showed no
+major change, though the UI looked cleaner and closer to a local environment.
+The latest CI run built and published the image after a retry, passed the X11
+and Wayland startup smoke tests, and passed the Wine runtime check. The first
+attempt stopped during core-font registration after Wine reported a connection
+reset; this did not recur on retry. Startup checks do not establish gameplay or
+WebView compatibility. The Proton archive includes `winegstreamer.so` for
+amd64 but not i386; the build checks the module where present and does not claim
+32-bit GStreamer-backed media compatibility.
 It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
 installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
 which requires a Vulkan 1.3-capable driver.
@@ -35,9 +67,12 @@ scene but failed to load fancy chat and the stat panel. In a separate container,
 a fresh prefix using standalone Proton-based Wine 11.0-2, BYOND's bundled
 DirectX setup and DXVK 2.7.1 rendered the scene and loaded those panels, but
 showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
-tracks them. The rebuilt image and those dialogs still need gameplay
-verification. The individual rendering cause is not isolated. Wine applications
-do not receive Selkies' injected gamepad or webcam integrations.
+tracks the investigation. The user now reports that the extra windows appear
+briefly at startup and disappear after connecting, and that restoring Ubuntu
+Wine packages as runtime dependencies caused no major rendering issues. No
+root cause or automated window suppression was established. These reports do
+not verify complete gameplay, map rendering or WebView compatibility. Wine
+applications do not receive Selkies' injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -70,12 +105,12 @@ docker build --platform linux/amd64 -t tgstation-gateway-player .
 
 The build downloads the portable Windows BYOND archive from the independently
 operated community mirror at `byond-builds.dm-lang.org`, defaulting to version
-`516.1688`. The archive must include BYOND's bundled DirectX setup and June 2010
+`516.1689`. The archive must include BYOND's bundled DirectX setup and June 2010
 `d3dx9_43` CAB. To select a version from a shell environment variable, set
 `BYOND_VERSION` and pass it as a build argument:
 
 ```sh
-export BYOND_VERSION=516.1688
+export BYOND_VERSION=516.1689
 docker build --platform linux/amd64 --build-arg BYOND_VERSION \
   -t tgstation-gateway-player .
 ```
@@ -84,6 +119,8 @@ Changing the environment of a running container does not replace the client;
 rebuild the image to change versions. You can also pass a trusted checksum with
 `--build-arg BYOND_SHA256=<sha256>`. Without it, the download is checked for ZIP
 corruption but not against a known digest.
+Version 516.1689 has not yet been verified against the community mirror or in
+gameplay: DNS resolution for the mirror was unavailable in the test environment.
 
 The former `BYOND_DOWNLOAD_BASE_URL` override is no longer supported.
 
@@ -118,7 +155,10 @@ Pull requests and pushes to `main` build the image and smoke-test the Selkies
 endpoint, Openbox, pager tray and BYOND pager, without logging in to a game
 server. CI caches the initialized Wine prefix without BYOND in GitHub Actions;
 the first successful build populates the cache, and branch access and cache
-eviction affect reuse.
+eviction affect reuse. The prefix cache key includes the Dockerfile and all
+three installer scripts, so this runtime-library change invalidates old prefixes.
+To test a fresh prefix locally, use the normal build command without a
+`wine-prefix-cache` build context; the scratch stage provides an empty cache.
 After formatting and image checks pass, CI publishes the tested image to
 `ghcr.io/flashdim/tgstation-gateway:dev` for pushes or manual runs on `main`
 and pull requests from this repository. Fork pull requests do not publish.
@@ -195,6 +235,17 @@ health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
+The display defaults to a fixed **1920x1080** using Selkies'
+`SELKIES_MANUAL_WIDTH=1920` and `SELKIES_MANUAL_HEIGHT=1080`. The pinned base
+already starts X11 at 1920x1080, but normally resizes it to the browser on
+connection; manual sizing keeps a consistent desktop instead. This does not
+maximize Dream Seeker or guarantee that browser scaling distortion is resolved.
+Override both variables to select a different fixed size. To restore automatic
+browser-sized resolution, set both to `0` (in the environment when using Compose,
+or with `-e SELKIES_MANUAL_WIDTH=0 -e SELKIES_MANUAL_HEIGHT=0` for `docker run`)
+and recreate the container. Check the browser's scaling settings as well;
+previously saved browser preferences may affect presentation.
+
 There is no full desktop in this image. Openbox manages BYOND windows and
 dialogs on the X11 display, which Selkies streams as a whole; this is not
 per-window isolation. When starting the pager rather than a direct server
@@ -202,11 +253,25 @@ connection, a small system tray is provided for its icon. The launcher assumes
 X11, not Selkies' Wayland backend. Earlier testing restored game and stat-panel
 rendering by removing `LD_PRELOAD`, and confirmed audio with the LXQt-based
 image. A later user-reported session rendered the menu, dialogs and audio, but
-showed a black game scene with a few solid-color tiles after joining. A separate
-standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
-the WebView panels, but showed extra blank dialogs. The newly built image still
-requires gameplay verification. The smoke test does not verify gameplay.
-The desktop-free image's pager/tray behavior also needs explicit verification.
+showed a black game scene with a few solid-color tiles after joining. The user
+now reports that the extra startup dialogs disappear after connecting and that
+there are no major rendering issues after restoring Ubuntu Wine packages as
+runtime dependencies. These reports do not establish the root cause or complete
+gameplay compatibility. CI smoke tests verify startup only. The desktop-free
+image's pager/tray behavior also needs explicit verification.
+The experimental Openbox maximization rule was removed after it made no
+reported difference to startup window size.
+No Dream Seeker startup maximize/fullscreen flag or persistent local sizing
+configuration was verified in the client documentation search, so the launcher
+does not pass speculative flags. BYOND documents
+[`is-maximized` as a main-window skin parameter](https://github.com/byond-open-reference/byondref.com/blob/master/skinparams.html),
+set by the game's interface or `winset()`, and the
+[`.winset` client command](https://ref.dm-lang.org/skin/commands/dotwinset)
+can change skin parameters after connecting. These are not executable startup
+flags; applying them requires the game's actual main-window control ID.
+Automatic game-window maximization remains unresolved. Do not maximize or hide
+all `steam_proton` windows: the class alone does not distinguish game windows
+from legitimate dialogs or WebView panels.
 
 ### AMD or Intel GPU experiment
 

@@ -23,12 +23,15 @@ planned features or smoke tests as proof of interactive gameplay.
   players. Do not log secrets or include player data in images or caches.
 - BYOND may see shared IP addresses or computer IDs. Investigate and document
   collisions and preserve server ban enforcement; never silently bypass it.
-- The player image uses checksum-pinned standalone Proton-based Wine 11.0-2;
-  Ubuntu Wine packages supply its runtime libraries. Keep the 32-bit runtime
-  dependencies, BYOND's bundled DirectX setup, native `d3dx9_43` and pinned
-  DXVK version consistent when changing the graphics stack. Preserve the X11
-  socket directory's sticky bit and remove Selkies' `LD_PRELOAD` interposers
-  from Wine's environment.
+- The player image uses checksum-pinned standalone Proton-based Wine 10.0-4;
+  Ubuntu `wine`, `wine32` and `wine64` packages supply its runtime dependencies.
+  Keep `/opt/wine-proton/bin` first in Wine's PATH; distro packages do not select
+  the active runtime. Retain dependency checks and explicit supplemental
+  libraries where needed; ldd alone cannot check dlopened libraries.
+  Keep BYOND's bundled DirectX setup, native `d3dx9_43` and
+  pinned DXVK version consistent when changing the graphics stack. Preserve
+  the X11 socket directory's sticky bit and remove Selkies' `LD_PRELOAD`
+  interposers from Wine's environment.
 - Keep seccomp enabled. The custom profile is based on Docker's default and
   permits only the 32-bit `socket` syscall exception Wine needs; keep it aligned
   across the Compose example, direct-run documentation and smoke tests.
@@ -38,6 +41,9 @@ planned features or smoke tests as proof of interactive gameplay.
 
 ## Changes and validation
 
+- Before every commit, run CI's `pre-commit run --all-files --show-diff-on-failure`
+  and resolve any formatter changes; do not commit until the formatting check
+  passes.
 - Keep changes focused on the requested milestone; identify unresolved design
   choices rather than assuming unvalidated features or performance targets.
 - Download BYOND only from the community mirror. Pin external dependencies where

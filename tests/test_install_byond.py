@@ -31,7 +31,7 @@ class InstallByondTest(unittest.TestCase):
             archive.writestr(path, b"BYOND fixture")
             archive.writestr("byond/bin/byondcore.dll", b"fixture DLL")
 
-    def install(self, version="516.1688", checksum="", base_url=None):
+    def install(self, version="516.1689", checksum="", base_url=None):
         env = {
             **os.environ,
             "BYOND_VERSION": version,
@@ -65,13 +65,23 @@ class InstallByondTest(unittest.TestCase):
         self.assertEqual((byond / "byond.exe").read_bytes(), b"BYOND fixture")
         self.assertTrue((byond / "byondcore.dll").is_file())
 
+    def test_default_version_matches_dockerfile_and_mirror_url(self):
+        self.make_archive()
+        self.assertIn("ARG BYOND_VERSION=516.1689\n", (ROOT / "Dockerfile").read_text())
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.url_file.read_text().strip(),
+            "https://byond-builds.dm-lang.org/516/516.1689_byond.zip",
+        )
+
     def test_ignores_legacy_download_base_override(self):
         self.make_archive()
         result = self.install(base_url="https://example.org")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.url_file.read_text().strip(),
-            "https://byond-builds.dm-lang.org/516/516.1688_byond.zip",
+            "https://byond-builds.dm-lang.org/516/516.1689_byond.zip",
         )
         self.assertTrue(
             (self.prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe").is_file()

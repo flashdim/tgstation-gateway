@@ -18,20 +18,51 @@ RUN selkies-privileged-files release && \
     apt-get install -y --no-install-recommends \
       "wine=${WINE_PACKAGE_VERSION}" "wine32:i386=${WINE_PACKAGE_VERSION}" \
       "wine64=${WINE_PACKAGE_VERSION}" cabextract unzip wget xz-utils \
-      openbox trayer libfreetype6:i386 libfontconfig1:i386 \
+      openbox trayer fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
 RUN curl -fsSL --retry 3 \
-      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-11.0-2/wine-proton-11.0-2-amd64.tar.xz \
+      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-10.0-4/wine-proton-10.0-4-amd64.tar.xz \
       -o /tmp/wine-proton.tar.xz && \
-    echo '51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
+    echo 'ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
     mkdir -p /opt/wine-proton && \
     tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
     test -x /opt/wine-proton/bin/wine && \
-    test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader && \
+    test -x /opt/wine-proton/bin/wine-preloader && \
     rm /tmp/wine-proton.tar.xz
+
+# Build-time gate shared by CI and releases. winedmo's old FFmpeg ABI and
+# wpcap's libpcap.so.1 are inherited optional gaps; do not fake SONAME links.
+RUN set -eu; \
+    test -x /opt/wine-proton/bin/wine-preloader; \
+    for architecture in i386 x86_64; do \
+      directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
+      for module in ntdll.so win32u.so winex11.so winewayland.so \
+          winealsa.so winepulse.so winevulkan.so; do \
+        dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/$module")"; \
+        if printf '%s\n' "$dependencies" | grep 'not found'; then \
+          echo "Missing dependencies for $directory/$module" >&2; exit 1; \
+        fi; \
+      done; \
+      if [ -f "$directory/winegstreamer.so" ]; then \
+        dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/winegstreamer.so")"; \
+        if printf '%s\n' "$dependencies" | grep 'not found'; then \
+          echo "Missing dependencies for $directory/winegstreamer.so" >&2; exit 1; \
+        fi; \
+      fi; \
+      for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
+          libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
+        test -r "/usr/lib/$architecture-linux-gnu/$library"; \
+      done; \
+    done; \
+    for binary in /opt/wine-proton/bin/wine /opt/wine-proton/bin/wineserver; do \
+      dependencies="$(ldd "$binary")"; \
+      if printf '%s\n' "$dependencies" | grep 'not found'; then \
+        echo "Missing dependencies for $binary" >&2; exit 1; \
+      fi; \
+    done
 
 # Pin the Winetricks revision used by the desktop experiment.
 RUN curl -fsSL --retry 3 \
@@ -48,6 +79,8 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     WINEARCH=win64 \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
+    SELKIES_MANUAL_WIDTH=1920 \
+    SELKIES_MANUAL_HEIGHT=1080 \
     SELKIES_COMMAND_ENABLED=false
 
 RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
@@ -64,7 +97,7 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
 
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
 COPY --chmod=755 container/install-graphics.sh /usr/local/bin/install-graphics
-ARG BYOND_VERSION=516.1688
+ARG BYOND_VERSION=516.1689
 ARG BYOND_SHA256=""
 ENV BYOND_VERSION=${BYOND_VERSION}
 

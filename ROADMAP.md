@@ -44,18 +44,35 @@ same GPU with Proton 11.0-2. Using Proton's D3D9 DXVK library with Wine did
 not fix the map, although Dream Seeker loaded it. The image now installs
 32-bit FreeType and Fontconfig, which removed FreeType errors in a separate
 Proton Wine initialization test, but did not resolve the black map.
-In a disposable container a fresh Ubuntu Wine 10 prefix with BYOND's bundled
-DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the scene, but fancy
-chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
-prefix rendered the scene and loaded both panels, but showed two extra blank
-dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
-tracks them. The image now uses that runtime; the rebuilt image still needs
-gameplay verification and the individual cause is unconfirmed.
+In disposable comparisons, Ubuntu Wine 10 rendered the scene but fancy chat and
+the stat panel failed; standalone Proton Wine 11.0-2 rendered the scene and
+panels, but initially showed two extra dialogs under Wayland/XWayland. The user
+now reports those windows appear briefly and disappear after connecting, and
+that there are no major rendering issues after restoring Ubuntu Wine packages
+as runtime dependencies. The dialog cause was not isolated and no suppression
+was added. The Openbox maximization rule made no reported size change and was
+removed.
+
+The current image uses checksum-pinned Proton Wine 10.0-4 as the active
+runtime, Ubuntu's pinned Wine packages for runtime dependencies, and BYOND
+516.1689. CI built and published the image after a retry; X11 and Wayland
+startup smoke tests and Wine runtime checks passed. The first build attempt
+failed during core-font registration after a Wine connection reset, but the
+retry passed. These checks do not prove interactive gameplay, game-scene
+rendering, WebView compatibility, or complete dialog behavior.
+
+The image defaults to fixed 1920x1080 Selkies resolution. This display-size
+experiment was prompted by reported first-connection scaling distortion;
+whether it improves browser scaling remains unverified. Automatic Dream Seeker
+maximization also remains unresolved. No verified Dream Seeker startup flag or
+local sizing setting was found; BYOND's documented maximization parameter is a
+game-skin setting, not an executable command-line option.
+
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
-stat-panel rendering in that test environment; it does not resolve or rule out
-the current failure. A direct launch to the configured host has been observed.
-The release publication path and a complete playable gameplay session remain
-unverified.
+stat-panel rendering in its test environment; it did not establish the cause
+of other rendering behavior. A direct launch to the configured host has been
+observed. A complete authenticated gameplay session and release publication
+remain unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
