@@ -11,6 +11,7 @@
 </p>
 
 Run the BYOND player in your browser without installing BYOND on your computer. This experimental project streams the player's screen and audio; it does not host a game server.
+<img width="1575" height="904" alt="image" src="https://github.com/user-attachments/assets/352d64c5-5ff8-4676-b582-7642ee001f9a" />
 
 ## Start playing
 
