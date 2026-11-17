@@ -30,7 +30,7 @@ export WINESERVER="/opt/wine-proton/bin/wineserver"
 unset LD_PRELOAD
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
 run_stage "Wine prefix initialization" 300s \
-    env 'WINEDLLOVERRIDES=mscoree,mshtml=d' wineboot --init
+    env 'WINEDLLOVERRIDES=mscoree,mshtml=d' wineboot --update
 run_stage "Wine prefix startup" 30s wineserver --wait
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
 run_stage "Winetricks dxtrans" 120s winetricks -q dxtrans

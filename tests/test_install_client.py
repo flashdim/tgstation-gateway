@@ -87,7 +87,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
-                "wineboot --init",
+                "wineboot --update",
                 "wineserver --wait",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
