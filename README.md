@@ -8,8 +8,7 @@
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker"></a>
   <a href="https://github.com/selkies-project/selkies"><img src="assets/selkies-logo.png" alt="Selkies" height="24"></a>
   <a href="https://www.byond.com/"><img src="assets/byond-logo.png" alt="BYOND" height="24"></a>
-  <a href="https://www.winehq.org/"><img src="https://img.shields.io/badge/Wine-10.0-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Wine 10.0"></a>
-  <a href="https://github.com/ValveSoftware/Proton"><img src="https://img.shields.io/badge/Proton-10.0--4-1A9FFF?style=flat-square" alt="Proton 10.0-4"></a>
+  <a href="https://www.winehq.org/"><img src="https://img.shields.io/badge/WineHQ-staging%2011.22-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="WineHQ staging 11.22"></a>
 </p>
 
 Run the BYOND player in your browser without installing BYOND on your computer. This experimental project streams the player's screen and audio; it does not host a game server.
@@ -61,6 +60,11 @@ To build the image from this repository and use it with Compose:
 docker buildx build --load --platform linux/amd64 -t tgstation-gateway-player .
 GATEWAY_IMAGE=tgstation-gateway-player docker compose -f examples/compose.yaml up
 ```
+
+The image installs pinned WineHQ staging packages from WineHQ's signed Ubuntu
+repository, following the [Debian/Ubuntu installation instructions](https://gitlab.winehq.org/wine/wine/-/wikis/Debian-Ubuntu).
+WineHQ staging is the active runtime, not a dependency layer for Proton.
+Builds require the pinned package version to remain available upstream.
 
 ## Important limitations
 

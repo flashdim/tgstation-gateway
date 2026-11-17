@@ -33,20 +33,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - proton: 10.0-4
-            wine_source: ubuntu
-            wine_package_version: 10.0~repack-12ubuntu1
-            tag_variant: proton-10.0-4
-          - proton: 11.0-2
-            wine_source: winehq
-            wine_package_version: 11.22~resolute-1
-            tag_variant: proton-11.0-2-winehq-staging-11.22
+          - wine_package_version: 11.22~resolute-1
+            tag_variant: winehq-staging-11.22
     concurrency:
-      group: uat-issue-7-${{ github.sha }}-${{ matrix.proton }}-wayland
+      group: uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland
       cancel-in-progress: false
     env:
-      WINE_PROTON_VERSION: ${{ matrix.proton }}
-      WINE_PACKAGE_SOURCE: ${{ matrix.wine_source }}
       WINE_PACKAGE_VERSION: ${{ matrix.wine_package_version }}
       SELKIES_WAYLAND: "true"
       IMAGE: ghcr.io/${{ github.repository }}:uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland
@@ -67,34 +59,17 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Restore Proton download
-        id: download
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
-          key: uat-wine-download-v1-${{ matrix.proton }}-${{ hashFiles('container/wine-proton.env', 'container/download-wine.sh') }}
-
-      - name: Download or verify selected Proton
-        run: sh container/download-wine.sh "$RUNNER_TEMP/wine-download-cache"
-
-      - name: Save Proton download
-        if: steps.download.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
-          key: ${{ steps.download.outputs.cache-primary-key }}
-
       - name: Restore runtime-specific Wine prefix
         id: prefix
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
-          key: uat-wine-prefix-v1-${{ matrix.proton }}-${{ matrix.wine_source }}-${{ matrix.wine_package_version }}-wayland-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/download-wine.sh', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+          key: uat-wine-prefix-v2-staging-${{ matrix.wine_package_version }}-wayland-${{ hashFiles('Dockerfile', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
 
       - name: Prepare prefix directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
 
-      - name: Build comparison image
+      - name: Build staging image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -103,40 +78,33 @@ jobs:
           tags: tgstation-gateway-player:uat
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            io.tgstation-gateway.uat.proton=${{ matrix.proton }}
+            io.tgstation-gateway.uat.wine-package=${{ matrix.wine_package_version }}
             io.tgstation-gateway.uat.display=wayland
           build-args: |
-            WINE_PROTON_VERSION=${{ matrix.proton }}
-            WINE_PACKAGE_SOURCE=${{ matrix.wine_source }}
             WINE_PACKAGE_VERSION=${{ matrix.wine_package_version }}
             SELKIES_WAYLAND=${{ env.SELKIES_WAYLAND }}
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
-            wine-download-cache=${{ runner.temp }}/wine-download-cache
 
-      - name: Record and verify comparison identity
+      - name: Record and verify staging identity
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE"
-          printf 'source=%s\nimage=%s\nproton=%s\ndisplay=%s\n' \
-            "$GITHUB_SHA" "$IMAGE" "$WINE_PROTON_VERSION" "$SELKIES_WAYLAND" > "$EVIDENCE/identity.txt"
-          printf 'wine_source=%s\nwine_package=%s\n' \
-            "$WINE_PACKAGE_SOURCE" "$WINE_PACKAGE_VERSION" >> "$EVIDENCE/identity.txt"
+          printf 'source=%s\nimage=%s\nwine_package=%s\ndisplay=%s\n' \
+            "$GITHUB_SHA" "$IMAGE" "$WINE_PACKAGE_VERSION" "$SELKIES_WAYLAND" > "$EVIDENCE/identity.txt"
           docker image inspect tgstation-gateway-player:uat > "$EVIDENCE/image.json"
           docker info > "$EVIDENCE/docker-info.txt"
           docker run --rm --entrypoint sh tgstation-gateway-player:uat -ec '
-            printf "proton=%s\nwine_source=%s\nwine_package=%s\nwayland=%s\nresolution=%sx%s\nbyond=%s\n" \
-              "$WINE_PROTON_VERSION" "$WINE_PACKAGE_SOURCE" \
+            printf "wine_package=%s\nwayland=%s\nresolution=%sx%s\nbyond=%s\n" \
               "$WINE_PACKAGE_VERSION" "$SELKIES_WAYLAND" \
               "$SELKIES_MANUAL_WIDTH" "$SELKIES_MANUAL_HEIGHT" "$BYOND_VERSION"
-            test "$(cat "$WINEPREFIX/.gateway-proton-version")" = "$WINE_PROTON_VERSION"
-            if [ "$WINE_PACKAGE_SOURCE" = winehq ]; then
-              test "$(dpkg-query -W winehq-staging | cut -f2)" = "$WINE_PACKAGE_VERSION"
-            fi
+            test "$(cat "$WINEPREFIX/.gateway-wine-package-version")" = "$WINE_PACKAGE_VERSION"
+            test "$(dpkg-query -W winehq-staging | cut -f2)" = "$WINE_PACKAGE_VERSION"
+            test "$(command -v wine)" = /opt/wine-staging/bin/wine
             wine --version
             dpkg-query -W
           ' > "$EVIDENCE/runtime-packages.txt"
-          grep -Fx "proton=$WINE_PROTON_VERSION" "$EVIDENCE/runtime-packages.txt"
+          grep -Fx "wine_package=$WINE_PACKAGE_VERSION" "$EVIDENCE/runtime-packages.txt"
           grep -Fx "wayland=$SELKIES_WAYLAND" "$EVIDENCE/runtime-packages.txt"
           docker run --rm --entrypoint sh \
             -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
@@ -191,8 +159,7 @@ jobs:
           docker pull "$reference"
           printf '%s\n' "$reference" > "$EVIDENCE/published-digest.txt"
           {
-            printf '### Proton %s / %s Wine %s / Wayland\n\n' \
-              "$WINE_PROTON_VERSION" "$WINE_PACKAGE_SOURCE" "$WINE_PACKAGE_VERSION"
+            printf '### WineHQ staging %s / Wayland\n\n' "$WINE_PACKAGE_VERSION"
             printf -- '- Source: `%s`\n- Tag: `%s`\n- Digest reference: `%s`\n' "$GITHUB_SHA" "$IMAGE" "$reference"
             printf -- '- Authenticated runner pull: passed. Tester pull and interactive results: pending.\n'
             printf -- '- Dialog / resize / fullscreen: **not tested interactively**.\n'

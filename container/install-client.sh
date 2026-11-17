@@ -24,9 +24,9 @@ run_stage() {
 }
 
 export WINEDEBUG=-all,err+all
-export PATH="/opt/wine-proton/bin:$PATH"
-export WINELOADER="/opt/wine-proton/bin/wine"
-export WINESERVER="/opt/wine-proton/bin/wineserver"
+export PATH="/opt/wine-staging/bin:$PATH"
+export WINELOADER="/opt/wine-staging/bin/wine"
+export WINESERVER="/opt/wine-staging/bin/wineserver"
 unset LD_PRELOAD
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
 run_stage "Wine prefix initialization" 300s \

@@ -53,13 +53,20 @@ as runtime dependencies. The dialog cause was not isolated and no suppression
 was added. The Openbox maximization rule made no reported size change and was
 removed.
 
-The current image uses checksum-pinned Proton Wine 10.0-4 as the active
+The previous image used checksum-pinned Proton Wine 10.0-4 as the active
 runtime, Ubuntu's pinned Wine packages for runtime dependencies, and BYOND
-516.1689. CI built and published the image after a retry; X11 and Wayland
+516.1689. CI built and published that image after a retry; X11 and Wayland
 startup smoke tests and Wine runtime checks passed. The first build attempt
 failed during core-font registration after a Wine connection reset, but the
 retry passed. These checks do not prove interactive gameplay, game-scene
 rendering, WebView compatibility, or complete dialog behavior.
+
+The current installation targets WineHQ staging 11.22
+(`winehq-staging=11.22~resolute-1`) from WineHQ's signed Ubuntu 26.04
+repository. It replaces the standalone Proton runtime and its download paths;
+old Proton prefixes are not reused. BYOND and DXVK remain unchanged.
+Build, startup and interactive compatibility of this new runtime must be
+verified separately; earlier Proton results do not validate WineHQ staging.
 
 The image defaults to fixed 1920x1080 Selkies resolution. This display-size
 experiment was prompted by reported first-connection scaling distortion;

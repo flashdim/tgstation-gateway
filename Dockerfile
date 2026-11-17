@@ -3,7 +3,6 @@
 # SELKIES_ENABLE_BASIC_AUTH is a boolean, not a secret.
 # The first milestone is one BYOND client per container, not a session manager.
 FROM scratch AS wine-prefix-cache
-FROM scratch AS wine-download-cache
 
 FROM ghcr.io/selkies-project/selkies/base:2.2.1-ubuntu26.04@sha256:4b70c739ea5aa650dd35a143d92c4bf80b7a527f2c66ee88718b08a5211267ff
 
@@ -11,40 +10,29 @@ USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WINE_PACKAGE_SOURCE=ubuntu
-ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
+ARG WINE_PACKAGE_VERSION=11.22~resolute-1
 
 RUN set -eu; \
     selkies-privileged-files release; \
     dpkg --add-architecture i386; \
-    if [ "$WINE_PACKAGE_SOURCE" = winehq ]; then \
-      test "$WINE_PACKAGE_VERSION" = "11.22~resolute-1"; \
-      apt-get update; \
-      apt-get install -y --no-install-recommends ca-certificates curl gpg; \
-      install -d -m 0755 /etc/apt/keyrings; \
-      curl -fsSL --retry 3 https://dl.winehq.org/wine-builds/winehq.key \
-        -o /tmp/winehq.key; \
-      gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.gpg /tmp/winehq.key; \
-      rm /tmp/winehq.key; \
-      curl -fsSL --retry 3 \
-        https://dl.winehq.org/wine-builds/ubuntu/dists/resolute/winehq-resolute.sources \
-        -o /etc/apt/sources.list.d/winehq-resolute.sources; \
-      sed -i 's|/etc/apt/keyrings/winehq-archive.key|/etc/apt/keyrings/winehq-archive.gpg|g' \
-        /etc/apt/sources.list.d/winehq-resolute.sources; \
-      grep -Fx 'Signed-By: /etc/apt/keyrings/winehq-archive.gpg' \
-        /etc/apt/sources.list.d/winehq-resolute.sources; \
-      apt-get update; \
-      apt-get install -y --install-recommends \
-        "winehq-staging=$WINE_PACKAGE_VERSION"; \
-    elif [ "$WINE_PACKAGE_SOURCE" = ubuntu ]; then \
-      apt-get update; \
-      apt-get install -y --no-install-recommends \
-        "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
-        "wine64=$WINE_PACKAGE_VERSION"; \
-    else \
-      echo "Unsupported WINE_PACKAGE_SOURCE: $WINE_PACKAGE_SOURCE" >&2; \
-      exit 1; \
-    fi; \
+    test "$WINE_PACKAGE_VERSION" = "11.22~resolute-1"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl gpg; \
+    install -d -m 0755 /etc/apt/keyrings; \
+    curl -fsSL --retry 3 https://dl.winehq.org/wine-builds/winehq.key \
+      -o /etc/apt/keyrings/winehq.key; \
+    gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.gpg /etc/apt/keyrings/winehq.key; \
+    rm /etc/apt/keyrings/winehq.key; \
+    curl -fsSL --retry 3 \
+      https://dl.winehq.org/wine-builds/ubuntu/dists/resolute/winehq-resolute.sources \
+      -o /etc/apt/sources.list.d/winehq-resolute.sources; \
+    sed -i 's|/etc/apt/keyrings/winehq-archive.key|/etc/apt/keyrings/winehq-archive.gpg|g' \
+      /etc/apt/sources.list.d/winehq-resolute.sources; \
+    grep -Fx 'Signed-By: /etc/apt/keyrings/winehq-archive.gpg' \
+      /etc/apt/sources.list.d/winehq-resolute.sources; \
+    apt-get update; \
+    apt-get install -y --install-recommends \
+      "winehq-staging=$WINE_PACKAGE_VERSION"; \
     apt-get install -y --no-install-recommends \
       cabextract unzip wget xz-utils openbox trayer fonts-liberation \
       libfreetype6:i386 libfontconfig1:i386 libgnutls30t64:i386 \
@@ -52,30 +40,46 @@ RUN set -eu; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
-ARG WINE_PROTON_VERSION=10.0-4
-COPY container/download-wine.sh container/wine-proton.env /tmp/wine-download/
-RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
-    if [ -f /tmp/wine-download-cache/wine-proton.tar.xz ]; then \
-      cp /tmp/wine-download-cache/wine-proton.tar.xz /tmp/wine-proton.tar.xz; \
-    fi && \
-    sh /tmp/wine-download/download-wine.sh /tmp && \
-    mkdir -p /opt/wine-proton && \
-    tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
-    test -x /opt/wine-proton/bin/wine && \
-    rm /tmp/wine-proton.tar.xz
-
-# Build-time gate shared by CI and releases. winedmo's old FFmpeg ABI and
-# wpcap's libpcap.so.1 are inherited optional gaps; do not fake SONAME links.
+# Build-time gate shared by CI and releases. WineHQ supports both classic and
+# new WoW64 layouts; only the former has i386 Unix modules. Do not fake SONAME links.
 RUN set -eu; \
-    case "$WINE_PROTON_VERSION" in \
-      10.0-4) test -x /opt/wine-proton/bin/wine-preloader ;; \
-      11.0-2) \
-        test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader; \
-        test -x /opt/wine-proton/lib/wine/x86_64-unix/wine-preloader ;; \
-      *) exit 1 ;; \
-    esac; \
+    test "$(dpkg-query -W -f='${Version}' winehq-staging)" = "$WINE_PACKAGE_VERSION"; \
+    test -x /opt/wine-staging/bin/wine; \
     for architecture in i386 x86_64; do \
-      directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
+      for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
+          libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
+        test -r "/usr/lib/$architecture-linux-gnu/$library" || \
+          { echo "Missing or unreadable /usr/lib/$architecture-linux-gnu/$library" >&2; exit 1; }; \
+      done; \
+      find /opt/wine-staging/lib /opt/wine-staging/lib64 \
+        -path "*/$architecture-windows/ntdll.dll" -type f -print 2>/dev/null | grep -q . || \
+        { echo "Missing $architecture Windows modules" >&2; exit 1; }; \
+      directory=""; \
+      for libdir in lib lib64; do \
+        candidate="/opt/wine-staging/$libdir/wine/$architecture-unix"; \
+        if [ -d "$candidate" ]; then \
+          candidate="$(readlink -f "$candidate")"; \
+          test -z "$directory" || test "$directory" = "$candidate"; \
+          directory="$candidate"; \
+        fi; \
+      done; \
+      if [ -z "$directory" ]; then \
+        test "$architecture" = i386 || \
+          { echo "Missing $architecture Unix modules" >&2; exit 1; }; \
+        for module in wow64.dll wow64cpu.dll; do \
+          find /opt/wine-staging/lib /opt/wine-staging/lib64 \
+            -path "*/x86_64-windows/$module" -type f -print 2>/dev/null | grep -q . || \
+            { echo "Missing new WoW64 component $module" >&2; exit 1; }; \
+        done; \
+        continue; \
+      fi; \
+      for loader in wine wine-preloader; do \
+        test -x "$directory/$loader"; \
+        dependencies="$(ldd "$directory/$loader")"; \
+        if printf '%s\n' "$dependencies" | grep 'not found'; then \
+          echo "Missing dependencies for $directory/$loader" >&2; exit 1; \
+        fi; \
+      done; \
       for module in ntdll.so win32u.so winex11.so winewayland.so \
           winealsa.so winepulse.so winevulkan.so; do \
         dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/$module")"; \
@@ -89,17 +93,8 @@ RUN set -eu; \
           echo "Missing dependencies for $directory/winegstreamer.so" >&2; exit 1; \
         fi; \
       fi; \
-      for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
-          libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
-        test -r "/usr/lib/$architecture-linux-gnu/$library" || \
-          { echo "Missing or unreadable /usr/lib/$architecture-linux-gnu/$library" >&2; exit 1; }; \
-      done; \
     done; \
-    binaries="/opt/wine-proton/bin/wine /opt/wine-proton/bin/wineserver"; \
-    if [ "$WINE_PROTON_VERSION" = 11.0-2 ]; then \
-      binaries="$binaries /opt/wine-proton/lib/wine/i386-unix/wine /opt/wine-proton/lib/wine/x86_64-unix/wine"; \
-    fi; \
-    for binary in $binaries; do \
+    for binary in /opt/wine-staging/bin/wineserver; do \
       test -x "$binary"; \
       dependencies="$(ldd "$binary")"; \
       if printf '%s\n' "$dependencies" | grep 'not found'; then \
@@ -118,9 +113,9 @@ COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
 
 USER 1000
 ARG SELKIES_WAYLAND=false
-ENV PATH=/opt/wine-proton/bin:${PATH} \
-    WINE_PROTON_VERSION=${WINE_PROTON_VERSION} \
-    WINE_PACKAGE_SOURCE=${WINE_PACKAGE_SOURCE} \
+ENV PATH=/opt/wine-staging/bin:${PATH} \
+    WINELOADER=/opt/wine-staging/bin/wine \
+    WINESERVER=/opt/wine-staging/bin/wineserver \
     WINE_PACKAGE_VERSION=${WINE_PACKAGE_VERSION} \
     WINEPREFIX=/home/ubuntu/.wine \
     WINEARCH=win64 \
@@ -135,7 +130,7 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
     if [ -f /tmp/wine-prefix-cache/prefix.tar.gz ]; then \
       mkdir -p "$WINEPREFIX" && \
       tar -xzf /tmp/wine-prefix-cache/prefix.tar.gz -C "$WINEPREFIX" && \
-      test "$(cat "$WINEPREFIX/.gateway-proton-version")" = "$WINE_PROTON_VERSION" && \
+      test "$(cat "$WINEPREFIX/.gateway-wine-package-version")" = "$WINE_PACKAGE_VERSION" && \
       test -s "$WINEPREFIX/system.reg" && \
       find "$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application" \
         -name msedgewebview2.exe -print -quit | grep -q . || \
@@ -143,7 +138,7 @@ RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
     else \
       xvfb-run -a /usr/local/bin/install-client; \
     fi && \
-    printf '%s\n' "$WINE_PROTON_VERSION" > "$WINEPREFIX/.gateway-proton-version"
+    printf '%s\n' "$WINE_PACKAGE_VERSION" > "$WINEPREFIX/.gateway-wine-package-version"
 
 COPY --chmod=755 container/install-byond.sh /usr/local/bin/install-byond
 COPY --chmod=755 container/install-graphics.sh /usr/local/bin/install-graphics

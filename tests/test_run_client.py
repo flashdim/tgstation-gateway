@@ -18,8 +18,10 @@ class RunClientTest(unittest.TestCase):
                 "timeout": 'shift\nexec "$@"',
                 "xdpyinfo": 'test "$1" = "-display" && test "$2" = ":42"',
                 "wine": (
-                    'case "$PATH" in /opt/wine-proton/bin:*) ;; '
+                    'case "$PATH" in /opt/wine-staging/bin:*) ;; '
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
+                    'test "$WINELOADER" = /opt/wine-staging/bin/wine && '
+                    'test "$WINESERVER" = /opt/wine-staging/bin/wineserver || exit 96\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
@@ -41,6 +43,7 @@ class RunClientTest(unittest.TestCase):
             prefix = root / "wine prefix"
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
+                "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
             )
