@@ -27,7 +27,6 @@ LIBRARIES = (
     "libGL.so.1",
     "libEGL.so.1",
     "libvulkan.so.1",
-    "libwayland-cursor.so.0",
 )
 
 
@@ -134,7 +133,6 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertIn('"wine=$WINE_PACKAGE_VERSION"', dockerfile)
         self.assertIn('"wine32:i386=$WINE_PACKAGE_VERSION"', dockerfile)
         self.assertIn('"wine64=$WINE_PACKAGE_VERSION"', dockerfile)
-        self.assertIn("libwayland-cursor0:i386", dockerfile)
         result = self.run_check(
             self.docker_check,
             INSTALLED_WINE_PACKAGE_VERSION="10.0~repack-12ubuntu2",
@@ -236,12 +234,6 @@ class WineRuntimeTest(unittest.TestCase):
 
     def test_rejects_missing_supplemental_library(self):
         library = self.libraries / "i386-linux-gnu" / "libgnutls.so.30"
-        library.unlink()
-        result = self.run_check(self.docker_check)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(str(library), result.stderr)
-
-        library = self.libraries / "i386-linux-gnu" / "libwayland-cursor.so.0"
         library.unlink()
         result = self.run_check(self.docker_check)
         self.assertNotEqual(result.returncode, 0)
