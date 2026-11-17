@@ -29,7 +29,6 @@ export WINE=/usr/local/bin/proton-wine
 export WINELOADER="/opt/ge-proton/files/bin/wine"
 export WINESERVER="/opt/ge-proton/files/bin/wineserver"
 unset LD_PRELOAD
-mkdir -p "$STEAM_COMPAT_DATA_PATH"
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
 run_stage "Wine prefix initialization" 300s \
     env 'WINEDLLOVERRIDES=mscoree,mshtml=d' proton-wine wineboot --update

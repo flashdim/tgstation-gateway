@@ -59,7 +59,6 @@ class InstallClientTest(unittest.TestCase):
             env={
                 **os.environ,
                 "WINEPREFIX": str(self.prefix),
-                "STEAM_COMPAT_DATA_PATH": str(self.root / "compat"),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
                 "RUNTIME_LOG": str(self.root / "runtime"),
@@ -85,7 +84,6 @@ class InstallClientTest(unittest.TestCase):
             WINESERVER="/usr/bin/wineserver",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((self.root / "compat").is_dir())
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
