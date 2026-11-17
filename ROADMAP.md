@@ -75,6 +75,13 @@ stat-panel rendering in that test environment; it does not resolve or rule out
 the current failure. A direct launch to the configured host has been observed.
 The release publication path and a complete playable gameplay session remain
 unverified.
+The latest user report found no major rendering issues after restoring Ubuntu
+Wine dependency packages, but no change from the Openbox maximization rule.
+That rule has been removed. The next display comparison defaults to a fixed
+1920x1080 Selkies desktop; browser scaling and automatic Dream Seeker
+maximization remain unverified. No client startup flag or local sizing
+configuration was verified; BYOND's documented maximization parameter belongs
+to the game skin, not the executable command line.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not

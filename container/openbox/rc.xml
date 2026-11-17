@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<openbox_config>
-  <applications>
-    <application class="steam_proton" type="normal">
-      <maximized>true</maximized>
-    </application>
-  </applications>
-</openbox_config>

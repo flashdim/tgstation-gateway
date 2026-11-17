@@ -79,6 +79,8 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     WINEARCH=win64 \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
+    SELKIES_MANUAL_WIDTH=1920 \
+    SELKIES_MANUAL_HEIGHT=1080 \
     SELKIES_COMMAND_ENABLED=false
 
 RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
@@ -103,12 +105,11 @@ RUN /usr/local/bin/install-byond
 RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray /home/ubuntu/.config/openbox && \
+RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
 COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run
-COPY --chown=1000:1000 --chmod=644 container/openbox/rc.xml /home/ubuntu/.config/openbox/rc.xml
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

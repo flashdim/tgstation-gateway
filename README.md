@@ -231,6 +231,17 @@ health endpoint; it does not verify a server connection or interactive gameplay.
 Closing the browser does not automatically remove the container. Stop it with
 Ctrl+C. No player data or BYOND login is intended to persist between containers.
 
+The display defaults to a fixed **1920x1080** using Selkies'
+`SELKIES_MANUAL_WIDTH=1920` and `SELKIES_MANUAL_HEIGHT=1080`. The pinned base
+already starts X11 at 1920x1080, but normally resizes it to the browser on
+connection; manual sizing keeps a consistent desktop instead. This does not
+maximize Dream Seeker or guarantee that browser scaling distortion is resolved.
+Override both variables to select a different fixed size. To restore automatic
+browser-sized resolution, set both to `0` (in the environment when using Compose,
+or with `-e SELKIES_MANUAL_WIDTH=0 -e SELKIES_MANUAL_HEIGHT=0` for `docker run`)
+and recreate the container. Check the browser's scaling settings as well;
+previously saved browser preferences may affect presentation.
+
 There is no full desktop in this image. Openbox manages BYOND windows and
 dialogs on the X11 display, which Selkies streams as a whole; this is not
 per-window isolation. When starting the pager rather than a direct server
@@ -243,10 +254,21 @@ standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
 the WebView panels, but showed extra blank dialogs. The newly built image still
 requires gameplay verification. The smoke test does not verify gameplay.
 The desktop-free image's pager/tray behavior also needs explicit verification.
-Openbox maximizes windows reported as both `steam_proton` and type `normal`,
-matching the observed Dream Seeker game window while leaving dialog-type
-windows unaffected. Interactive confirmation of the maximized game panel is
-still needed.
+The experimental Openbox maximization rule was removed after a user reported
+no change in startup window size. The same report found no major rendering
+issues after restoring Ubuntu Wine packages as runtime dependencies. These
+reports do not establish complete gameplay compatibility.
+No Dream Seeker startup maximize/fullscreen flag or persistent local sizing
+configuration was verified in the client documentation search, so the launcher
+does not pass speculative flags. BYOND documents
+[`is-maximized` as a main-window skin parameter](https://github.com/byond-open-reference/byondref.com/blob/master/skinparams.html),
+set by the game's interface or `winset()`, and the
+[`.winset` client command](https://ref.dm-lang.org/skin/commands/dotwinset)
+can change skin parameters after connecting. These are not executable startup
+flags; applying them requires the game's actual main-window control ID.
+Automatic game-window maximization remains unresolved. Do not maximize or hide
+all `steam_proton` windows: the class alone does not distinguish game windows
+from legitimate dialogs or WebView panels.
 
 ### AMD or Intel GPU experiment
 
