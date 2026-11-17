@@ -52,9 +52,10 @@ dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation
 tracks them. The image now uses that runtime; the rebuilt image still needs
 gameplay verification and the individual cause is unconfirmed.
 The current runtime comparison uses checksum-pinned Proton Wine 10.0-4 amd64,
-BYOND 516.1689 and the existing graphics setup. It continues to replace Ubuntu
-Wine packages with explicit amd64/i386 native runtime libraries. Build-time
-gates reject distro Wine packages and check core loader/display/audio
+BYOND 516.1689 and the existing graphics setup. It restores the earlier pinned
+Ubuntu Wine packages to supply dependencies instead of a complete explicit
+native library list, while retaining Proton as the active runtime. Build-time
+gates check core loader/display/audio
 dependencies; `winegstreamer.so` is present in the amd64 Proton runtime but
 absent from i386. Optional
 `winedmo.so` still requires old FFmpeg ABIs and optional `wpcap.so` expects

@@ -10,65 +10,16 @@ USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-# Native dependencies follow Ubuntu 26.04 libwine Depends/Recommends, not libwine
-# itself: Wine also dlopens optional libraries that ldd cannot discover.
+ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
+
 RUN selkies-privileged-files release && \
     dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-      cabextract unzip wget xz-utils openbox trayer fonts-liberation \
-      libc6:amd64 libc6:i386 \
-      libfontconfig1:amd64 libfontconfig1:i386 \
-      libfreetype6:amd64 libfreetype6:i386 \
-      libasound2t64:amd64 libasound2t64:i386 \
-      libasound2-plugins:amd64 libasound2-plugins:i386 \
-      libavcodec62:amd64 libavcodec62:i386 \
-      libavformat62:amd64 libavformat62:i386 \
-      libavutil60:amd64 libavutil60:i386 \
-      libcapi20-3t64:amd64 libcapi20-3t64:i386 \
-      libcups2t64:amd64 libcups2t64:i386 \
-      libdbus-1-3:amd64 libdbus-1-3:i386 \
-      libdrm2:amd64 libdrm2:i386 \
-      libdrm-amdgpu1:amd64 libdrm-amdgpu1:i386 \
-      libegl1:amd64 libegl1:i386 \
-      libgl1:amd64 libgl1:i386 \
-      libgl1-mesa-dri:amd64 libgl1-mesa-dri:i386 \
-      libglib2.0-0t64:amd64 libglib2.0-0t64:i386 \
-      libgnutls30t64:amd64 libgnutls30t64:i386 \
-      libgphoto2-6t64:amd64 libgphoto2-6t64:i386 \
-      libgphoto2-port12t64:amd64 libgphoto2-port12t64:i386 \
-      libgssapi-krb5-2:amd64 libgssapi-krb5-2:i386 \
-      libgstreamer-plugins-base1.0-0:amd64 libgstreamer-plugins-base1.0-0:i386 \
-      libgstreamer-gl1.0-0:amd64 libgstreamer-gl1.0-0:i386 \
-      libgstreamer1.0-0:amd64 libgstreamer1.0-0:i386 \
-      gstreamer1.0-plugins-good:amd64 gstreamer1.0-plugins-good:i386 \
-      libkrb5-3:amd64 libkrb5-3:i386 \
-      libodbc2:amd64 libodbc2:i386 \
-      libpcap0.8t64:amd64 libpcap0.8t64:i386 \
-      libpcsclite1:amd64 libpcsclite1:i386 \
-      libpulse0:amd64 libpulse0:i386 \
-      libsane1:amd64 libsane1:i386 \
-      libsdl2-2.0-0:amd64 libsdl2-2.0-0:i386 \
-      libudev1:amd64 libudev1:i386 \
-      libunwind8:amd64 libunwind8:i386 \
-      libusb-1.0-0:amd64 libusb-1.0-0:i386 \
-      libv4l-0t64:amd64 libv4l-0t64:i386 \
-      libvulkan1:amd64 libvulkan1:i386 \
-      libwayland-client0:amd64 libwayland-client0:i386 \
-      libwayland-egl1:amd64 libwayland-egl1:i386 \
-      libx11-6:amd64 libx11-6:i386 \
-      libxcomposite1:amd64 libxcomposite1:i386 \
-      libxcursor1:amd64 libxcursor1:i386 \
-      libxext6:amd64 libxext6:i386 \
-      libxfixes3:amd64 libxfixes3:i386 \
-      libxi6:amd64 libxi6:i386 \
-      libxinerama1:amd64 libxinerama1:i386 \
-      libxkbcommon0:amd64 libxkbcommon0:i386 \
-      libxkbregistry0:amd64 libxkbregistry0:i386 \
-      libxrandr2:amd64 libxrandr2:i386 \
-      libxrender1:amd64 libxrender1:i386 \
-      libxxf86vm1:amd64 libxxf86vm1:i386 \
-      ocl-icd-libopencl1:amd64 ocl-icd-libopencl1:i386 && \
+      "wine=${WINE_PACKAGE_VERSION}" "wine32:i386=${WINE_PACKAGE_VERSION}" \
+      "wine64=${WINE_PACKAGE_VERSION}" cabextract unzip wget xz-utils \
+      openbox trayer fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
+      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
@@ -85,10 +36,6 @@ RUN curl -fsSL --retry 3 \
 # Build-time gate shared by CI and releases. winedmo's old FFmpeg ABI and
 # wpcap's libpcap.so.1 are inherited optional gaps; do not fake SONAME links.
 RUN set -eu; \
-    packages="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n')"; \
-    if printf '%s\n' "$packages" | grep -E '^installed (wine(:|$|-|32|64)|libwine)'; then \
-      echo "Distro Wine packages must not be installed" >&2; exit 1; \
-    fi; \
     test -x /opt/wine-proton/bin/wine-preloader; \
     for architecture in i386 x86_64; do \
       directory="/opt/wine-proton/lib/wine/$architecture-unix"; \

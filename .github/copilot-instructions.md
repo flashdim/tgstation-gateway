@@ -24,10 +24,11 @@ planned features or smoke tests as proof of interactive gameplay.
 - BYOND may see shared IP addresses or computer IDs. Investigate and document
   collisions and preserve server ban enforcement; never silently bypass it.
 - The player image uses checksum-pinned standalone Proton-based Wine 10.0-4;
-  install native Ubuntu runtime libraries explicitly for amd64 and i386,
-  never `wine`, `wine32`, `wine64` or `libwine`. Preserve optional dlopened
-  graphics/audio/crypto libraries as well as ELF dependencies; ldd alone is
-  insufficient. Keep BYOND's bundled DirectX setup, native `d3dx9_43` and
+  Ubuntu `wine`, `wine32` and `wine64` packages supply its runtime dependencies.
+  Keep `/opt/wine-proton/bin` first in Wine's PATH; distro packages do not select
+  the active runtime. Retain dependency checks and explicit supplemental
+  libraries where needed; ldd alone cannot check dlopened libraries.
+  Keep BYOND's bundled DirectX setup, native `d3dx9_43` and
   pinned DXVK version consistent when changing the graphics stack. Preserve
   the X11 socket directory's sticky bit and remove Selkies' `LD_PRELOAD`
   interposers from Wine's environment.

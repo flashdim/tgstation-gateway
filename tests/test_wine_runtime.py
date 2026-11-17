@@ -58,10 +58,6 @@ class WineRuntimeTest(unittest.TestCase):
             path.touch()
             path.chmod(0o755)
         for name, body in {
-            "dpkg-query": (
-                '[ "${FAIL_DPKG:-0}" = 0 ] || exit 2\n'
-                'printf "%s\\n" "${PACKAGES:-installed libc6:amd64}"'
-            ),
             "ldd": (
                 'printf "%s\\n" "$1" >> "$LDD_LOG"\n'
                 'test -r "$1" || exit 1\n'
@@ -134,34 +130,21 @@ class WineRuntimeTest(unittest.TestCase):
         for optional in ("winedmo", "wpcap"):
             self.assertFalse(any(optional in path for path in checked))
 
-    def test_rejects_installed_distro_wine_packages(self):
-        for package in (
-            "wine",
-            "wine32:i386",
-            "wine64:amd64",
-            "wine-common",
-            "wine32-preloader:i386",
-            "libwine:amd64",
-            "libwine:i386",
-        ):
-            with self.subTest(package=package):
-                result = self.check_runtime(PACKAGES=f"installed {package}")
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("Distro Wine packages", result.stderr)
-
-    def test_allows_removed_package_configuration_records(self):
-        result = self.check_runtime(PACKAGES="config-files libwine:i386")
-        self.assertEqual(result.returncode, 0, result.stderr)
+    def test_uses_pinned_ubuntu_wine_packages_for_dependencies(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn("ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1", dockerfile)
+        for package in ("wine", "wine32:i386", "wine64"):
+            self.assertIn(f'"{package}=${{WINE_PACKAGE_VERSION}}"', dockerfile)
+        self.assertNotIn("dpkg-query", self.check)
+        self.assertIn("ENV PATH=/opt/wine-proton/bin:${PATH}", dockerfile)
 
     def test_rejects_missing_linked_dependency(self):
         result = self.check_runtime(DEPENDENCIES="libpulse.so.0 => not found")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Missing dependencies", result.stderr)
 
-    def test_rejects_failed_dependency_or_package_query(self):
-        for env in ({"FAIL_DPKG": "1"}, {"FAIL_LDD": "1"}):
-            with self.subTest(env=env):
-                self.assertNotEqual(self.check_runtime(**env).returncode, 0)
+    def test_rejects_failed_dependency_query(self):
+        self.assertNotEqual(self.check_runtime(FAIL_LDD="1").returncode, 0)
 
     def test_requires_both_module_architectures(self):
         (self.runtime / "lib/wine/i386-unix/winepulse.so").unlink()

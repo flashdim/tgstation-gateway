@@ -16,19 +16,19 @@ The image uses the Selkies base for a headless X11 display, audio and browser
 streaming, with Openbox managing BYOND windows instead of a desktop. It uses
 Kron4ek's checksum-verified standalone Proton-based Wine 10.0-4 amd64 build as
 the Wine runtime, and Winetricks to install Visual C++ 2022, DirectX components,
-core fonts, RichEdit and WebView2. This experiment installs native Ubuntu
-libraries directly for amd64 and i386, without Ubuntu's `wine`, `wine32`,
-`wine64` or `libwine` packages; the standalone runtime and its pinned checksum
-are unchanged. The package list follows Ubuntu 26.04's `libwine`
-Depends/Recommends metadata, retaining X11/Wayland, Mesa/OpenGL/Vulkan,
-ALSA/PulseAudio, GStreamer, fonts, TLS/Kerberos and device libraries. Libraries
-loaded with `dlopen` are not all visible to `ldd`; keep both architectures when
-updating the list.
+core fonts, RichEdit and WebView2. Ubuntu's pinned `wine`, `wine32:i386` and
+`wine64` packages supply runtime dependencies, with explicit supplemental
+32-bit font, TLS/Kerberos and Vulkan libraries. This restores the earlier
+package-based setup instead of maintaining the complete native library list.
+Proton remains the active runtime through `/opt/wine-proton/bin` at the front
+of PATH; its archive and checksum are unchanged. Libraries loaded with `dlopen`
+are not all visible to `ldd`; package installation and dependency checks alone
+do not establish compatibility.
 The pinned Selkies base already supplies Mesa Vulkan ICDs for both architectures;
 this is not just a Vulkan-loader-only setup.
 
-Every image build, including releases, rejects installed distro Wine packages
-and checks both loader architectures, core display/audio/GStreamer modules and
+Every image build, including releases, checks both loader architectures,
+core display/audio/GStreamer modules and
 selected dynamically loaded libraries before creating the prefix. This is not
 a gameplay or WebView compatibility test. The pinned standalone runtime's
 optional `winedmo.so` expects FFmpeg SONAMEs `libavcodec.so.58`,
