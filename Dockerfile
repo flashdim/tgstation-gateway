@@ -3,6 +3,7 @@
 # SELKIES_ENABLE_BASIC_AUTH is a boolean, not a secret.
 # The first milestone is one BYOND client per container, not a session manager.
 FROM scratch AS wine-prefix-cache
+FROM scratch AS wine-download-cache
 
 FROM ghcr.io/selkies-project/selkies/base:2.2.1-ubuntu26.04@sha256:4b70c739ea5aa650dd35a143d92c4bf80b7a527f2c66ee88718b08a5211267ff
 
@@ -23,10 +24,12 @@ RUN selkies-privileged-files release && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     selkies-privileged-files restore
 
-RUN curl -fsSL --retry 3 \
-      https://github.com/Kron4ek/Wine-Builds/releases/download/proton-10.0-4/wine-proton-10.0-4-amd64.tar.xz \
-      -o /tmp/wine-proton.tar.xz && \
-    echo 'ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290  /tmp/wine-proton.tar.xz' | sha256sum -c - && \
+COPY container/download-wine.sh container/wine-proton.env /tmp/wine-download/
+RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
+    if [ -f /tmp/wine-download-cache/wine-proton.tar.xz ]; then \
+      cp /tmp/wine-download-cache/wine-proton.tar.xz /tmp/wine-proton.tar.xz; \
+    fi && \
+    sh /tmp/wine-download/download-wine.sh /tmp && \
     mkdir -p /opt/wine-proton && \
     tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton && \
     test -x /opt/wine-proton/bin/wine && \
@@ -54,7 +57,8 @@ RUN set -eu; \
       fi; \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
           libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
-        test -r "/usr/lib/$architecture-linux-gnu/$library"; \
+        test -r "/usr/lib/$architecture-linux-gnu/$library" || \
+          { echo "Missing or unreadable /usr/lib/$architecture-linux-gnu/$library" >&2; exit 1; }; \
       done; \
     done; \
     for binary in /opt/wine-proton/bin/wine /opt/wine-proton/bin/wineserver; do \
