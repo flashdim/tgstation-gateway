@@ -20,6 +20,31 @@ until timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; do
     sleep 1
 done
 
+stop_client() {
+    trap - TERM INT
+    timeout --kill-after=5s 15s "$GE_PROTON_PATH/proton" runinprefix wineboot --kill || true
+    if jobs -pr | grep -qx "$client_pid"; then
+        kill -TERM "$client_pid" 2>/dev/null || true
+        for _ in {1..50}; do
+            if ! jobs -pr | grep -qx "$client_pid"; then
+                break
+            fi
+            sleep 0.1
+        done
+        if jobs -pr | grep -qx "$client_pid"; then
+            kill -KILL "$client_pid" 2>/dev/null || true
+        fi
+    fi
+    wait "$client_pid" 2>/dev/null || true
+}
+
+run_client() {
+    "$GE_PROTON_PATH/proton" run "$@" &
+    client_pid=$!
+    trap stop_client TERM INT
+    wait "$client_pid"
+}
+
 case "${BYOND_WEBVIEW2_GPU:-0}" in
     0 | "") ;;
     1)
@@ -43,8 +68,9 @@ if [ -n "${BYOND_SERVER:-}" ]; then
         echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
         exit 1
     fi
-    exec "$GE_PROTON_PATH/proton" run \
+    run_client \
         'C:\Program Files (x86)\BYOND\bin\dreamseeker.exe' "byond://$server"
+    exit $?
 fi
 
-exec "$GE_PROTON_PATH/proton" run 'C:\Program Files (x86)\BYOND\bin\byond.exe'
+run_client 'C:\Program Files (x86)\BYOND\bin\byond.exe'
