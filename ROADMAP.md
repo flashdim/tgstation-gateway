@@ -70,11 +70,16 @@ installer for `d3dx9_43` and the Winetricks `dxvk` verb; the previous Winetricks
 The pinned Winetricks script
 resolves the latest upstream DXVK release when a fresh prefix is created, so
 that DXVK release is not version-pinned. Lighting has not yet been reverified
-with this setup. A Mesa Vulkan experiment added i386 and x86_64 drivers and
-lavapipe ICD manifests, but did not improve rendering; those additions have
-been removed. Interactive rendering remains unverified.
-Build, startup and interactive compatibility of this restored setup must be
-verified separately; prior results are not proof of current gameplay.
+with this setup before the following change. **Update:** the user reports that re-adding BYOND's bundled
+DirectX installer fixed the lighting rendering issue. This points to installing
+BYOND's native `d3dx9_43` as important for lighting in the tested setup; it
+does not establish the underlying mechanism or guarantee compatibility across
+other hosts/configurations. CI startup and runtime checks still do not prove
+gameplay or rendering. A Mesa Vulkan experiment added i386 and x86_64 drivers
+and lavapipe ICD manifests, but did not improve rendering; those additions
+have been removed.
+Build and interactive compatibility on other configurations remain to be
+verified; prior results are not proof of universal gameplay compatibility.
 
 The image defaults to fixed 1920x1080 Selkies resolution. This display-size
 experiment was prompted by reported first-connection scaling distortion;
