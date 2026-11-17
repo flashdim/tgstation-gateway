@@ -61,4 +61,19 @@ for architecture in i386 x86_64; do
             exit 1
         fi
     done
+    path="/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so"
+    if [ ! -r "$path" ]; then
+        echo "Missing Mesa Vulkan driver $path" >&2
+        exit 1
+    fi
+    if [ "$architecture" = i386 ]; then
+        icd="i686"
+    else
+        icd="x86_64"
+    fi
+    path="/usr/share/vulkan/icd.d/lvp_icd.$icd.json"
+    if [ ! -r "$path" ]; then
+        echo "Missing Mesa Vulkan ICD $path" >&2
+        exit 1
+    fi
 done
