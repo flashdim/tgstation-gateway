@@ -37,18 +37,10 @@ jobs:
             wine_source: ubuntu
             wine_package_version: 10.0~repack-12ubuntu1
             tag_variant: proton-10.0-4
-          - proton: 9.0-4
-            wine_source: ubuntu
-            wine_package_version: 10.0~repack-12ubuntu1
-            tag_variant: proton-9.0-4
-          - proton: 8.0-5
-            wine_source: ubuntu
-            wine_package_version: 10.0~repack-12ubuntu1
-            tag_variant: proton-8.0-5
           - proton: 11.0-2
             wine_source: winehq
             wine_package_version: 11.22~resolute-1
-            tag_variant: proton-11.0-2-winehq-11.22
+            tag_variant: proton-11.0-2-winehq-staging-11.22
     concurrency:
       group: uat-issue-7-${{ github.sha }}-${{ matrix.proton }}-wayland
       cancel-in-progress: false
@@ -139,7 +131,7 @@ jobs:
               "$SELKIES_MANUAL_WIDTH" "$SELKIES_MANUAL_HEIGHT" "$BYOND_VERSION"
             test "$(cat "$WINEPREFIX/.gateway-proton-version")" = "$WINE_PROTON_VERSION"
             if [ "$WINE_PACKAGE_SOURCE" = winehq ]; then
-              test "$(dpkg-query -W -f="%v" winehq-devel)" = "$WINE_PACKAGE_VERSION"
+              test "$(dpkg-query -W winehq-staging | cut -f2)" = "$WINE_PACKAGE_VERSION"
             fi
             wine --version
             dpkg-query -W

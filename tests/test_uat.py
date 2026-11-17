@@ -19,12 +19,13 @@ class UatTest(unittest.TestCase):
         self.assertNotIn("  release:", workflow)
         self.assertIn("fail-fast: false", workflow)
         self.assertIn("proton: 10.0-4", workflow)
-        self.assertIn("proton: 9.0-4", workflow)
-        self.assertIn("proton: 8.0-5", workflow)
+        self.assertNotIn("proton: 9.0-4", workflow)
+        self.assertNotIn("proton: 8.0-5", workflow)
         self.assertIn("proton: 11.0-2", workflow)
         self.assertIn("wine_source: winehq", workflow)
         self.assertIn("wine_package_version: 11.22~resolute-1", workflow)
-        self.assertIn("tag_variant: proton-11.0-2-winehq-11.22", workflow)
+        self.assertIn("tag_variant: proton-11.0-2-winehq-staging-11.22", workflow)
+        self.assertIn("dpkg-query -W winehq-staging | cut -f2", workflow)
         self.assertNotIn("display:", workflow)
         self.assertIn(
             ":uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland",

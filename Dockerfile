@@ -23,18 +23,19 @@ RUN set -eu; \
       apt-get install -y --no-install-recommends ca-certificates curl gpg; \
       install -d -m 0755 /etc/apt/keyrings; \
       curl -fsSL --retry 3 https://dl.winehq.org/wine-builds/winehq.key \
-        -o /etc/apt/keyrings/winehq-archive.asc; \
-      printf '%s\n' \
-        'Types: deb' \
-        'URIs: https://dl.winehq.org/wine-builds/ubuntu' \
-        'Suites: resolute' \
-        'Components: main' \
-        'Architectures: amd64' \
-        'Signed-By: /etc/apt/keyrings/winehq-archive.asc' \
-        > /etc/apt/sources.list.d/winehq.sources; \
+        -o /tmp/winehq.key; \
+      gpg --batch --yes --dearmor -o /etc/apt/keyrings/winehq-archive.gpg /tmp/winehq.key; \
+      rm /tmp/winehq.key; \
+      curl -fsSL --retry 3 \
+        https://dl.winehq.org/wine-builds/ubuntu/dists/resolute/winehq-resolute.sources \
+        -o /etc/apt/sources.list.d/winehq-resolute.sources; \
+      sed -i 's|/etc/apt/keyrings/winehq-archive.key|/etc/apt/keyrings/winehq-archive.gpg|g' \
+        /etc/apt/sources.list.d/winehq-resolute.sources; \
+      grep -Fx 'Signed-By: /etc/apt/keyrings/winehq-archive.gpg' \
+        /etc/apt/sources.list.d/winehq-resolute.sources; \
       apt-get update; \
-      apt-get install -y --no-install-recommends \
-        "winehq-devel=$WINE_PACKAGE_VERSION"; \
+      apt-get install -y --install-recommends \
+        "winehq-staging=$WINE_PACKAGE_VERSION"; \
     elif [ "$WINE_PACKAGE_SOURCE" = ubuntu ]; then \
       apt-get update; \
       apt-get install -y --no-install-recommends \
@@ -67,7 +68,7 @@ RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
 # wpcap's libpcap.so.1 are inherited optional gaps; do not fake SONAME links.
 RUN set -eu; \
     case "$WINE_PROTON_VERSION" in \
-      10.0-4|9.0-4|8.0-5) test -x /opt/wine-proton/bin/wine-preloader ;; \
+      10.0-4) test -x /opt/wine-proton/bin/wine-preloader ;; \
       11.0-2) \
         test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader; \
         test -x /opt/wine-proton/lib/wine/x86_64-unix/wine-preloader ;; \
@@ -77,9 +78,6 @@ RUN set -eu; \
       directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
       for module in ntdll.so win32u.so winex11.so winewayland.so \
           winealsa.so winepulse.so winevulkan.so; do \
-        if [ "$module" = winewayland.so ] && [ ! -f "$directory/$module" ]; then \
-          continue; \
-        fi; \
         dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/$module")"; \
         if printf '%s\n' "$dependencies" | grep 'not found'; then \
           echo "Missing dependencies for $directory/$module" >&2; exit 1; \

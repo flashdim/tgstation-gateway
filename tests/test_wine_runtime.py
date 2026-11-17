@@ -91,7 +91,7 @@ class WineRuntimeTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
         self.assertIn("tests/check-wine-runtime.sh", workflow)
-        self.assertIn("10.0-4 | 9.0-4 | 8.0-5)", check)
+        self.assertIn("10.0-4)", check)
         self.assertIn('loaders="/opt/wine-proton/bin/wine-preloader"', check)
         self.assertIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", check)
 
@@ -146,14 +146,11 @@ class WineRuntimeTest(unittest.TestCase):
             )
             loader.chmod(0o755)
 
-    def test_proton_8_allows_absent_native_wayland_modules(self):
+    def test_requires_native_wayland_modules(self):
         for architecture in ("i386", "x86_64"):
             (self.runtime / "lib/wine" / f"{architecture}-unix/winewayland.so").unlink()
-        result = self.check_runtime(WINE_PROTON_VERSION="8.0-5")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn("winewayland.so", self.log.read_text())
-        check = (ROOT / "tests/check-wine-runtime.sh").read_text()
-        self.assertIn("9.0-4 | 8.0-5", check)
+        result = self.check_runtime()
+        self.assertNotEqual(result.returncode, 0)
 
     def test_uses_pinned_ubuntu_wine_packages_for_dependencies(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
@@ -164,12 +161,19 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertNotIn("dpkg-query", self.check)
         self.assertIn("ENV PATH=/opt/wine-proton/bin:${PATH}", dockerfile)
 
-    def test_pins_signed_winehq_11_22_development_package(self):
+    def test_pins_signed_winehq_11_22_staging_package(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         self.assertIn('test "$WINE_PACKAGE_VERSION" = "11.22~resolute-1"', dockerfile)
-        self.assertIn('"winehq-devel=$WINE_PACKAGE_VERSION"', dockerfile)
-        self.assertIn("'Signed-By: /etc/apt/keyrings/winehq-archive.asc'", dockerfile)
-        self.assertIn("Architectures: amd64", dockerfile)
+        self.assertIn('"winehq-staging=$WINE_PACKAGE_VERSION"', dockerfile)
+        self.assertIn("apt-get install -y --install-recommends", dockerfile)
+        self.assertIn("gpg --batch --yes --dearmor", dockerfile)
+        self.assertIn(
+            "wine-builds/ubuntu/dists/resolute/winehq-resolute.sources", dockerfile
+        )
+        self.assertIn(
+            "grep -Fx 'Signed-By: /etc/apt/keyrings/winehq-archive.gpg'", dockerfile
+        )
+        self.assertNotIn("winehq-devel", dockerfile)
 
     def test_rejects_missing_linked_dependency(self):
         result = self.check_runtime(DEPENDENCIES="libpulse.so.0 => not found")

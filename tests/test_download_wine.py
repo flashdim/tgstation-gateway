@@ -77,14 +77,6 @@ class DownloadWineTest(unittest.TestCase):
                 "11.0-2",
                 "51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b",
             ),
-            (
-                "9.0-4",
-                "0f72d7e176c9f5b4a98080f67e4dda3a908c80744c20452259236aa1b1b1fe83",
-            ),
-            (
-                "8.0-5",
-                "685884cfc70b63c3ab18bede39329d99cefff7d563ff105be720ca907797f789",
-            ),
         ):
             with self.subTest(version=version):
                 result = subprocess.run(
@@ -115,6 +107,15 @@ class DownloadWineTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Unsupported WINE_PROTON_VERSION", result.stderr)
         self.assertFalse(self.log.exists())
+
+    def test_rejects_retired_runtimes_before_download(self):
+        self.manifest.write_text((ROOT / "container/wine-proton.env").read_text())
+        for version in ("8.0-5", "9.0-4"):
+            with self.subTest(version=version):
+                result = self.download(WINE_PROTON_VERSION=version)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Unsupported WINE_PROTON_VERSION", result.stderr)
+                self.assertFalse(self.log.exists())
 
     def test_workflows_key_download_and_prefix_on_manifest(self):
         for workflow in ("ci.yml", "publish.yml"):

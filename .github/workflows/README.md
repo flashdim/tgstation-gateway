@@ -30,15 +30,11 @@ workflow**, selecting the source branch to compare. All jobs use that run's
 full `github.sha`. It does not publish `dev`, `latest` or release tags and does
 not change the release workflow.
 
-The fail-fast-disabled matrix builds four Wayland/XWayland test images. Three
-use checksum-pinned standalone Kron4ek Proton Wine **10.0-4**, **9.0-4** and
-**8.0-5** with the pinned Ubuntu Wine 10 runtime packages. The fourth pairs
-standalone Proton **11.0-2** with WineHQ's development package **Wine 11.22**
-(`winehq-devel=11.22~resolute-1`) to test that combination independently.
-The Proton 10.0-4 Wayland image is retained from the initial comparison; the
-10.0-4 X11 and previous 11.0-2 combinations were removed, and Proton 9.0-4,
-8.0-5 and the new WineHQ 11.22 variant were added after subsequent comparison
-decisions. `WINE_PROTON_VERSION` selects the standalone runtime and
+The fail-fast-disabled matrix builds two Wayland/XWayland test images:
+checksum-pinned standalone Kron4ek Proton Wine **10.0-4** with the pinned Ubuntu
+Wine 10 runtime packages, and Proton **11.0-2** with **WineHQ staging 11.22**
+(`winehq-staging=11.22~resolute-1`). Proton 8 and 9 paths have been retired.
+`WINE_PROTON_VERSION` selects the standalone runtime and
 `WINE_PACKAGE_SOURCE`/`WINE_PACKAGE_VERSION` select the system package source
 and version. All images default to `SELKIES_WAYLAND=true`. Unknown package
 sources and unexpected WineHQ versions fail closed. SHA-256 pins are taken
@@ -48,16 +44,13 @@ for the amd64 archive, not x86 or wow64 artifacts:
 | Runtime | AMD64 archive SHA-256                                              |
 | ------- | ------------------------------------------------------------------ |
 | 10.0-4  | `ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290` |
-| 9.0-4   | `0f72d7e176c9f5b4a98080f67e4dda3a908c80744c20452259236aa1b1b1fe83` |
-| 8.0-5   | `685884cfc70b63c3ab18bede39329d99cefff7d563ff105be720ca907797f789` |
 | 11.0-2  | `51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b` |
 
-Proton 10.0-4, 9.0-4 and 8.0-5 place `wine-preloader` in `bin/`; 11.0-2
+Proton 10.0-4 places `wine-preloader` in `bin/`; 11.0-2
 relocates preloaders and architecture-specific loaders under
-`lib/wine/*-unix/`. Wine 8.0-5 does not ship native `winewayland.so`; this
-comparison uses the Selkies Wayland desktop with BYOND on XWayland, so that
-optional module is not required. The X11 backend and other required runtime
-modules remain checked. Proton 11.0-2's i386 GStreamer module required
+`lib/wine/*-unix/`. Both runtimes must supply the X11 and Wayland modules;
+the older-runtime exception for missing Wayland modules has been removed.
+Proton 11.0-2's i386 GStreamer module required
 `libgstgl-1.0.so.0`; `libgstreamer-gl1.0-0:i386` remains installed across
 variants for comparable dependencies. Supplemental APT libraries remain
 repository-selected (not version-pinned); each image's package inventory
@@ -65,9 +58,21 @@ records their versions.
 
 All variants retain the Dockerfile's identical digest-pinned Selkies
 2.2.1/Ubuntu 26.04 base, BYOND 516.1689, DXVK 2.7.1, WebView2 installation and
-fixed 1920×1080 display. The first three use Ubuntu Wine 10 packages; the new
+fixed 1920×1080 display. The baseline uses Ubuntu Wine 10 packages; the new
 comparison uses WineHQ's signed Ubuntu 26.04 repository and pins
-`winehq-devel=11.22~resolute-1`. The Proton archive remains checksum-verified,
+`winehq-staging=11.22~resolute-1`. Installation follows
+[WineHQ's Debian/Ubuntu instructions](https://gitlab.winehq.org/wine/wine/-/wikis/Debian-Ubuntu):
+download the official signing key and `winehq-resolute.sources`, update APT,
+then install the staging metapackage with `--install-recommends`. The key is
+dearmored to a `.gpg` keyring and the downloaded source's `Signed-By` is
+adjusted and checked, avoiding APT's rejection of mismatched key extensions.
+The key and source definition are HTTPS downloads without content pins;
+APT still verifies repository signatures and package hashes. Package inventory
+and image digests record each actual build. The staging version must be
+available in WineHQ's repository; there is no fallback to another version or
+branch. This changes system dependencies, not the active executable:
+`/opt/wine-proton/bin` stays first in PATH for installation and player sessions.
+The Proton archive remains checksum-verified,
 and the Proton 11 prefix cache is isolated by its system Wine source/version.
 X11 uses Openbox;
 Wayland uses Selkies' labwc with Wine on XWayland (not native Wine Wayland).
@@ -84,7 +89,9 @@ registry errors stop publication. Per-variant concurrency serializes same-SHA
 runs. To change contents, use a new source commit; do not delete/reuse UAT tags.
 
 Download keys use `uat-wine-download-v1-<proton>-<pin/script hash>`.
-Prefix keys use `uat-wine-prefix-v1-<proton>-<display>-<installer/Dockerfile hash>`.
+Prefix keys use `uat-wine-prefix-v1-<proton>-<package source>-<package version>-<display>-<installer/Dockerfile hash>`.
+The staging tag and Dockerfile input hash prevent reuse of the previous devel
+configuration's prefix.
 There are no fallback restore keys. Cached archives are verified again in
 the image build. Prefixes carry a runtime marker, checked before reuse, and
 are archived from the clean image, never from a running player container.
@@ -96,18 +103,18 @@ identity, image metadata, installed package versions (including Openbox,
 labwc and X servers), runner Docker resources, smoke output and, after
 publication, the pullable digest reference. The job summary records the
 published tag/digest and explicitly leaves interactive results pending.
-Download these artifacts and copy the four summaries to issue #7 along
+Download these artifacts and copy the two summaries to issue #7 along
 with the manual results below; preserve them beyond artifact expiry.
 Failures in one matrix entry do not cancel the other entries.
 
 ### Pull and run the comparison
 
-Use the **same full source SHA** from the workflow summary for all four tags.
+Use the **same full source SHA** from the workflow summary for both tags.
 From a checkout of that source commit, using `examples/seccomp.json`, run:
 
 ```sh
 SOURCE_SHA=<full-40-character-source-sha>
-TAG_VARIANT=proton-10.0-4 # also proton-9.0-4, proton-8.0-5, or proton-11.0-2-winehq-11.22
+TAG_VARIANT=proton-10.0-4 # or proton-11.0-2-winehq-staging-11.22
 IMAGE="ghcr.io/flashdim/tgstation-gateway:uat-issue-7-${SOURCE_SHA}-${TAG_VARIANT}-wayland"
 docker pull "$IMAGE"
 docker image inspect --format '{{json .RepoDigests}}' "$IMAGE"
@@ -198,17 +205,15 @@ Publication and interactive acceptance are **pending**, not implied by this
 workflow or by startup smoke tests. Fill in and post this table to issue #7
 after dispatch and user testing:
 
-| Proton / system Wine  | Display | Source SHA / tag / published digest | Tester pull | Dialog results | Resize results | Fullscreen results |
-| --------------------- | ------- | ----------------------------------- | ----------- | -------------- | -------------- | ------------------ |
-| 10.0-4 / Ubuntu 10    | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
-| 9.0-4 / Ubuntu 10     | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
-| 8.0-5 / Ubuntu 10     | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
-| 11.0-2 / WineHQ 11.22 | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
+| Proton / system Wine          | Display | Source SHA / tag / published digest | Tester pull | Dialog results | Resize results | Fullscreen results |
+| ----------------------------- | ------- | ----------------------------------- | ----------- | -------------- | -------------- | ------------------ |
+| 10.0-4 / Ubuntu 10            | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
+| 11.0-2 / WineHQ staging 11.22 | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
 
 Include occurrence counts, measured delay, recovery behavior and evidence
 links per cell, plus runtime/compositor versions and any configuration changes.
 Do not close issue #7 until publication, tester pulls and interactive repaint
-acceptance across all four Wayland runtime/package variants are demonstrated. The
+acceptance across both Wayland runtime/package variants are demonstrated. The
 previous run's already-published X11 and Proton 11 tags are historical images
 from its older source commit, not part of this reduced matrix.
 
