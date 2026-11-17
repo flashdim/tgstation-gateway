@@ -1,5 +1,11 @@
 # tgstation-gateway
 
+[![Build status](https://github.com/flashdim/tgstation-gateway/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/flashdim/tgstation-gateway/actions/workflows/ci.yml)
+![Status: experimental (we mean it)](https://img.shields.io/badge/status-experimental%20%28we%20mean%20it%29-yellow?style=flat-square)
+![Scale: one player per container; ambition pending](https://img.shields.io/badge/scale-1%20player%20per%20container%20%28ambition%20pending%29-orange?style=flat-square)
+![Gameplay: some reports, zero guarantees](https://img.shields.io/badge/gameplay-some%20reports%2C%20zero%20guarantees-red?style=flat-square)
+![Production-ready: not even pretending](https://img.shields.io/badge/production-ready%3F%20not%20even%20pretending-red?style=flat-square)
+
 An experimental browser-accessible BYOND client for tgstation. The intended
 design is a separate, disposable Wine/BYOND container for each player, with a
 session manager. The game server and tgstation-server remain separate.
