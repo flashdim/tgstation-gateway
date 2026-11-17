@@ -64,9 +64,10 @@ rendering, WebView compatibility, or complete dialog behavior.
 The active runtime is restored to checksum-pinned standalone Proton Wine
 10.0-4, with Ubuntu Wine 10 packages retained as runtime dependencies. The
 WineHQ staging experiment is no longer in use, and its prefix cache is not
-reused. BYOND is unchanged. Graphics setup uses Winetricks' `d3dx9`,
-`d3dx9_43` and `dxvk` verbs; BYOND's bundled DirectX setup and the previous
-pinned DXVK archive installation are not used. The pinned Winetricks script
+reused. BYOND is unchanged. Graphics setup now uses BYOND's bundled DirectX
+installer for `d3dx9_43` and the Winetricks `dxvk` verb; the previous Winetricks
+`d3dx9`/`d3dx9_43` verbs and pinned DXVK archive installation are not used.
+The pinned Winetricks script
 resolves the latest upstream DXVK release when a fresh prefix is created, so
 that DXVK release is not version-pinned. Lighting has not yet been reverified
 with this setup. A Mesa Vulkan experiment added i386 and x86_64 drivers and

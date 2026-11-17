@@ -40,14 +40,15 @@ the selected executable, prefix marker, both architecture module sets,
 linked-library dependencies and required Ubuntu packages.
 
 The image retains the Dockerfile's digest-pinned Selkies
-2.2.1/Ubuntu 26.04 base, BYOND 516.1689, Winetricks' `d3dx9`, `d3dx9_43` and
-`dxvk` verbs, WebView2 installation and fixed 1920×1080 display. The pinned
-Winetricks script resolves the latest DXVK GitHub release when building a fresh
-prefix; that release is not version-pinned. BYOND's bundled DirectX setup is
-not run. The Proton archive is cached separately from the Wine prefix and
-verified on cache hits and downloads. `/opt/wine-proton/bin` stays first in
-PATH for installation and player sessions, with Wine's loader and server
-selected from that same runtime.
+2.2.1/Ubuntu 26.04 base, BYOND 516.1689, WebView2 installation and fixed
+1920×1080 display. DirectX setup runs BYOND's bundled DXSETUP and verifies the
+installed `d3dx9_43` against its CAB before applying the native DLL override.
+Winetricks installs DXVK; its pinned script resolves the latest DXVK GitHub
+release when creating a fresh prefix, so that release is not version-pinned.
+The Proton archive is cached separately from the Wine prefix and verified on
+cache hits and downloads. `/opt/wine-proton/bin` stays first in PATH for
+installation and player sessions, with Wine's loader and server selected from
+that same runtime.
 X11 uses Openbox;
 Wayland uses Selkies' labwc with Wine on XWayland (not native Wine Wayland).
 No compositor, window rule or resource tuning is introduced as a supposed fix.
