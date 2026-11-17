@@ -19,7 +19,7 @@ test -x /opt/wine-staging/bin/wineserver || {
     exit 1
 }
 if [ ! -r /usr/share/vulkan/icd.d/lvp_icd.json ]; then
-    echo "Missing Mesa lavapipe Vulkan ICD manifest" >&2
+    echo "Missing Mesa lavapipe Vulkan ICD manifest /usr/share/vulkan/icd.d/lvp_icd.json" >&2
     exit 1
 fi
 for architecture in i386 x86_64; do
