@@ -11,13 +11,16 @@ CI and release workflows separately cache the checksum-pinned Proton Wine
 archive and clean build-time Wine prefix. The archive cache key uses
 `container/wine-proton.env`; the runner and image build verify its SHA-256.
 Delete the corresponding `wine-download-v1-...` cache to refresh it. The
-versioned prefix key includes the Dockerfile, Proton pin and installer inputs;
-prefixes carry a Proton-version marker so runtimes cannot be mixed. Delete the
+versioned prefix key includes the Dockerfile, Proton pin and installer inputs.
+Prefixes carry a Proton-version marker so runtimes cannot be mixed. Delete the
 matching `wine-prefix-v4-proton-...` cache to force a fresh prefix. No cache
 contains player session data.
 
 Ubuntu Wine 10 packages are installed as version-pinned runtime dependencies,
-while Proton's standalone runtime is selected first in PATH. The BYOND download
-remains versioned but has an optional checksum. Winetricks downloads are
-avoided when the separate prefix cache hits. Successful startup smoke tests do
-not demonstrate interactive gameplay or rendering compatibility.
+while Proton's standalone runtime is selected first in PATH. Graphics setup
+runs BYOND's bundled DirectX installer, verifies the installed `d3dx9_43.dll`
+against BYOND's CAB and configures the native DLL override. Winetricks installs
+DXVK through its `dxvk` verb; the DXVK release is not separately pinned. The
+BYOND download remains versioned but has an optional checksum. Successful
+startup smoke tests do not demonstrate interactive gameplay or rendering
+compatibility.

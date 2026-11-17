@@ -63,8 +63,9 @@ GATEWAY_IMAGE=tgstation-gateway-player docker compose -f examples/compose.yaml u
 
 The image uses checksum-pinned standalone Proton Wine 10.0-4 as its active
 runtime. Ubuntu Wine 10 packages supply runtime dependencies; Wine's executable
-comes from the Proton archive. Winetricks installs DirectX and DXVK components
-in the Wine prefix.
+comes from the Proton archive. Graphics setup runs BYOND's bundled DirectX
+installer and verifies its `d3dx9_43.dll` against the bundled CAB. Winetricks
+installs DXVK; the resolved DXVK release is not separately version-pinned.
 
 ## Important limitations
 

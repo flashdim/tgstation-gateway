@@ -61,23 +61,21 @@ failed during core-font registration after a Wine connection reset, but the
 retry passed. These checks do not prove interactive gameplay, game-scene
 rendering, WebView compatibility, or complete dialog behavior.
 
-The active runtime is restored to checksum-pinned standalone Proton Wine
-10.0-4, with Ubuntu Wine 10 packages retained as runtime dependencies. The
-WineHQ staging experiment is no longer in use, and its prefix cache is not
-reused. BYOND is unchanged. Graphics setup now uses BYOND's bundled DirectX
-installer for `d3dx9_43` and the Winetricks `dxvk` verb; the previous Winetricks
-`d3dx9`/`d3dx9_43` verbs and pinned DXVK archive installation are not used.
-The pinned Winetricks script
-resolves the latest upstream DXVK release when a fresh prefix is created, so
-that DXVK release is not version-pinned. Lighting has not yet been reverified
-with this setup before the following change. **Update:** the user reports that re-adding BYOND's bundled
-DirectX installer fixed the lighting rendering issue. This points to installing
-BYOND's native `d3dx9_43` as important for lighting in the tested setup; it
-does not establish the underlying mechanism or guarantee compatibility across
-other hosts/configurations. CI startup and runtime checks still do not prove
-gameplay or rendering. A Mesa Vulkan experiment added i386 and x86_64 drivers
-and lavapipe ICD manifests, but did not improve rendering; those additions
-have been removed.
+The active runtime is checksum-pinned standalone Proton Wine 10.0-4; Ubuntu
+Wine 10 packages provide runtime dependencies. WineHQ staging and GE-Proton
+experiments were reverted and are not part of the current image. Its graphics
+setup runs BYOND's bundled DirectX installer for `d3dx9_43`, verifies the
+installed DLL against BYOND's CAB, and configures the native DLL override.
+Winetricks installs DXVK through its `dxvk` verb; the resolved DXVK release is
+not separately version-pinned. An earlier attempt to install native
+`d3dx9_43` did not improve the scene, but the user reports that restoring
+BYOND's bundled DirectX installer fixed the lighting rendering issue in the
+current setup. This points to the bundled installer being important for
+lighting in that test; it does not establish the underlying mechanism or
+guarantee compatibility across other hosts/configurations. Startup and runtime
+checks still do not prove gameplay or rendering. A Mesa Vulkan experiment
+added i386 and x86_64 drivers and lavapipe ICD manifests, but did not improve
+rendering; those additions have been removed.
 Build and interactive compatibility on other configurations remain to be
 verified; prior results are not proof of universal gameplay compatibility.
 
