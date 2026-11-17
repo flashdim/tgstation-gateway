@@ -60,27 +60,10 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
-          key: wine-prefix-v4-proton-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+          key: wine-prefix-v5-staging-${{ hashFiles('Dockerfile', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
 
       - name: Prepare Wine prefix cache directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
-
-      - name: Restore Proton Wine download cache
-        id: wine-download
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
-          key: wine-download-v1-${{ hashFiles('container/wine-proton.env') }}
-
-      - name: Download or verify Proton Wine
-        run: sh container/download-wine.sh "$RUNNER_TEMP/wine-download-cache"
-
-      - name: Save Proton Wine download cache
-        if: steps.wine-download.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
-          key: ${{ steps.wine-download.outputs.cache-primary-key }}
 
       - name: Build player image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
@@ -91,7 +74,6 @@ jobs:
           tags: tgstation-gateway-player:ci
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
-            wine-download-cache=${{ runner.temp }}/wine-download-cache
 
       - name: Smoke-test player image
         id: smoke-x11

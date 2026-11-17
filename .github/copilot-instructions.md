@@ -23,10 +23,10 @@ planned features or smoke tests as proof of interactive gameplay.
   players. Do not log secrets or include player data in images or caches.
 - BYOND may see shared IP addresses or computer IDs. Investigate and document
   collisions and preserve server ban enforcement; never silently bypass it.
-- The player image uses checksum-pinned standalone Proton-based Wine 10.0-4;
-  Ubuntu `wine`, `wine32` and `wine64` packages supply its runtime dependencies.
-  Keep `/opt/wine-proton/bin` first in Wine's PATH; distro packages do not select
-  the active runtime. Retain dependency checks and explicit supplemental
+- The current player image uses WineHQ staging `11.22~resolute-1` from its
+  signed Ubuntu repository. Keep `/opt/wine-staging/bin` first in Wine's PATH
+  and bind WINELOADER/WINESERVER to that installation. Retain dependency checks
+  and explicit supplemental
   libraries where needed; ldd alone cannot check dlopened libraries.
   Keep BYOND's bundled DirectX setup, native `d3dx9_43` and
   pinned DXVK version consistent when changing the graphics stack. Preserve
