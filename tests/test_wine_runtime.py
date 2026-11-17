@@ -65,8 +65,7 @@ class WineRuntimeTest(unittest.TestCase):
                 (libraries / name).touch()
         self.icd_directory = self.root / "share/vulkan/icd.d"
         self.icd_directory.mkdir(parents=True)
-        for manifest in ("lvp_icd.i686.json", "lvp_icd.x86_64.json"):
-            (self.icd_directory / manifest).touch()
+        (self.icd_directory / "lvp_icd.json").touch()
         (self.runtime / "bin").mkdir()
         for name in ("wine", "wineserver"):
             path = self.runtime / "bin" / name
@@ -306,7 +305,7 @@ class WineRuntimeTest(unittest.TestCase):
                     "libvulkan_lvp.so",
                 )
             ),
-            self.icd_directory / "lvp_icd.i686.json",
+            self.icd_directory / "lvp_icd.json",
         ):
             with self.subTest(path=path):
                 path.rename(path.with_suffix(path.suffix + ".missing"))
@@ -325,7 +324,7 @@ class WineRuntimeTest(unittest.TestCase):
                 checked,
             )
 
-    def test_runtime_requires_mesa_vulkan_icd_and_driver_for_both_architectures(self):
+    def test_runtime_requires_mesa_vulkan_icd_and_drivers_for_both_architectures(self):
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
         check = (
             check.replace("/opt/wine-staging", str(self.runtime))
@@ -351,8 +350,7 @@ class WineRuntimeTest(unittest.TestCase):
         for path in (
             self.libraries / "i386-linux-gnu/libvulkan_lvp.so",
             self.libraries / "x86_64-linux-gnu/libvulkan_lvp.so",
-            self.icd_directory / "lvp_icd.i686.json",
-            self.icd_directory / "lvp_icd.x86_64.json",
+            self.icd_directory / "lvp_icd.json",
         ):
             with self.subTest(path=path):
                 path.unlink()

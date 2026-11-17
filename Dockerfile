@@ -46,6 +46,10 @@ RUN set -eu; \
 RUN set -eu; \
     test "$(dpkg-query -W -f='${Version}' winehq-staging)" = "$WINE_PACKAGE_VERSION"; \
     test -x /opt/wine-staging/bin/wine; \
+    if [ ! -r /usr/share/vulkan/icd.d/lvp_icd.json ]; then \
+      echo "Missing Mesa lavapipe Vulkan ICD manifest" >&2; \
+      exit 1; \
+    fi; \
     for architecture in i386 x86_64; do \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
           libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
@@ -54,18 +58,6 @@ RUN set -eu; \
       done; \
       test -r "/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so" || \
         { echo "Missing Mesa Vulkan driver for $architecture" >&2; exit 1; }; \
-      if [ "$architecture" = i386 ]; then \
-        icd="i686"; \
-      else \
-        icd="x86_64"; \
-      fi; \
-      if [ ! -r "/usr/share/vulkan/icd.d/lvp_icd.$icd.json" ]; then \
-        echo "Missing Mesa Vulkan ICD for $architecture; installed manifests:" >&2; \
-        find /usr/share/vulkan /etc/vulkan -type f -name '*.json' -print 2>/dev/null >&2 || true; \
-        dpkg-query -L mesa-vulkan-drivers:i386 mesa-vulkan-drivers:amd64 2>/dev/null | \
-          grep -E 'vulkan|icd' >&2 || true; \
-        exit 1; \
-      fi; \
       dependencies="$(ldd "/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so")"; \
       if printf '%s\n' "$dependencies" | grep 'not found'; then \
         echo "Missing dependencies for Mesa Vulkan driver $architecture" >&2; exit 1; \
