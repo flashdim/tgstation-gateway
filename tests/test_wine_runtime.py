@@ -71,7 +71,9 @@ class WineRuntimeTest(unittest.TestCase):
             path.write_text(f"#!/bin/sh\n{body}\n")
             path.chmod(0o755)
         dockerfile = (ROOT / "Dockerfile").read_text()
-        self.check = re.search(r"RUN (set -eu;.*?)(?:\n\n)", dockerfile, re.S)[1]
+        self.check = re.search(
+            r"# Build-time gate.*?\nRUN (set -eu;.*?)(?:\n\n)", dockerfile, re.S
+        )[1]
         self.check = self.check.replace("\\\n", " ").replace(
             "/opt/wine-proton", str(self.runtime)
         )
@@ -157,10 +159,17 @@ class WineRuntimeTest(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text()
         self.assertIn("ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1", dockerfile)
         for package in ("wine", "wine32:i386", "wine64"):
-            self.assertIn(f'"{package}=${{WINE_PACKAGE_VERSION}}"', dockerfile)
+            self.assertIn(f'"{package}=$WINE_PACKAGE_VERSION"', dockerfile)
         self.assertIn("libgstreamer-gl1.0-0:i386", dockerfile)
         self.assertNotIn("dpkg-query", self.check)
         self.assertIn("ENV PATH=/opt/wine-proton/bin:${PATH}", dockerfile)
+
+    def test_pins_signed_winehq_11_22_development_package(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn('test "$WINE_PACKAGE_VERSION" = "11.22~resolute-1"', dockerfile)
+        self.assertIn('"winehq-devel=$WINE_PACKAGE_VERSION"', dockerfile)
+        self.assertIn("'Signed-By: /etc/apt/keyrings/winehq-archive.asc'", dockerfile)
+        self.assertIn("Architectures: amd64", dockerfile)
 
     def test_rejects_missing_linked_dependency(self):
         result = self.check_runtime(DEPENDENCIES="libpulse.so.0 => not found")

@@ -11,18 +11,44 @@ USER root
 SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG WINE_PACKAGE_SOURCE=ubuntu
 ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
 
-RUN selkies-privileged-files release && \
-    dpkg --add-architecture i386 && \
-    apt-get update && \
+RUN set -eu; \
+    selkies-privileged-files release; \
+    dpkg --add-architecture i386; \
+    if [ "$WINE_PACKAGE_SOURCE" = winehq ]; then \
+      test "$WINE_PACKAGE_VERSION" = "11.22~resolute-1"; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends ca-certificates curl gpg; \
+      install -d -m 0755 /etc/apt/keyrings; \
+      curl -fsSL --retry 3 https://dl.winehq.org/wine-builds/winehq.key \
+        -o /etc/apt/keyrings/winehq-archive.asc; \
+      printf '%s\n' \
+        'Types: deb' \
+        'URIs: https://dl.winehq.org/wine-builds/ubuntu' \
+        'Suites: resolute' \
+        'Components: main' \
+        'Architectures: amd64' \
+        'Signed-By: /etc/apt/keyrings/winehq-archive.asc' \
+        > /etc/apt/sources.list.d/winehq.sources; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends \
+        "winehq-devel=$WINE_PACKAGE_VERSION"; \
+    elif [ "$WINE_PACKAGE_SOURCE" = ubuntu ]; then \
+      apt-get update; \
+      apt-get install -y --no-install-recommends \
+        "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
+        "wine64=$WINE_PACKAGE_VERSION"; \
+    else \
+      echo "Unsupported WINE_PACKAGE_SOURCE: $WINE_PACKAGE_SOURCE" >&2; \
+      exit 1; \
+    fi; \
     apt-get install -y --no-install-recommends \
-      "wine=${WINE_PACKAGE_VERSION}" "wine32:i386=${WINE_PACKAGE_VERSION}" \
-      "wine64=${WINE_PACKAGE_VERSION}" cabextract unzip wget xz-utils \
-      openbox trayer fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
-      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 \
-      libgstreamer-gl1.0-0:i386 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+      cabextract unzip wget xz-utils openbox trayer fonts-liberation \
+      libfreetype6:i386 libfontconfig1:i386 libgnutls30t64:i386 \
+      libgssapi-krb5-2:i386 libvulkan1:i386 libgstreamer-gl1.0-0:i386; \
+    apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
 ARG WINE_PROTON_VERSION=10.0-4
@@ -96,6 +122,8 @@ USER 1000
 ARG SELKIES_WAYLAND=false
 ENV PATH=/opt/wine-proton/bin:${PATH} \
     WINE_PROTON_VERSION=${WINE_PROTON_VERSION} \
+    WINE_PACKAGE_SOURCE=${WINE_PACKAGE_SOURCE} \
+    WINE_PACKAGE_VERSION=${WINE_PACKAGE_VERSION} \
     WINEPREFIX=/home/ubuntu/.wine \
     WINEARCH=win64 \
     SELKIES_WAYLAND=${SELKIES_WAYLAND} \

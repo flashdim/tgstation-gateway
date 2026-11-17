@@ -18,10 +18,16 @@ class UatTest(unittest.TestCase):
         self.assertNotIn("  pull_request:", workflow)
         self.assertNotIn("  release:", workflow)
         self.assertIn("fail-fast: false", workflow)
-        self.assertIn("proton: [10.0-4, 9.0-4, 8.0-5]", workflow)
+        self.assertIn("proton: 10.0-4", workflow)
+        self.assertIn("proton: 9.0-4", workflow)
+        self.assertIn("proton: 8.0-5", workflow)
+        self.assertIn("proton: 11.0-2", workflow)
+        self.assertIn("wine_source: winehq", workflow)
+        self.assertIn("wine_package_version: 11.22~resolute-1", workflow)
+        self.assertIn("tag_variant: proton-11.0-2-winehq-11.22", workflow)
         self.assertNotIn("display:", workflow)
         self.assertIn(
-            ":uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-wayland",
+            ":uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland",
             workflow,
         )
         self.assertIn("WINE_PROTON_VERSION=${{ matrix.proton }}", workflow)
@@ -52,7 +58,7 @@ class UatTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "key: uat-wine-prefix-v1-${{ matrix.proton }}-wayland-",
+            "key: uat-wine-prefix-v1-${{ matrix.proton }}-${{ matrix.wine_source }}-${{ matrix.wine_package_version }}-wayland-",
             workflow,
         )
         for source in (
@@ -107,6 +113,8 @@ class UatTest(unittest.TestCase):
                         "EVIDENCE": str(root),
                         "GITHUB_SHA": "a" * 40,
                         "WINE_PROTON_VERSION": "11.0-2",
+                        "WINE_PACKAGE_SOURCE": "winehq",
+                        "WINE_PACKAGE_VERSION": "11.22~resolute-1",
                         "GITHUB_STEP_SUMMARY": str(root / "summary"),
                     },
                     capture_output=True,
