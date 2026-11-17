@@ -43,12 +43,13 @@ are installed.
 The Proton 10.0-4 amd64 archive checksum is pinned for the runtime comparison.
 A user-reported test of Proton 11.0-2 without Ubuntu Wine packages showed no
 major change, though the UI looked cleaner and closer to a local environment.
-Proton 10.0-4 passed the build-time runtime dependency gate, but the full image
-build stopped when Winetricks could not resolve `aka.ms` or `web.archive.org`
-while installing Visual C++ 2022. Client behavior remains unverified. Its
-archive includes `winegstreamer.so` for amd64 but not i386; the build checks the
-module where present and does not claim 32-bit GStreamer-backed media
-compatibility.
+The latest CI run built and published the image after a retry, passed the X11
+and Wayland startup smoke tests, and passed the Wine runtime check. The first
+attempt stopped during core-font registration after Wine reported a connection
+reset; this did not recur on retry. Startup checks do not establish gameplay or
+WebView compatibility. The Proton archive includes `winegstreamer.so` for
+amd64 but not i386; the build checks the module where present and does not claim
+32-bit GStreamer-backed media compatibility.
 It also installs BYOND. It targets `linux/amd64` and an x64 Wine prefix. It
 installs BYOND's bundled DirectX setup, native `d3dx9_43` and DXVK 2.7.1,
 which requires a Vulkan 1.3-capable driver.
@@ -66,9 +67,12 @@ scene but failed to load fancy chat and the stat panel. In a separate container,
 a fresh prefix using standalone Proton-based Wine 11.0-2, BYOND's bundled
 DirectX setup and DXVK 2.7.1 rendered the scene and loaded those panels, but
 showed two extra blank dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
-tracks them. The rebuilt image and those dialogs still need gameplay
-verification. The individual rendering cause is not isolated. Wine applications
-do not receive Selkies' injected gamepad or webcam integrations.
+tracks the investigation. The user now reports that the extra windows appear
+briefly at startup and disappear after connecting, and that restoring Ubuntu
+Wine packages as runtime dependencies caused no major rendering issues. No
+root cause or automated window suppression was established. These reports do
+not verify complete gameplay, map rendering or WebView compatibility. Wine
+applications do not receive Selkies' injected gamepad or webcam integrations.
 
 Winetricks downloads Microsoft's WebView2 Evergreen bootstrapper at build time.
 The bootstrapper is not checksum-pinned by Winetricks and downloads a current
@@ -249,15 +253,14 @@ connection, a small system tray is provided for its icon. The launcher assumes
 X11, not Selkies' Wayland backend. Earlier testing restored game and stat-panel
 rendering by removing `LD_PRELOAD`, and confirmed audio with the LXQt-based
 image. A later user-reported session rendered the menu, dialogs and audio, but
-showed a black game scene with a few solid-color tiles after joining. A separate
-standalone Proton-based Wine and DXVK comparison rendered that scene and loaded
-the WebView panels, but showed extra blank dialogs. The newly built image still
-requires gameplay verification. The smoke test does not verify gameplay.
-The desktop-free image's pager/tray behavior also needs explicit verification.
-The experimental Openbox maximization rule was removed after a user reported
-no change in startup window size. The same report found no major rendering
-issues after restoring Ubuntu Wine packages as runtime dependencies. These
-reports do not establish complete gameplay compatibility.
+showed a black game scene with a few solid-color tiles after joining. The user
+now reports that the extra startup dialogs disappear after connecting and that
+there are no major rendering issues after restoring Ubuntu Wine packages as
+runtime dependencies. These reports do not establish the root cause or complete
+gameplay compatibility. CI smoke tests verify startup only. The desktop-free
+image's pager/tray behavior also needs explicit verification.
+The experimental Openbox maximization rule was removed after it made no
+reported difference to startup window size.
 No Dream Seeker startup maximize/fullscreen flag or persistent local sizing
 configuration was verified in the client documentation search, so the launcher
 does not pass speculative flags. BYOND documents

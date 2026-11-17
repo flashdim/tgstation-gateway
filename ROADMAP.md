@@ -44,44 +44,35 @@ same GPU with Proton 11.0-2. Using Proton's D3D9 DXVK library with Wine did
 not fix the map, although Dream Seeker loaded it. The image now installs
 32-bit FreeType and Fontconfig, which removed FreeType errors in a separate
 Proton Wine initialization test, but did not resolve the black map.
-In a disposable container a fresh Ubuntu Wine 10 prefix with BYOND's bundled
-DirectX setup, native `d3dx9_43` and DXVK 2.7.1 rendered the scene, but fancy
-chat and the stat panel failed. A fresh standalone Proton-based Wine 11.0-2
-prefix rendered the scene and loaded both panels, but showed two extra blank
-dialogs under Wayland/XWayland; [issue #4](https://github.com/flashdim/tgstation-gateway/issues/4)
-tracks them. The image now uses that runtime; the rebuilt image still needs
-gameplay verification and the individual cause is unconfirmed.
-The current runtime comparison uses checksum-pinned Proton Wine 10.0-4 amd64,
-BYOND 516.1689 and the existing graphics setup. It restores the earlier pinned
-Ubuntu Wine packages to supply dependencies instead of a complete explicit
-native library list, while retaining Proton as the active runtime. Build-time
-gates check core loader/display/audio
-dependencies; `winegstreamer.so` is present in the amd64 Proton runtime but
-absent from i386. Optional
-`winedmo.so` still requires old FFmpeg ABIs and optional `wpcap.so` expects
-`libpcap.so.1`, SONAMEs unavailable in Ubuntu 26.04.
-Neither package checks nor startup smoke tests verify gameplay, WebView panels
-or the blank-dialog report.
-The Proton 10.0-4 runtime passed the build-time dependency gate. The image build
-stopped at Winetricks because DNS resolution for `aka.ms` and `web.archive.org`
-failed while installing Visual C++ 2022. Client behavior remains unverified.
-The user reported no major change with the previous Proton 11.0-2/no-Ubuntu-Wine
-build, but said the UI looked cleaner and closer to a local environment.
-The image now defaults to BYOND 516.1689 for a comparison; the mirror download
-and gameplay remain unverified because the mirror did not resolve in the test
-environment.
+In disposable comparisons, Ubuntu Wine 10 rendered the scene but fancy chat and
+the stat panel failed; standalone Proton Wine 11.0-2 rendered the scene and
+panels, but initially showed two extra dialogs under Wayland/XWayland. The user
+now reports those windows appear briefly and disappear after connecting, and
+that there are no major rendering issues after restoring Ubuntu Wine packages
+as runtime dependencies. The dialog cause was not isolated and no suppression
+was added. The Openbox maximization rule made no reported size change and was
+removed.
+
+The current image uses checksum-pinned Proton Wine 10.0-4 as the active
+runtime, Ubuntu's pinned Wine packages for runtime dependencies, and BYOND
+516.1689. CI built and published the image after a retry; X11 and Wayland
+startup smoke tests and Wine runtime checks passed. The first build attempt
+failed during core-font registration after a Wine connection reset, but the
+retry passed. These checks do not prove interactive gameplay, game-scene
+rendering, WebView compatibility, or complete dialog behavior.
+
+The image defaults to fixed 1920x1080 Selkies resolution. This display-size
+experiment was prompted by reported first-connection scaling distortion;
+whether it improves browser scaling remains unverified. Automatic Dream Seeker
+maximization also remains unresolved. No verified Dream Seeker startup flag or
+local sizing setting was found; BYOND's documented maximization parameter is a
+game-skin setting, not an executable command-line option.
+
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
-stat-panel rendering in that test environment; it does not resolve or rule out
-the current failure. A direct launch to the configured host has been observed.
-The release publication path and a complete playable gameplay session remain
-unverified.
-The latest user report found no major rendering issues after restoring Ubuntu
-Wine dependency packages, but no change from the Openbox maximization rule.
-That rule has been removed. The next display comparison defaults to a fixed
-1920x1080 Selkies desktop; browser scaling and automatic Dream Seeker
-maximization remain unverified. No client startup flag or local sizing
-configuration was verified; BYOND's documented maximization parameter belongs
-to the game skin, not the executable command line.
+stat-panel rendering in its test environment; it did not establish the cause
+of other rendering behavior. A direct launch to the configured host has been
+observed. A complete authenticated gameplay session and release publication
+remain unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
