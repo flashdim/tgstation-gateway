@@ -65,11 +65,15 @@ jobs:
       - name: Prepare Wine prefix cache directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
 
+      - name: Read GE-Proton version
+        id: ge-proton-version
+        run: echo "version=$(sed -n 's/^GE_PROTON_VERSION=//p' container/ge-proton.env)" >> "$GITHUB_OUTPUT"
+
       - name: Restore GE-Proton download cache
         id: ge-proton-download
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ runner.temp }}/ge-proton-download-cache/GE-Proton10-34.tar.gz
+          path: ${{ runner.temp }}/ge-proton-download-cache/${{ steps.ge-proton-version.outputs.version }}.tar.gz
           key: ge-proton-download-v1-${{ hashFiles('container/ge-proton.env') }}
 
       - name: Download or verify GE-Proton
@@ -79,7 +83,7 @@ jobs:
         if: steps.ge-proton-download.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ runner.temp }}/ge-proton-download-cache/GE-Proton10-34.tar.gz
+          path: ${{ runner.temp }}/ge-proton-download-cache/${{ steps.ge-proton-version.outputs.version }}.tar.gz
           key: ${{ steps.ge-proton-download.outputs.cache-primary-key }}
 
       - name: Build player image

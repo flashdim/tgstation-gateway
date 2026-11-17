@@ -22,7 +22,8 @@ RUN set -eu; \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       openbox trayer fonts-liberation python3 libfreetype6:i386 libfontconfig1:i386 \
-      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
+      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 \
+      libwayland-cursor0 libwayland-cursor0:i386; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
@@ -56,7 +57,8 @@ RUN set -eu; \
     for architecture in i386 x86_64; do \
       directory="/opt/ge-proton/files/lib/wine/$architecture-unix"; \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
-          libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
+          libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1 \
+          libwayland-cursor.so.0; do \
         test -r "/usr/lib/$architecture-linux-gnu/$library" || \
           { echo "Missing or unreadable /usr/lib/$architecture-linux-gnu/$library" >&2; exit 1; }; \
       done; \
