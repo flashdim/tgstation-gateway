@@ -270,8 +270,10 @@ class WineRuntimeTest(unittest.TestCase):
     def test_ci_runtime_diagnostics_name_each_missing_requirement(self):
         (self.runtime / "lib64").symlink_to("lib", target_is_directory=True)
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
-        check = check.replace("/opt/wine-staging", str(self.runtime)).replace(
-            "/usr/lib/", f"{self.libraries}/"
+        check = (
+            check.replace("/opt/wine-staging", str(self.runtime))
+            .replace("/usr/lib/", f"{self.libraries}/")
+            .replace("/usr/share/vulkan/icd.d", str(self.icd_directory))
         )
         env = {
             **os.environ,
@@ -325,9 +327,11 @@ class WineRuntimeTest(unittest.TestCase):
 
     def test_runtime_requires_mesa_vulkan_icd_and_driver_for_both_architectures(self):
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
-        check = check.replace("/opt/wine-staging", str(self.runtime)).replace(
-            "/usr/lib/", f"{self.libraries}/"
-        ).replace("/usr/share/vulkan/icd.d", str(self.icd_directory))
+        check = (
+            check.replace("/opt/wine-staging", str(self.runtime))
+            .replace("/usr/lib/", f"{self.libraries}/")
+            .replace("/usr/share/vulkan/icd.d", str(self.icd_directory))
+        )
         prefix = self.root / "prefix"
         prefix.mkdir()
         (prefix / ".gateway-wine-package-version").write_text("11.22~resolute-1")
