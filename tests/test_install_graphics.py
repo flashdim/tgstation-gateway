@@ -16,28 +16,14 @@ class InstallGraphicsTest(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.prefix = self.root / "prefix"
-        self.directx = self.prefix / "drive_c/Program Files (x86)/BYOND/directx"
-        self.directx.mkdir(parents=True)
-        (self.directx / "DXSETUP.exe").touch()
-        (self.directx / "Jun2010_d3dx9_43_x86.cab").touch()
-        for directory in ("syswow64", "system32"):
-            (self.prefix / "drive_c/windows" / directory).mkdir(parents=True)
 
         commands = {
-            "wine": (
-                'printf "%s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'if [ "$1" = DXSETUP.exe ]; then\n'
-                '  [ "${FAIL_SETUP:-0}" = 0 ] || exit 17\n'
-                '  printf native > "$WINEPREFIX/drive_c/windows/syswow64/d3dx9_43.dll"\n'
-                "fi\n"
-            ),
             "wineserver": "exit 0\n",
-            "cabextract": 'printf native > "$6/d3dx9_43.dll"\n',
             "winetricks": (
                 'printf "winetricks %s\\n" "$*" >> "$COMMAND_LOG"\n'
                 'printf "%s\\n" "$W_CACHE" >> "$CACHE_LOG"\n'
-                'printf archive > "$W_CACHE/dxvk.tar.gz"\n'
-                '[ "${FAIL_DXVK:-0}" = 0 ]\n'
+                'printf archive > "$W_CACHE/$2.archive"\n'
+                '[ "${FAIL_VERB:-}" != "$2" ] || exit 17\n'
             ),
         }
         for name, body in commands.items():
@@ -62,30 +48,33 @@ class InstallGraphicsTest(unittest.TestCase):
             timeout=10,
         )
 
-    def test_installs_bundled_directx_then_winetricks_dxvk(self):
+    def test_installs_directx_and_dxvk_with_winetricks_in_order(self):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(
-            "winetricks -q dxvk",
-            self.log.read_text(),
+        self.assertEqual(
+            self.log.read_text().splitlines(),
+            [
+                "winetricks -q d3dx9",
+                "winetricks -q d3dx9_43",
+                "winetricks -q dxvk",
+            ],
         )
-        self.assertLess(
-            self.log.read_text().index("DXSETUP.exe /silent"),
-            self.log.read_text().index("winetricks -q dxvk"),
-        )
-        self.assertIn("*d3dx9_43 /t REG_SZ /d native", self.log.read_text())
-        cache_path = Path((self.root / "cache-path").read_text().strip())
-        self.assertEqual(cache_path.name, "winetricks-cache")
-        self.assertFalse(cache_path.exists())
+        self.assertNotIn("DXSETUP.exe", self.log.read_text())
+        cache_paths = (self.root / "cache-path").read_text().splitlines()
+        self.assertEqual(len(set(cache_paths)), 1)
+        self.assertEqual(Path(cache_paths[0]).name, "winetricks-cache")
+        self.assertFalse(Path(cache_paths[0]).exists())
 
-    def test_stops_on_directx_or_dxvk_install_failure(self):
-        for env in ({"FAIL_SETUP": "1"}, {"FAIL_DXVK": "1"}):
+    def test_stops_on_directx_or_dxvk_verb_failure(self):
+        for verb in ("d3dx9", "d3dx9_43", "dxvk"):
+            env = {"FAIL_VERB": verb}
             with self.subTest(env=env):
                 result = self.install(**env)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertFalse(
-                    (self.prefix / "drive_c/windows/syswow64/d3d9.dll").exists()
-                )
+                commands = self.log.read_text().splitlines()
+                self.assertIn(f"winetricks -q {verb}", commands)
+                self.assertNotIn("wineserver --wait", commands)
+                self.log.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

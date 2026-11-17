@@ -38,10 +38,10 @@ repository-selected (not version-pinned); each image's package inventory
 records their versions.
 
 The image retains the Dockerfile's digest-pinned Selkies
-2.2.1/Ubuntu 26.04 base, BYOND 516.1689, Winetricks' `dxvk` verb, WebView2
-installation and fixed 1920×1080 display. The pinned Winetricks script resolves
-the latest DXVK GitHub release when building a fresh prefix; that release is
-not version-pinned. Installation uses WineHQ's signed Ubuntu 26.04 repository and pins
+2.2.1/Ubuntu 26.04 base, BYOND 516.1689, Winetricks' `d3dx9`, `d3dx9_43` and
+`dxvk` verbs, WebView2 installation and fixed 1920×1080 display. The pinned
+Winetricks script resolves the latest DXVK GitHub release when building a fresh
+prefix; that release is not version-pinned. Installation uses WineHQ's signed Ubuntu 26.04 repository and pins
 `winehq-staging=11.22~resolute-1`. Installation follows
 [WineHQ's Debian/Ubuntu instructions](https://gitlab.winehq.org/wine/wine/-/wikis/Debian-Ubuntu):
 download the official signing key and `winehq-resolute.sources`, update APT,

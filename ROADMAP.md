@@ -66,8 +66,10 @@ The current installation targets WineHQ staging 11.22
 repository. It replaces the standalone Proton runtime and its download paths;
 old Proton prefixes are not reused. BYOND is unchanged. The prior pinned DXVK
 2.7.1 archive installation has been replaced with Winetricks' `dxvk` verb,
-which resolves the latest upstream release on fresh prefix creation; lighting
-has not yet been reverified with this experiment.
+which resolves the latest upstream release on fresh prefix creation. BYOND's
+bundled DirectX setup is no longer run; Winetricks' `d3dx9` and `d3dx9_43`
+verbs now supply those components. Lighting has not yet been reverified with
+these experiments.
 Build, startup and interactive compatibility of this new runtime must be
 verified separately; earlier Proton results do not validate WineHQ staging.
 
