@@ -80,9 +80,11 @@ runtime checks are retained rather than duplicating an image build.
 For comparison, [CI run 44012025718](https://github.com/flashdim/tgstation-gateway/actions/runs/44012025718)
 restored the prefix in 4 seconds and built the image in 3m55s. APT fetched
 380 MB in 3 seconds, and the Proton download and checksum finished within
-0.59 seconds; extraction took the rest of that 5.8-second step. A warm
-download-cache run has not yet been measured, and cache transfer and repeated
-verification may outweigh the saved download time.
+0.59 seconds; extraction took the rest of that 5.8-second step. In a local
+test the 70.4 MB archive took 1.26 seconds to download and verify, versus
+0.05 seconds to verify an existing copy. A warm download-cache CI run has
+not yet been measured, and cache transfer and repeated verification may
+outweigh the saved download time.
 
 ## Important limitations
 
