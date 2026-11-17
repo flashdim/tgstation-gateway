@@ -85,8 +85,10 @@ test the 70.4 MB archive took 1.26 seconds to download and verify, versus
 0.05 seconds to verify an existing copy. In
 [CI run 44013258570](https://github.com/flashdim/tgstation-gateway/actions/runs/44013258570)
 the warm download cache restored in 2 seconds and runner verification took
-less than a second; the image build was still in progress when measured.
-Cache transfer and repeated verification may outweigh the saved download time.
+less than a second. Its image build took 5m43s and passed both smoke tests
+and runtime checks, but missed the newly keyed prefix cache, so it is not
+directly comparable with the baseline prefix hit. Cache transfer and repeated
+verification may outweigh the saved download time.
 
 ## Important limitations
 
