@@ -79,6 +79,19 @@ class DownloadWineTest(unittest.TestCase):
                 "wine-download-cache=${{ runner.temp }}/wine-download-cache", content
             )
 
+    def test_release_workflow_saves_download_cache_on_miss(self):
+        content = (ROOT / ".github/workflows/publish.yml").read_text()
+        self.assertIn(
+            "if: steps.wine-download.outputs.cache-hit != 'true'", content
+        )
+        self.assertIn(
+            "key: ${{ steps.wine-download.outputs.cache-primary-key }}", content
+        )
+        self.assertIn(
+            "uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4",
+            content,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
