@@ -12,29 +12,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class UatTest(unittest.TestCase):
-    def test_matrix_has_one_staging_immutable_tag_and_mode_checks(self):
+    def test_matrix_has_one_proton_immutable_tag_and_mode_checks(self):
         workflow = (ROOT / ".github/workflows/uat.yml").read_text()
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertNotIn("  pull_request:", workflow)
         self.assertNotIn("  release:", workflow)
         self.assertIn("fail-fast: false", workflow)
-        self.assertEqual(workflow.count("- wine_package_version:"), 1)
-        self.assertNotIn("proton", workflow.lower())
-        self.assertNotIn("WINE_PACKAGE_SOURCE", workflow)
-        self.assertIn("wine_package_version: 11.22~resolute-1", workflow)
-        self.assertIn("tag_variant: winehq-staging-11.22", workflow)
-        self.assertIn("dpkg-query -W winehq-staging | cut -f2", workflow)
+        self.assertEqual(workflow.count("- wine_proton_version:"), 1)
+        self.assertNotIn("winehq-staging", workflow)
+        self.assertIn("wine_proton_version: 10.0-4", workflow)
+        self.assertIn("tag_variant: proton-10.0-4", workflow)
+        self.assertIn('test "$WINE_PROTON_VERSION" = 10.0-4', workflow)
         self.assertNotIn("display:", workflow)
         self.assertIn(
             ":uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland",
             workflow,
         )
-        self.assertIn(
-            "WINE_PACKAGE_VERSION=${{ matrix.wine_package_version }}", workflow
-        )
-        self.assertIn(
-            'test "$(command -v wine)" = /opt/wine-staging/bin/wine', workflow
-        )
+        self.assertIn("WINE_PROTON_VERSION=${{ matrix.wine_proton_version }}", workflow)
+        self.assertIn('test "$(command -v wine)" = /opt/wine-proton/bin/wine', workflow)
         self.assertIn('SELKIES_WAYLAND: "true"', workflow)
         self.assertNotIn("${{ matrix.display }}", workflow)
         self.assertIn('grep -Fx "wayland=$SELKIES_WAYLAND"', workflow)
@@ -57,27 +52,32 @@ class UatTest(unittest.TestCase):
 
     def test_caches_include_selected_runtime_and_prefix_inputs(self):
         workflow = (ROOT / ".github/workflows/uat.yml").read_text()
-        self.assertNotIn("wine-download", workflow)
         self.assertIn(
-            "key: uat-wine-prefix-v2-staging-${{ matrix.wine_package_version }}-wayland-",
+            "key: uat-wine-prefix-v3-proton-${{ matrix.wine_proton_version }}-wayland-",
             workflow,
+        )
+        self.assertIn(
+            "wine-download-v1-${{ hashFiles('container/wine-proton.env') }}", workflow
+        )
+        self.assertIn(
+            "wine-download-cache=${{ runner.temp }}/wine-download-cache", workflow
         )
         for source in (
             "Dockerfile",
+            "container/wine-proton.env",
             "install-client.sh",
             "install-byond.sh",
             "install-graphics.sh",
         ):
             self.assertIn(source, workflow)
 
-    def test_ci_and_release_publish_the_smoke_tested_staging_image(self):
+    def test_ci_and_release_publish_the_smoke_tested_player_image(self):
         for filename, tag in (("ci.yml", "ci"), ("publish.yml", "release")):
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
-                self.assertIn("key: wine-prefix-v3-", workflow)
-                self.assertNotIn("wine-download", workflow)
+                self.assertIn("key: wine-prefix-v4-proton-", workflow)
+                self.assertIn("wine-download-v1-", workflow)
                 self.assertNotIn("WINE_PACKAGE_SOURCE", workflow)
-                self.assertNotIn("WINE_PROTON_VERSION", workflow)
                 self.assertIn("load: true", workflow)
                 self.assertNotIn("push: true", workflow)
                 self.assertIn(f"tags: tgstation-gateway-player:{tag}", workflow)
@@ -133,7 +133,7 @@ class UatTest(unittest.TestCase):
                         "IMAGE": "ghcr.io/example/player:uat",
                         "EVIDENCE": str(root),
                         "GITHUB_SHA": "a" * 40,
-                        "WINE_PACKAGE_VERSION": "11.22~resolute-1",
+                        "WINE_PROTON_VERSION": "10.0-4",
                         "GITHUB_STEP_SUMMARY": str(root / "summary"),
                     },
                     capture_output=True,
@@ -164,7 +164,7 @@ class UatTest(unittest.TestCase):
             dockerfile,
             re.S,
         )[1].replace("\\\n", " ")
-        for cached_version in ("10.0-4", "11.21~resolute-1", "11.22~resolute-1", None):
+        for cached_version in ("10.0-3", "10.0-4", "11.22", None):
             with self.subTest(cached_version=cached_version):
                 with tempfile.TemporaryDirectory() as temporary:
                     root = Path(temporary)
@@ -178,9 +178,7 @@ class UatTest(unittest.TestCase):
                     webview.mkdir(parents=True)
                     (webview / "msedgewebview2.exe").touch()
                     if cached_version:
-                        (source / ".gateway-wine-package-version").write_text(
-                            cached_version
-                        )
+                        (source / ".gateway-proton-version").write_text(cached_version)
                     cache = root / "cache"
                     cache.mkdir()
                     with tarfile.open(cache / "prefix.tar.gz", "w:gz") as archive:
@@ -194,14 +192,14 @@ class UatTest(unittest.TestCase):
                         env={
                             **os.environ,
                             "WINEPREFIX": str(root / "prefix"),
-                            "WINE_PACKAGE_VERSION": "11.22~resolute-1",
+                            "WINE_PROTON_VERSION": "10.0-4",
                         },
                         capture_output=True,
                         text=True,
                     )
                     self.assertEqual(
                         result.returncode == 0,
-                        cached_version == "11.22~resolute-1",
+                        cached_version == "10.0-4",
                         result.stderr,
                     )
 

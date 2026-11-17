@@ -61,19 +61,19 @@ failed during core-font registration after a Wine connection reset, but the
 retry passed. These checks do not prove interactive gameplay, game-scene
 rendering, WebView compatibility, or complete dialog behavior.
 
-The current installation targets WineHQ staging 11.22
-(`winehq-staging=11.22~resolute-1`) from WineHQ's signed Ubuntu 26.04
-repository. It replaces the standalone Proton runtime and its download paths;
-old Proton prefixes are not reused. BYOND is unchanged. The prior pinned DXVK
-2.7.1 archive installation has been replaced with Winetricks' `dxvk` verb,
-which resolves the latest upstream release on fresh prefix creation. BYOND's
-bundled DirectX setup is no longer run; Winetricks' `d3dx9` and `d3dx9_43`
-verbs now supply those components. Lighting has not yet been reverified with
-these experiments. A Mesa Vulkan experiment added i386 and x86_64 drivers and
+The active runtime is restored to checksum-pinned standalone Proton Wine
+10.0-4, with Ubuntu Wine 10 packages retained as runtime dependencies. The
+WineHQ staging experiment is no longer in use, and its prefix cache is not
+reused. BYOND is unchanged. Graphics setup uses Winetricks' `d3dx9`,
+`d3dx9_43` and `dxvk` verbs; BYOND's bundled DirectX setup and the previous
+pinned DXVK archive installation are not used. The pinned Winetricks script
+resolves the latest upstream DXVK release when a fresh prefix is created, so
+that DXVK release is not version-pinned. Lighting has not yet been reverified
+with this setup. A Mesa Vulkan experiment added i386 and x86_64 drivers and
 lavapipe ICD manifests, but did not improve rendering; those additions have
 been removed. Interactive rendering remains unverified.
-Build, startup and interactive compatibility of this new runtime must be
-verified separately; earlier Proton results do not validate WineHQ staging.
+Build, startup and interactive compatibility of this restored setup must be
+verified separately; prior results are not proof of current gameplay.
 
 The image defaults to fixed 1920x1080 Selkies resolution. This display-size
 experiment was prompted by reported first-connection scaling distortion;
