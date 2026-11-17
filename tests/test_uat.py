@@ -27,12 +27,8 @@ class UatTest(unittest.TestCase):
             ":uat-issue-7-${{ github.sha }}-${{ matrix.tag_variant }}-wayland",
             workflow,
         )
-        self.assertIn(
-            "WINE_PACKAGE_VERSION=${{ matrix.wine_package_version }}", workflow
-        )
-        self.assertIn(
-            'test "$(command -v wine)" = /opt/wine-staging/bin/wine', workflow
-        )
+        self.assertIn("WINE_PACKAGE_VERSION=${{ matrix.wine_package_version }}", workflow)
+        self.assertIn('test "$(command -v wine)" = /opt/wine-staging/bin/wine', workflow)
         self.assertIn('SELKIES_WAYLAND: "true"', workflow)
         self.assertNotIn("${{ matrix.display }}", workflow)
         self.assertIn('grep -Fx "wayland=$SELKIES_WAYLAND"', workflow)

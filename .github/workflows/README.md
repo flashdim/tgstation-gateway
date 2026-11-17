@@ -173,9 +173,9 @@ Publication and interactive acceptance are **pending**, not implied by this
 workflow or by startup smoke tests. Fill in and post this table to issue #7
 after dispatch and user testing:
 
-| Runtime              | Display | Source SHA / tag / published digest | Tester pull | Dialog results | Resize results | Fullscreen results |
-| -------------------- | ------- | ----------------------------------- | ----------- | -------------- | -------------- | ------------------ |
-| WineHQ staging 11.22 | Wayland | Pending publication                 | Pending     | Not tested     | Not tested     | Not tested         |
+| Runtime            | Display | Source SHA / tag / published digest | Tester pull | Dialog results | Resize results | Fullscreen results |
+| ------------------ | ------- | ----------------------------------- | ----------- | -------------- | -------------- | ------------------ |
+| WineHQ staging 11.22 | Wayland | Pending publication              | Pending     | Not tested     | Not tested     | Not tested         |
 
 Include occurrence counts, measured delay, recovery behavior and evidence
 links per cell, plus runtime/compositor versions and any configuration changes.
