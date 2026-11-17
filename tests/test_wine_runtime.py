@@ -40,7 +40,7 @@ class WineRuntimeTest(unittest.TestCase):
         for architecture in ("i386", "x86_64"):
             directory = self.runtime / "lib/wine" / f"{architecture}-unix"
             directory.mkdir(parents=True)
-            for name in MODULES:
+            for name in (*MODULES, "wine", "wine-preloader"):
                 path = directory / name
                 path.touch()
                 path.chmod(0o755)
@@ -62,7 +62,7 @@ class WineRuntimeTest(unittest.TestCase):
                 'printf "%s\\n" "$1" >> "$LDD_LOG"\n'
                 'test -r "$1" || exit 1\n'
                 '[ "${FAIL_LDD:-0}" = 0 ] || exit 2\n'
-                'case "$1" in */lib/wine/*) '
+                'case "$1" in */lib/wine/*.so) '
                 'test "$LD_LIBRARY_PATH" = "${1%/*}" || exit 3;; esac\n'
                 'printf "%s\\n" "${DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"'
             ),
@@ -79,7 +79,7 @@ class WineRuntimeTest(unittest.TestCase):
 
     def test_pins_proton_10_0_4_amd64_archive_and_checksum(self):
         manifest = (ROOT / "container/wine-proton.env").read_text()
-        self.assertIn("WINE_PROTON_VERSION=10.0-4", manifest)
+        self.assertIn('WINE_PROTON_VERSION="${WINE_PROTON_VERSION:-10.0-4}"', manifest)
         self.assertIn(
             "ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290",
             manifest,
@@ -89,8 +89,8 @@ class WineRuntimeTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
         self.assertIn("tests/check-wine-runtime.sh", workflow)
-        self.assertIn("-x /opt/wine-proton/bin/wine-preloader", check)
-        self.assertNotIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", check)
+        self.assertIn('10.0-4) loaders="/opt/wine-proton/bin/wine-preloader"', check)
+        self.assertIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", check)
 
     def check_runtime(self, **extra_env):
         return subprocess.run(
@@ -99,6 +99,7 @@ class WineRuntimeTest(unittest.TestCase):
                 **os.environ,
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "LDD_LOG": str(self.log),
+                "WINE_PROTON_VERSION": "10.0-4",
                 **extra_env,
             },
             capture_output=True,
@@ -128,11 +129,26 @@ class WineRuntimeTest(unittest.TestCase):
         for optional in ("winedmo", "wpcap"):
             self.assertFalse(any(optional in path for path in checked))
 
+    def test_proton_11_requires_relocated_loaders(self):
+        (self.runtime / "bin/wine-preloader").unlink()
+        result = self.check_runtime(WINE_PROTON_VERSION="11.0-2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for architecture in ("i386", "x86_64"):
+            directory = self.runtime / "lib/wine" / f"{architecture}-unix"
+            self.assertIn(str(directory / "wine"), self.log.read_text().splitlines())
+            loader = directory / "wine-preloader"
+            loader.chmod(0o644)
+            self.assertNotEqual(
+                self.check_runtime(WINE_PROTON_VERSION="11.0-2").returncode, 0
+            )
+            loader.chmod(0o755)
+
     def test_uses_pinned_ubuntu_wine_packages_for_dependencies(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         self.assertIn("ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1", dockerfile)
         for package in ("wine", "wine32:i386", "wine64"):
             self.assertIn(f'"{package}=${{WINE_PACKAGE_VERSION}}"', dockerfile)
+        self.assertIn("libgstreamer-gl1.0-0:i386", dockerfile)
         self.assertNotIn("dpkg-query", self.check)
         self.assertIn("ENV PATH=/opt/wine-proton/bin:${PATH}", dockerfile)
 
@@ -163,7 +179,11 @@ class WineRuntimeTest(unittest.TestCase):
         check = check.replace("/opt/wine-proton", str(self.runtime)).replace(
             "/usr/lib/", f"{self.libraries}/"
         )
-        env = {**os.environ, "PATH": f"{self.runtime / 'bin'}:{os.environ['PATH']}"}
+        env = {
+            **os.environ,
+            "PATH": f"{self.runtime / 'bin'}:{os.environ['PATH']}",
+            "WINE_PROTON_VERSION": "10.0-4",
+        }
 
         def run():
             return subprocess.run(

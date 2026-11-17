@@ -36,7 +36,7 @@ class DownloadWineTest(unittest.TestCase):
             f"WINE_PROTON_VERSION={version}\nWINE_PROTON_SHA256={checksum}\n"
         )
 
-    def download(self):
+    def download(self, **extra_env):
         return subprocess.run(
             ["sh", str(self.script), str(self.cache)],
             env={
@@ -44,6 +44,7 @@ class DownloadWineTest(unittest.TestCase):
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "LOG": str(self.log),
                 "PAYLOAD": str(self.payload),
+                **extra_env,
             },
             capture_output=True,
             text=True,
@@ -64,6 +65,48 @@ class DownloadWineTest(unittest.TestCase):
         (self.cache / "wine-proton.tar.xz").write_bytes(b"corrupt")
         self.assertNotEqual(self.download().returncode, 0)
         self.assertEqual(len(self.log.read_text().splitlines()), 1)
+
+    def test_selects_each_pinned_artifact(self):
+        self.manifest.write_text((ROOT / "container/wine-proton.env").read_text())
+        for version, checksum in (
+            (
+                "10.0-4",
+                "ffaf6e766f916a408d273254f6b9c42b1589ac1bb4b02e09ab04650c87bca290",
+            ),
+            (
+                "11.0-2",
+                "51e1b54068c242c0a59c329674afe4b0ae03d313516a535be4acd1c5f3277e9b",
+            ),
+        ):
+            with self.subTest(version=version):
+                result = subprocess.run(
+                    [
+                        "sh",
+                        "-c",
+                        '. "$1"; printf "%s %s" "$WINE_PROTON_VERSION" "$WINE_PROTON_SHA256"',
+                        "sh",
+                        str(self.manifest),
+                    ],
+                    env={**os.environ, "WINE_PROTON_VERSION": version},
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"{version} {checksum}")
+                result = self.download(WINE_PROTON_VERSION=version)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    f"proton-{version}/wine-proton-{version}-amd64.tar.xz",
+                    self.log.read_text(),
+                )
+                self.assertFalse((self.cache / "wine-proton.tar.xz").exists())
+
+    def test_rejects_unknown_runtime_before_download(self):
+        self.manifest.write_text((ROOT / "container/wine-proton.env").read_text())
+        result = self.download(WINE_PROTON_VERSION="../../unknown")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unsupported WINE_PROTON_VERSION", result.stderr)
+        self.assertFalse(self.log.exists())
 
     def test_workflows_key_download_and_prefix_on_manifest(self):
         for workflow in ("ci.yml", "publish.yml"):

@@ -1,0 +1,185 @@
+name: Issue 7 repaint UAT images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  formatting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check formatting
+        run: |
+          python3 -m venv "$RUNNER_TEMP/format-env"
+          "$RUNNER_TEMP/format-env/bin/python" -m pip install pre-commit==4.3.0
+          "$RUNNER_TEMP/format-env/bin/pre-commit" run --all-files --show-diff-on-failure
+
+  uat:
+    needs: formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        proton: [10.0-4, 11.0-2]
+        display: [x11, wayland]
+    concurrency:
+      group: uat-issue-7-${{ github.sha }}-${{ matrix.proton }}-${{ matrix.display }}
+      cancel-in-progress: false
+    env:
+      WINE_PROTON_VERSION: ${{ matrix.proton }}
+      SELKIES_WAYLAND: ${{ matrix.display == 'wayland' && 'true' || 'false' }}
+      IMAGE: ghcr.io/${{ github.repository }}:uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-${{ matrix.display }}
+      EVIDENCE: ${{ runner.temp }}/uat-evidence
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Restore Proton download
+        id: download
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
+          key: uat-wine-download-v1-${{ matrix.proton }}-${{ hashFiles('container/wine-proton.env', 'container/download-wine.sh') }}
+
+      - name: Download or verify selected Proton
+        run: sh container/download-wine.sh "$RUNNER_TEMP/wine-download-cache"
+
+      - name: Save Proton download
+        if: steps.download.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
+          key: ${{ steps.download.outputs.cache-primary-key }}
+
+      - name: Restore runtime-specific Wine prefix
+        id: prefix
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
+          key: uat-wine-prefix-v1-${{ matrix.proton }}-${{ matrix.display }}-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/download-wine.sh', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+
+      - name: Prepare prefix directory
+        run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
+
+      - name: Build comparison image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: tgstation-gateway-player:uat
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            io.tgstation-gateway.uat.proton=${{ matrix.proton }}
+            io.tgstation-gateway.uat.display=${{ matrix.display }}
+          build-args: |
+            WINE_PROTON_VERSION=${{ matrix.proton }}
+            SELKIES_WAYLAND=${{ env.SELKIES_WAYLAND }}
+          build-contexts: |
+            wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
+            wine-download-cache=${{ runner.temp }}/wine-download-cache
+
+      - name: Record and verify comparison identity
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          printf 'source=%s\nimage=%s\nproton=%s\ndisplay=%s\n' \
+            "$GITHUB_SHA" "$IMAGE" "$WINE_PROTON_VERSION" "$SELKIES_WAYLAND" > "$EVIDENCE/identity.txt"
+          docker image inspect tgstation-gateway-player:uat > "$EVIDENCE/image.json"
+          docker info > "$EVIDENCE/docker-info.txt"
+          docker run --rm --entrypoint sh tgstation-gateway-player:uat -ec '
+            printf "proton=%s\nwayland=%s\nresolution=%sx%s\nbyond=%s\n" \
+              "$WINE_PROTON_VERSION" "$SELKIES_WAYLAND" \
+              "$SELKIES_MANUAL_WIDTH" "$SELKIES_MANUAL_HEIGHT" "$BYOND_VERSION"
+            test "$(cat "$WINEPREFIX/.gateway-proton-version")" = "$WINE_PROTON_VERSION"
+            wine --version
+            dpkg-query -W
+          ' > "$EVIDENCE/runtime-packages.txt"
+          grep -Fx "proton=$WINE_PROTON_VERSION" "$EVIDENCE/runtime-packages.txt"
+          grep -Fx "wayland=$SELKIES_WAYLAND" "$EVIDENCE/runtime-packages.txt"
+          docker run --rm --entrypoint sh \
+            -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
+            tgstation-gateway-player:uat /tmp/check-wine-runtime.sh
+
+      - name: Smoke-test tagged display mode
+        run: |
+          set -euo pipefail
+          if [ "$SELKIES_WAYLAND" = true ]; then
+            bash tests/smoke-wayland.sh tgstation-gateway-player:uat 2>&1 | tee "$EVIDENCE/smoke.log"
+          else
+            bash tests/smoke-container.sh tgstation-gateway-player:uat 2>&1 | tee "$EVIDENCE/smoke.log"
+          fi
+
+      - name: Archive clean build-time prefix
+        if: steps.prefix.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm --entrypoint tar tgstation-gateway-player:uat \
+            --exclude='./drive_c/Program Files (x86)/BYOND' \
+            -C /home/ubuntu/.wine -czf - . > "$RUNNER_TEMP/wine-prefix-cache/prefix.tar.gz"
+
+      - name: Save runtime-specific Wine prefix
+        if: steps.prefix.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
+          key: ${{ steps.prefix.outputs.cache-primary-key }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish once and verify pull by digest
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "$IMAGE" > "$EVIDENCE/existing-image.txt" 2> "$EVIDENCE/registry-error.txt"; then
+            echo "Refusing to overwrite an existing commit-specific UAT tag: $IMAGE" >&2
+            exit 1
+          fi
+          if ! grep -Eq 'manifest unknown|: not found' "$EVIDENCE/registry-error.txt"; then
+            cat "$EVIDENCE/registry-error.txt" >&2
+            echo "Cannot establish tag absence; refusing publication" >&2
+            exit 1
+          fi
+          docker tag tgstation-gateway-player:uat "$IMAGE"
+          docker push "$IMAGE" | tee "$EVIDENCE/push.log"
+          reference="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          docker pull "$reference"
+          printf '%s\n' "$reference" > "$EVIDENCE/published-digest.txt"
+          {
+            printf '### Proton %s / %s\n\n' "$WINE_PROTON_VERSION" '${{ matrix.display }}'
+            printf -- '- Source: `%s`\n- Tag: `%s`\n- Digest reference: `%s`\n' "$GITHUB_SHA" "$IMAGE" "$reference"
+            printf -- '- Authenticated runner pull: passed. Tester pull and interactive results: pending.\n'
+            printf -- '- Dialog / resize / fullscreen: **not tested interactively**.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload per-variant evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: uat-issue-7-proton-${{ matrix.proton }}-${{ matrix.display }}
+          path: ${{ runner.temp }}/uat-evidence/
+          if-no-files-found: warn
+          retention-days: 30
