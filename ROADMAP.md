@@ -64,7 +64,10 @@ rendering, WebView compatibility, or complete dialog behavior.
 The current installation targets WineHQ staging 11.22
 (`winehq-staging=11.22~resolute-1`) from WineHQ's signed Ubuntu 26.04
 repository. It replaces the standalone Proton runtime and its download paths;
-old Proton prefixes are not reused. BYOND and DXVK remain unchanged.
+old Proton prefixes are not reused. BYOND is unchanged. The prior pinned DXVK
+2.7.1 archive installation has been replaced with Winetricks' `dxvk` verb,
+which resolves the latest upstream release on fresh prefix creation; lighting
+has not yet been reverified with this experiment.
 Build, startup and interactive compatibility of this new runtime must be
 verified separately; earlier Proton results do not validate WineHQ staging.
 

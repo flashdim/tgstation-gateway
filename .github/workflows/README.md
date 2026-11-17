@@ -14,11 +14,10 @@ package pin; delete the matching `wine-prefix-v3-...` cache to force a fresh
 prefix. The new cache namespace and staging package-version marker prevent
 reuse of old Proton prefixes. No cache contains player session data.
 
-The BYOND download remains versioned but has an optional checksum, and the
-DXVK archive is checksum-pinned but not cached. Winetricks downloads are
-avoided when the separate prefix cache hits. Formatting remains a publication
-gate; unit tests, Compose validation, both CI display-mode smoke tests, and
-runtime checks are retained rather than duplicating an image build.
+The BYOND download remains versioned but has an optional checksum. Winetricks
+downloads are avoided when the separate prefix cache hits. Formatting remains
+a publication gate; unit tests, Compose validation, both CI display-mode smoke
+tests, and runtime checks are retained rather than duplicating an image build.
 
 ## Issue 7 repaint UAT
 
@@ -39,8 +38,10 @@ repository-selected (not version-pinned); each image's package inventory
 records their versions.
 
 The image retains the Dockerfile's digest-pinned Selkies
-2.2.1/Ubuntu 26.04 base, BYOND 516.1689, DXVK 2.7.1, WebView2 installation and
-fixed 1920×1080 display. Installation uses WineHQ's signed Ubuntu 26.04 repository and pins
+2.2.1/Ubuntu 26.04 base, BYOND 516.1689, Winetricks' `dxvk` verb, WebView2
+installation and fixed 1920×1080 display. The pinned Winetricks script resolves
+the latest DXVK GitHub release when building a fresh prefix; that release is
+not version-pinned. Installation uses WineHQ's signed Ubuntu 26.04 repository and pins
 `winehq-staging=11.22~resolute-1`. Installation follows
 [WineHQ's Debian/Ubuntu instructions](https://gitlab.winehq.org/wine/wine/-/wikis/Debian-Ubuntu):
 download the official signing key and `winehq-resolute.sources`, update APT,

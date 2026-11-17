@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 import subprocess
-import tarfile
 import tempfile
 import unittest
 
@@ -24,15 +23,6 @@ class InstallGraphicsTest(unittest.TestCase):
         for directory in ("syswow64", "system32"):
             (self.prefix / "drive_c/windows" / directory).mkdir(parents=True)
 
-        payload = self.root / "payload/dxvk-2.7.1"
-        for arch in ("x32", "x64"):
-            (payload / arch).mkdir(parents=True)
-            for dll in ("d3d9", "d3d10core", "d3d11", "dxgi"):
-                (payload / arch / f"{dll}.dll").write_text(f"{arch}-{dll}")
-        self.archive = self.root / "dxvk.tar.gz"
-        with tarfile.open(self.archive, "w:gz") as archive:
-            archive.add(payload, arcname="dxvk-2.7.1")
-
         commands = {
             "wine": (
                 'printf "%s\\n" "$*" >> "$COMMAND_LOG"\n'
@@ -43,8 +33,12 @@ class InstallGraphicsTest(unittest.TestCase):
             ),
             "wineserver": "exit 0\n",
             "cabextract": 'printf native > "$6/d3dx9_43.dll"\n',
-            "curl": 'cp "$FIXTURE" "$6"\n',
-            "sha256sum": 'cat >/dev/null\n[ "${FAIL_CHECKSUM:-0}" = 0 ]\n',
+            "winetricks": (
+                'printf "winetricks %s\\n" "$*" >> "$COMMAND_LOG"\n'
+                'printf "%s\\n" "$W_CACHE" >> "$CACHE_LOG"\n'
+                'printf archive > "$W_CACHE/dxvk.tar.gz"\n'
+                '[ "${FAIL_DXVK:-0}" = 0 ]\n'
+            ),
         }
         for name, body in commands.items():
             path = self.bin / name
@@ -60,7 +54,7 @@ class InstallGraphicsTest(unittest.TestCase):
                 "WINEPREFIX": str(self.prefix),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
-                "FIXTURE": str(self.archive),
+                "CACHE_LOG": str(self.root / "cache-path"),
                 **extra_env,
             },
             capture_output=True,
@@ -68,18 +62,24 @@ class InstallGraphicsTest(unittest.TestCase):
             timeout=10,
         )
 
-    def test_installs_bundled_directx_and_both_dxvk_architectures(self):
+    def test_installs_bundled_directx_then_winetricks_dxvk(self):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        for arch, directory in (("x32", "syswow64"), ("x64", "system32")):
-            for dll in ("d3d9", "d3d10core", "d3d11", "dxgi"):
-                file = self.prefix / "drive_c/windows" / directory / f"{dll}.dll"
-                self.assertEqual(file.read_text(), f"{arch}-{dll}")
-                self.assertIn(f"*{dll} /t REG_SZ /d native", self.log.read_text())
+        self.assertIn(
+            "winetricks -q dxvk",
+            self.log.read_text(),
+        )
+        self.assertLess(
+            self.log.read_text().index("DXSETUP.exe /silent"),
+            self.log.read_text().index("winetricks -q dxvk"),
+        )
         self.assertIn("*d3dx9_43 /t REG_SZ /d native", self.log.read_text())
+        cache_path = Path((self.root / "cache-path").read_text().strip())
+        self.assertEqual(cache_path.name, "winetricks-cache")
+        self.assertFalse(cache_path.exists())
 
-    def test_stops_on_setup_or_checksum_failure(self):
-        for env in ({"FAIL_SETUP": "1"}, {"FAIL_CHECKSUM": "1"}):
+    def test_stops_on_directx_or_dxvk_install_failure(self):
+        for env in ({"FAIL_SETUP": "1"}, {"FAIL_DXVK": "1"}):
             with self.subTest(env=env):
                 result = self.install(**env)
                 self.assertNotEqual(result.returncode, 0)

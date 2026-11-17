@@ -92,15 +92,13 @@ class InstallClientTest(unittest.TestCase):
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
                 "winetricks -q corefonts",
-                "winetricks -q riched20",
-                "winetricks -q msftedit",
                 "winetricks -q webview2",
                 "wineserver --wait",
             ],
         )
         self.assertEqual(
             (self.root / "runtime").read_text().splitlines(),
-            ["/opt/wine-staging/bin/wine|/opt/wine-staging/bin/wineserver"] * 9,
+            ["/opt/wine-staging/bin/wine|/opt/wine-staging/bin/wineserver"] * 7,
         )
         self.assertIn(
             "Starting Wine prefix initialization (timeout: 300s)", result.stdout
@@ -108,11 +106,11 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
-            (self.root / "preload").read_text().splitlines(), ["unset"] * 9
+            (self.root / "preload").read_text().splitlines(), ["unset"] * 7
         )
         self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
-            ["mscoree,mshtml=d"] + ["example=b"] * 6,
+            ["mscoree,mshtml=d"] + ["example=b"] * 4,
         )
         cache_paths = (self.root / "cache-paths").read_text().splitlines()
         self.assertEqual(len(set(cache_paths)), 1)
@@ -133,14 +131,11 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Winetricks webview2 timed out after 240s", result.stderr)
         self.assertEqual(self.log.read_text().count("wineserver --wait"), 1)
 
-    def test_fails_if_new_component_fails(self):
-        for component in ("corefonts", "riched20", "msftedit"):
-            with self.subTest(component=component):
-                result = self.install(FAIL_COMPONENT=component)
-                self.assertEqual(result.returncode, 17)
-                self.assertIn(f"Winetricks {component} failed", result.stderr)
-                self.assertNotIn("winetricks -q webview2", self.log.read_text())
-                self.log.unlink()
+    def test_fails_if_corefonts_fails(self):
+        result = self.install(FAIL_COMPONENT="corefonts")
+        self.assertEqual(result.returncode, 17)
+        self.assertIn("Winetricks corefonts failed", result.stderr)
+        self.assertNotIn("winetricks -q webview2", self.log.read_text())
 
     def test_fails_if_webview_runtime_is_missing(self):
         result = self.install()
