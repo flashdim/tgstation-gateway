@@ -59,8 +59,13 @@ RUN set -eu; \
       else \
         icd="x86_64"; \
       fi; \
-      test -r "/usr/share/vulkan/icd.d/lvp_icd.$icd.json" || \
-        { echo "Missing Mesa Vulkan ICD for $architecture" >&2; exit 1; }; \
+      if [ ! -r "/usr/share/vulkan/icd.d/lvp_icd.$icd.json" ]; then \
+        echo "Missing Mesa Vulkan ICD for $architecture; installed manifests:" >&2; \
+        find /usr/share/vulkan /etc/vulkan -type f -name '*.json' -print 2>/dev/null >&2 || true; \
+        dpkg-query -L mesa-vulkan-drivers:i386 mesa-vulkan-drivers:amd64 2>/dev/null | \
+          grep -E 'vulkan|icd' >&2 || true; \
+        exit 1; \
+      fi; \
       dependencies="$(ldd "/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so")"; \
       if printf '%s\n' "$dependencies" | grep 'not found'; then \
         echo "Missing dependencies for Mesa Vulkan driver $architecture" >&2; exit 1; \
