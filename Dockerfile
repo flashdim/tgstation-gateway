@@ -41,7 +41,7 @@ RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
 # wpcap's libpcap.so.1 are inherited optional gaps; do not fake SONAME links.
 RUN set -eu; \
     case "$WINE_PROTON_VERSION" in \
-      10.0-4) test -x /opt/wine-proton/bin/wine-preloader ;; \
+      10.0-4|9.0-4|8.0-5) test -x /opt/wine-proton/bin/wine-preloader ;; \
       11.0-2) \
         test -x /opt/wine-proton/lib/wine/i386-unix/wine-preloader; \
         test -x /opt/wine-proton/lib/wine/x86_64-unix/wine-preloader ;; \
@@ -51,6 +51,9 @@ RUN set -eu; \
       directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
       for module in ntdll.so win32u.so winex11.so winewayland.so \
           winealsa.so winepulse.so winevulkan.so; do \
+        if [ "$module" = winewayland.so ] && [ ! -f "$directory/$module" ]; then \
+          continue; \
+        fi; \
         dependencies="$(LD_LIBRARY_PATH="$directory" ldd "$directory/$module")"; \
         if printf '%s\n' "$dependencies" | grep 'not found'; then \
           echo "Missing dependencies for $directory/$module" >&2; exit 1; \

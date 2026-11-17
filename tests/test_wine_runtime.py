@@ -89,7 +89,8 @@ class WineRuntimeTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
         self.assertIn("tests/check-wine-runtime.sh", workflow)
-        self.assertIn('10.0-4) loaders="/opt/wine-proton/bin/wine-preloader"', check)
+        self.assertIn('10.0-4 | 9.0-4 | 8.0-5)', check)
+        self.assertIn('loaders="/opt/wine-proton/bin/wine-preloader"', check)
         self.assertIn("/opt/wine-proton/lib/wine/i386-unix/wine-preloader", check)
 
     def check_runtime(self, **extra_env):
@@ -142,6 +143,15 @@ class WineRuntimeTest(unittest.TestCase):
                 self.check_runtime(WINE_PROTON_VERSION="11.0-2").returncode, 0
             )
             loader.chmod(0o755)
+
+    def test_proton_8_allows_absent_native_wayland_modules(self):
+        for architecture in ("i386", "x86_64"):
+            (self.runtime / "lib/wine" / f"{architecture}-unix/winewayland.so").unlink()
+        result = self.check_runtime(WINE_PROTON_VERSION="8.0-5")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("winewayland.so", self.log.read_text())
+        check = (ROOT / "tests/check-wine-runtime.sh").read_text()
+        self.assertIn("9.0-4 | 8.0-5", check)
 
     def test_uses_pinned_ubuntu_wine_packages_for_dependencies(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

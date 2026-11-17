@@ -7,7 +7,7 @@ if [ "$wine_path" != /opt/wine-proton/bin/wine ]; then
     exit 1
 fi
 case "${WINE_PROTON_VERSION:-10.0-4}" in
-    10.0-4) loaders="/opt/wine-proton/bin/wine-preloader" ;;
+    10.0-4 | 9.0-4 | 8.0-5) loaders="/opt/wine-proton/bin/wine-preloader" ;;
     11.0-2)
         loaders="/opt/wine-proton/lib/wine/i386-unix/wine-preloader /opt/wine-proton/lib/wine/x86_64-unix/wine-preloader /opt/wine-proton/lib/wine/i386-unix/wine /opt/wine-proton/lib/wine/x86_64-unix/wine"
         ;;

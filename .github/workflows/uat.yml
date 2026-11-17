@@ -32,15 +32,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        proton: [10.0-4, 11.0-2]
-        display: [x11, wayland]
+        proton: [10.0-4, 9.0-4, 8.0-5]
     concurrency:
-      group: uat-issue-7-${{ github.sha }}-${{ matrix.proton }}-${{ matrix.display }}
+      group: uat-issue-7-${{ github.sha }}-${{ matrix.proton }}-wayland
       cancel-in-progress: false
     env:
       WINE_PROTON_VERSION: ${{ matrix.proton }}
-      SELKIES_WAYLAND: ${{ matrix.display == 'wayland' && 'true' || 'false' }}
-      IMAGE: ghcr.io/${{ github.repository }}:uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-${{ matrix.display }}
+      SELKIES_WAYLAND: "true"
+      IMAGE: ghcr.io/${{ github.repository }}:uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-wayland
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -80,7 +79,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
-          key: uat-wine-prefix-v1-${{ matrix.proton }}-${{ matrix.display }}-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/download-wine.sh', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+          key: uat-wine-prefix-v1-${{ matrix.proton }}-wayland-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/download-wine.sh', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
 
       - name: Prepare prefix directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
@@ -95,7 +94,7 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             io.tgstation-gateway.uat.proton=${{ matrix.proton }}
-            io.tgstation-gateway.uat.display=${{ matrix.display }}
+            io.tgstation-gateway.uat.display=wayland
           build-args: |
             WINE_PROTON_VERSION=${{ matrix.proton }}
             SELKIES_WAYLAND=${{ env.SELKIES_WAYLAND }}
@@ -128,11 +127,7 @@ jobs:
       - name: Smoke-test tagged display mode
         run: |
           set -euo pipefail
-          if [ "$SELKIES_WAYLAND" = true ]; then
-            bash tests/smoke-wayland.sh tgstation-gateway-player:uat 2>&1 | tee "$EVIDENCE/smoke.log"
-          else
-            bash tests/smoke-container.sh tgstation-gateway-player:uat 2>&1 | tee "$EVIDENCE/smoke.log"
-          fi
+          bash tests/smoke-wayland.sh tgstation-gateway-player:uat 2>&1 | tee "$EVIDENCE/smoke.log"
 
       - name: Archive clean build-time prefix
         if: steps.prefix.outputs.cache-hit != 'true'
@@ -169,11 +164,16 @@ jobs:
           fi
           docker tag tgstation-gateway-player:uat "$IMAGE"
           docker push "$IMAGE" | tee "$EVIDENCE/push.log"
-          reference="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' "$EVIDENCE/push.log" | tail -n 1)"
+          if [ -z "$digest" ]; then
+            echo "Could not read the pushed GHCR digest" >&2
+            exit 1
+          fi
+          reference="${IMAGE%:*}@$digest"
           docker pull "$reference"
           printf '%s\n' "$reference" > "$EVIDENCE/published-digest.txt"
           {
-            printf '### Proton %s / %s\n\n' "$WINE_PROTON_VERSION" '${{ matrix.display }}'
+            printf '### Proton %s / Wayland\n\n' "$WINE_PROTON_VERSION"
             printf -- '- Source: `%s`\n- Tag: `%s`\n- Digest reference: `%s`\n' "$GITHUB_SHA" "$IMAGE" "$reference"
             printf -- '- Authenticated runner pull: passed. Tester pull and interactive results: pending.\n'
             printf -- '- Dialog / resize / fullscreen: **not tested interactively**.\n'
@@ -183,7 +183,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: uat-issue-7-proton-${{ matrix.proton }}-${{ matrix.display }}
+          name: uat-issue-7-proton-${{ matrix.proton }}-wayland
           path: ${{ runner.temp }}/uat-evidence/
           if-no-files-found: warn
           retention-days: 30

@@ -18,17 +18,18 @@ class UatTest(unittest.TestCase):
         self.assertNotIn("  pull_request:", workflow)
         self.assertNotIn("  release:", workflow)
         self.assertIn("fail-fast: false", workflow)
-        self.assertIn("proton: [10.0-4, 11.0-2]", workflow)
-        self.assertIn("display: [x11, wayland]", workflow)
+        self.assertIn("proton: [10.0-4, 9.0-4, 8.0-5]", workflow)
+        self.assertNotIn("display:", workflow)
         self.assertIn(
-            ":uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-${{ matrix.display }}",
+            ":uat-issue-7-${{ github.sha }}-proton-${{ matrix.proton }}-wayland",
             workflow,
         )
         self.assertIn("WINE_PROTON_VERSION=${{ matrix.proton }}", workflow)
-        self.assertIn("SELKIES_WAYLAND=${{ env.SELKIES_WAYLAND }}", workflow)
+        self.assertIn('SELKIES_WAYLAND: "true"', workflow)
+        self.assertNotIn("${{ matrix.display }}", workflow)
         self.assertIn('grep -Fx "wayland=$SELKIES_WAYLAND"', workflow)
-        for mode in ("container", "wayland"):
-            self.assertIn(f"bash tests/smoke-{mode}.sh", workflow)
+        self.assertIn("bash tests/smoke-wayland.sh", workflow)
+        self.assertNotIn("bash tests/smoke-container.sh", workflow)
         self.assertLess(
             workflow.index("name: Smoke-test tagged display mode"),
             workflow.index('docker push "$IMAGE"'),
@@ -38,6 +39,8 @@ class UatTest(unittest.TestCase):
         )
         self.assertIn("Cannot establish tag absence; refusing publication", workflow)
         self.assertIn('docker pull "$reference"', workflow)
+        self.assertIn('reference="${IMAGE%:*}@$digest"', workflow)
+        self.assertNotIn("{{index .RepoDigests 0}}", workflow)
         self.assertIn("published-digest.txt", workflow)
         self.assertNotIn(":latest", workflow)
         self.assertNotIn(":dev", workflow)
@@ -49,7 +52,7 @@ class UatTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "key: uat-wine-prefix-v1-${{ matrix.proton }}-${{ matrix.display }}-",
+            "key: uat-wine-prefix-v1-${{ matrix.proton }}-wayland-",
             workflow,
         )
         for source in (
@@ -90,7 +93,7 @@ class UatTest(unittest.TestCase):
                     "  esac\n"
                     "  exit 1\n"
                     "fi\n"
-                    'if [ "$1" = image ]; then echo "ghcr.io/example/player@sha256:abc"; fi\n'
+                    'if [ "$1" = push ]; then echo "uat: digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa size: 10"; fi\n'
                 )
                 docker.chmod(0o755)
                 result = subprocess.run(
@@ -115,10 +118,14 @@ class UatTest(unittest.TestCase):
                 commands = (root / "docker.log").read_text()
                 if state == "absent":
                     self.assertIn("push ghcr.io/example/player:uat", commands)
-                    self.assertIn("pull ghcr.io/example/player@sha256:abc", commands)
+                    self.assertIn(
+                        "pull ghcr.io/example/player@sha256:"
+                        + "a" * 64,
+                        commands,
+                    )
                     self.assertEqual(
                         (root / "published-digest.txt").read_text().strip(),
-                        "ghcr.io/example/player@sha256:abc",
+                        "ghcr.io/example/player@sha256:" + "a" * 64,
                     )
                 else:
                     self.assertNotIn("push ", commands)
