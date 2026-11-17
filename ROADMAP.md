@@ -69,10 +69,9 @@ old Proton prefixes are not reused. BYOND is unchanged. The prior pinned DXVK
 which resolves the latest upstream release on fresh prefix creation. BYOND's
 bundled DirectX setup is no longer run; Winetricks' `d3dx9` and `d3dx9_43`
 verbs now supply those components. Lighting has not yet been reverified with
-these experiments. Mesa Vulkan drivers and lavapipe ICD manifests are now
-installed and checked for both i386 and x86_64 to provide a 32-bit Vulkan path
-for DXVK. This does not establish that the operator's GPU ICD is available or
-selected; interactive rendering remains unverified.
+these experiments. A Mesa Vulkan experiment added i386 and x86_64 drivers and
+lavapipe ICD manifests, but did not improve rendering; those additions have
+been removed. Interactive rendering remains unverified.
 Build, startup and interactive compatibility of this new runtime must be
 verified separately; earlier Proton results do not validate WineHQ staging.
 

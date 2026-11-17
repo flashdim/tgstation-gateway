@@ -36,8 +36,7 @@ RUN set -eu; \
     apt-get install -y --no-install-recommends \
       cabextract unzip wget xz-utils openbox trayer fonts-liberation \
       libfreetype6:i386 libfontconfig1:i386 libgnutls30t64:i386 \
-      libgssapi-krb5-2:i386 libvulkan1:i386 mesa-vulkan-drivers \
-      mesa-vulkan-drivers:i386 libgstreamer-gl1.0-0:i386; \
+      libgssapi-krb5-2:i386 libvulkan1:i386 libgstreamer-gl1.0-0:i386; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
@@ -46,22 +45,12 @@ RUN set -eu; \
 RUN set -eu; \
     test "$(dpkg-query -W -f='${Version}' winehq-staging)" = "$WINE_PACKAGE_VERSION"; \
     test -x /opt/wine-staging/bin/wine; \
-    if [ ! -r /usr/share/vulkan/icd.d/lvp_icd.json ]; then \
-      echo "Missing Mesa lavapipe Vulkan ICD manifest" >&2; \
-      exit 1; \
-    fi; \
     for architecture in i386 x86_64; do \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
           libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
         test -r "/usr/lib/$architecture-linux-gnu/$library" || \
           { echo "Missing or unreadable /usr/lib/$architecture-linux-gnu/$library" >&2; exit 1; }; \
       done; \
-      test -r "/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so" || \
-        { echo "Missing Mesa Vulkan driver for $architecture" >&2; exit 1; }; \
-      dependencies="$(ldd "/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so")"; \
-      if printf '%s\n' "$dependencies" | grep 'not found'; then \
-        echo "Missing dependencies for Mesa Vulkan driver $architecture" >&2; exit 1; \
-      fi; \
       find /opt/wine-staging/lib /opt/wine-staging/lib64 \
         -path "*/$architecture-windows/ntdll.dll" -type f -print 2>/dev/null | grep -q . || \
         { echo "Missing $architecture Windows modules" >&2; exit 1; }; \

@@ -33,11 +33,7 @@ Standalone Proton versions, including the retired Proton 8 and 9 paths, are no
 longer selectable. `WINE_PACKAGE_VERSION` selects the pinned staging package
 version. The image defaults to `SELKIES_WAYLAND=true`.
 Runtime checks retain loader, X11/Wayland module, linked-library and explicitly
-dlopened-library checks. Mesa Vulkan drivers and ICD manifests are installed
-for both i386 and x86_64, and the lavapipe drivers are checked for missing
-linked libraries. This confirms that 32-bit Vulkan software and Mesa ICD
-artifacts are present; it does not verify host GPU access, hardware ICD
-selection, or in-game rendering. Supplemental APT libraries remain
+dlopened-library checks. Supplemental APT libraries remain
 repository-selected (not version-pinned); each image's package inventory
 records their versions.
 

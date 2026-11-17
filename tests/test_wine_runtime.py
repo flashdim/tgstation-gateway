@@ -61,11 +61,8 @@ class WineRuntimeTest(unittest.TestCase):
                 path.chmod(0o755)
             libraries = self.libraries / f"{architecture}-linux-gnu"
             libraries.mkdir(parents=True)
-            for name in (*LIBRARIES, "libvulkan_lvp.so"):
+            for name in LIBRARIES:
                 (libraries / name).touch()
-        self.icd_directory = self.root / "share/vulkan/icd.d"
-        self.icd_directory.mkdir(parents=True)
-        (self.icd_directory / "lvp_icd.json").touch()
         (self.runtime / "bin").mkdir()
         for name in ("wine", "wineserver"):
             path = self.runtime / "bin" / name
@@ -93,9 +90,6 @@ class WineRuntimeTest(unittest.TestCase):
             "/opt/wine-staging", str(self.runtime)
         )
         self.check = self.check.replace("/usr/lib/", f"{self.libraries}/")
-        self.check = self.check.replace(
-            "/usr/share/vulkan/icd.d", str(self.icd_directory)
-        )
 
     def test_ci_checks_staging_loaders_in_both_library_directories(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
@@ -218,8 +212,6 @@ class WineRuntimeTest(unittest.TestCase):
         for obsolete in ("WINE_PACKAGE_SOURCE", "WINE_PROTON_VERSION", "wine-proton"):
             self.assertNotIn(obsolete, dockerfile)
         self.assertIn("libgstreamer-gl1.0-0:i386", dockerfile)
-        self.assertIn("mesa-vulkan-drivers:i386", dockerfile)
-        self.assertIn("libvulkan_lvp.so", dockerfile)
         self.assertIn("ENV PATH=/opt/wine-staging/bin:${PATH}", dockerfile)
 
     def test_rejects_mismatched_installed_package(self):
@@ -269,10 +261,8 @@ class WineRuntimeTest(unittest.TestCase):
     def test_ci_runtime_diagnostics_name_each_missing_requirement(self):
         (self.runtime / "lib64").symlink_to("lib", target_is_directory=True)
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()
-        check = (
-            check.replace("/opt/wine-staging", str(self.runtime))
-            .replace("/usr/lib/", f"{self.libraries}/")
-            .replace("/usr/share/vulkan/icd.d", str(self.icd_directory))
+        check = check.replace("/opt/wine-staging", str(self.runtime)).replace(
+            "/usr/lib/", f"{self.libraries}/"
         )
         env = {
             **os.environ,
@@ -302,10 +292,8 @@ class WineRuntimeTest(unittest.TestCase):
                     "libfreetype.so.6",
                     "libfontconfig.so.1",
                     "libvulkan.so.1",
-                    "libvulkan_lvp.so",
                 )
             ),
-            self.icd_directory / "lvp_icd.json",
         ):
             with self.subTest(path=path):
                 path.rename(path.with_suffix(path.suffix + ".missing"))
@@ -313,51 +301,6 @@ class WineRuntimeTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(str(path), result.stderr)
                 path.with_suffix(path.suffix + ".missing").rename(path)
-
-    def test_build_gate_checks_mesa_vulkan_dependencies_in_both_architectures(self):
-        result = self.check_runtime()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        checked = self.log.read_text().splitlines()
-        for architecture in ("i386", "x86_64"):
-            self.assertIn(
-                str(self.libraries / f"{architecture}-linux-gnu/libvulkan_lvp.so"),
-                checked,
-            )
-
-    def test_runtime_requires_mesa_vulkan_icd_and_drivers_for_both_architectures(self):
-        check = (ROOT / "tests/check-wine-runtime.sh").read_text()
-        check = (
-            check.replace("/opt/wine-staging", str(self.runtime))
-            .replace("/usr/lib/", f"{self.libraries}/")
-            .replace("/usr/share/vulkan/icd.d", str(self.icd_directory))
-        )
-        prefix = self.root / "prefix"
-        prefix.mkdir()
-        (prefix / ".gateway-wine-package-version").write_text("11.22~resolute-1")
-        env = {
-            **os.environ,
-            "PATH": f"{self.runtime / 'bin'}:{self.bin}:{os.environ['PATH']}",
-            "WINE_PACKAGE_VERSION": "11.22~resolute-1",
-            "WINEPREFIX": str(prefix),
-        }
-
-        def run():
-            return subprocess.run(
-                ["sh", "-c", check], env=env, capture_output=True, text=True
-            )
-
-        self.assertEqual(run().returncode, 0)
-        for path in (
-            self.libraries / "i386-linux-gnu/libvulkan_lvp.so",
-            self.libraries / "x86_64-linux-gnu/libvulkan_lvp.so",
-            self.icd_directory / "lvp_icd.json",
-        ):
-            with self.subTest(path=path):
-                path.unlink()
-                result = run()
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(str(path), result.stderr)
-                path.touch()
 
     def test_ci_rejects_wrong_package_or_prefix_version(self):
         check = (ROOT / "tests/check-wine-runtime.sh").read_text()

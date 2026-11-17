@@ -18,10 +18,6 @@ test -x /opt/wine-staging/bin/wineserver || {
     echo "Missing or non-executable /opt/wine-staging/bin/wineserver" >&2
     exit 1
 }
-if [ ! -r /usr/share/vulkan/icd.d/lvp_icd.json ]; then
-    echo "Missing Mesa lavapipe Vulkan ICD manifest /usr/share/vulkan/icd.d/lvp_icd.json" >&2
-    exit 1
-fi
 for architecture in i386 x86_64; do
     directory=""
     for libdir in lib lib64; do
@@ -65,9 +61,4 @@ for architecture in i386 x86_64; do
             exit 1
         fi
     done
-    path="/usr/lib/$architecture-linux-gnu/libvulkan_lvp.so"
-    if [ ! -r "$path" ]; then
-        echo "Missing Mesa Vulkan driver $path" >&2
-        exit 1
-    fi
 done
