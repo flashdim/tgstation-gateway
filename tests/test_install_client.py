@@ -20,6 +20,8 @@ class InstallClientTest(unittest.TestCase):
             command = self.bin / name
             command.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
+                'printf "%s|%s\\n" "${WINELOADER-unset}" "${WINESERVER-unset}" '
+                '>> "$RUNTIME_LOG"\n'
                 + (
                     'printf "%s\\n" "${WINEDLLOVERRIDES-unset}" >> "$OVERRIDE_LOG"\n'
                     if name in ("wineboot", "winetricks")
@@ -58,6 +60,7 @@ class InstallClientTest(unittest.TestCase):
                 "WINEPREFIX": str(self.prefix),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
+                "RUNTIME_LOG": str(self.root / "runtime"),
                 "OVERRIDE_LOG": str(self.root / "overrides"),
                 "CACHE_LOG": str(self.root / "cache-paths"),
                 "WINEDLLOVERRIDES": "example=b",
@@ -73,7 +76,10 @@ class InstallClientTest(unittest.TestCase):
             "drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application/"
             "123/msedgewebview2.exe"
         )
-        result = self.install()
+        result = self.install(
+            WINELOADER="/usr/bin/wine",
+            WINESERVER="/usr/bin/wineserver",
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.log.read_text().splitlines(),
@@ -89,6 +95,13 @@ class InstallClientTest(unittest.TestCase):
                 "wineserver --wait",
             ],
         )
+        self.assertEqual(
+            (self.root / "runtime").read_text().splitlines(),
+            [
+                "/opt/wine-proton/bin/wine|/opt/wine-proton/bin/wineserver"
+            ] * 9,
+        )
+        self.assertIn("Starting Wine prefix initialization (timeout: 300s)", result.stdout)
         self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(

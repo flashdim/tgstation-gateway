@@ -24,8 +24,11 @@ run_stage() {
 }
 
 export WINEDEBUG=-all,err+all
+export PATH="/opt/wine-proton/bin:$PATH"
+export WINELOADER="/opt/wine-proton/bin/wine"
+export WINESERVER="/opt/wine-proton/bin/wineserver"
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
-run_stage "Wine prefix initialization" 90s \
+run_stage "Wine prefix initialization" 300s \
     env WINEDLLOVERRIDES=mscoree,mshtml=d wineboot --init
 run_stage "Wine prefix startup" 30s wineserver --wait
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
