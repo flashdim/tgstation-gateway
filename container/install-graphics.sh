@@ -18,7 +18,18 @@ cmp "$workdir/d3dx9_43.dll" "$WINEPREFIX/drive_c/windows/syswow64/d3dx9_43.dll" 
 }
 wine reg add 'HKCU\Software\Wine\DllOverrides' /v '*d3dx9_43' /t REG_SZ /d native /f
 
-export W_CACHE="$workdir/winetricks-cache"
-mkdir -p "$W_CACHE"
-timeout --kill-after=10s 300s winetricks -q dxvk
+dxvk_version=3.1.1
+dxvk_dir="dxvk-$dxvk_version"
+archive="$workdir/$dxvk_dir.tar.gz"
+curl -fsSL --retry 3 --max-time 120 \
+    "https://github.com/doitsujin/dxvk/releases/download/v$dxvk_version/$dxvk_dir.tar.gz" \
+    -o "$archive"
+printf '%s  %s\n' 40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608 "$archive" |
+    sha256sum -c -
+tar -xzf "$archive" -C "$workdir"
+for dll in dxgi d3d8 d3d9 d3d10core d3d11; do
+    cp "$workdir/$dxvk_dir/x32/$dll.dll" "$WINEPREFIX/drive_c/windows/syswow64/"
+    cp "$workdir/$dxvk_dir/x64/$dll.dll" "$WINEPREFIX/drive_c/windows/system32/"
+    wine reg add 'HKCU\Software\Wine\DllOverrides' /v "$dll" /t REG_SZ /d native /f
+done
 timeout --kill-after=10s 30s wineserver --wait

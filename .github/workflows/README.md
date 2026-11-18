@@ -21,8 +21,8 @@ contains player session data.
 Ubuntu Wine 10 packages are installed as version-pinned runtime dependencies,
 while Proton's standalone runtime is selected first in PATH. Graphics setup
 runs BYOND's bundled DirectX installer, verifies the installed `d3dx9_43.dll`
-against BYOND's CAB and configures the native DLL override. Winetricks installs
-DXVK through its `dxvk` verb; the DXVK release is not separately pinned. The
-BYOND download remains versioned but has an optional checksum. Successful
+against BYOND's CAB and configures the native DLL override. It also installs
+checksum-verified DXVK 3.1.1. The BYOND download remains versioned but has an
+optional checksum. Successful
 startup smoke tests do not demonstrate interactive gameplay or rendering
 compatibility.

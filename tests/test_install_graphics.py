@@ -44,11 +44,25 @@ class InstallGraphicsTest(unittest.TestCase):
                 'cp "$CAB_DLL" "$destination/d3dx9_43.dll"\n'
             ),
             "wineserver": 'printf "wineserver %s\\n" "$*" >> "$COMMAND_LOG"\n',
-            "winetricks": (
-                'printf "winetricks %s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'printf "%s\\n" "$W_CACHE" >> "$CACHE_LOG"\n'
-                'printf archive > "$W_CACHE/$2.archive"\n'
-                '[ "${FAIL_VERB:-}" != "$2" ] || exit 17\n'
+            "curl": (
+                'printf "curl %s\\n" "$*" >> "$COMMAND_LOG"\n'
+                'printf archive > "$8"\n'
+            ),
+            "sha256sum": (
+                'read -r digest archive\n'
+                'test -s "$archive"\n'
+                'printf "verify %s\\n" "$digest" >> "$COMMAND_LOG"\n'
+                '[ "${BAD_CHECKSUM:-0}" = 0 ]\n'
+            ),
+            "tar": (
+                'printf "extract\\n" >> "$COMMAND_LOG"\n'
+                'for arch in x32 x64; do\n'
+                '  dir="$4/dxvk-3.1.1/$arch"\n'
+                '  mkdir -p "$dir"\n'
+                '  for dll in dxgi d3d8 d3d9 d3d10core d3d11; do\n'
+                '    printf "%s" "$arch" > "$dir/$dll.dll"\n'
+                "  done\n"
+                "done\n"
             ),
         }
         for name, body in commands.items():
@@ -56,6 +70,7 @@ class InstallGraphicsTest(unittest.TestCase):
             path.write_text("#!/bin/sh\nset -e\n" + body)
             path.chmod(0o755)
         self.log = self.root / "commands"
+        (self.prefix / "drive_c/windows/system32").mkdir(parents=True)
 
     def install(self, **extra_env):
         return subprocess.run(
@@ -65,7 +80,6 @@ class InstallGraphicsTest(unittest.TestCase):
                 "WINEPREFIX": str(self.prefix),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
-                "CACHE_LOG": str(self.root / "cache-path"),
                 "INSTALLER_DLL": str(self.installer_dll),
                 "CAB_DLL": str(self.cab_dll),
                 **extra_env,
@@ -75,48 +89,50 @@ class InstallGraphicsTest(unittest.TestCase):
             timeout=10,
         )
 
-    def test_runs_bundled_directx_setup_then_winetricks_dxvk(self):
+    def test_runs_bundled_directx_setup_then_installs_verified_dxvk(self):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.log.read_text().splitlines()
         self.assertEqual(commands[0], "wine DXSETUP.exe /silent")
         self.assertTrue(commands[1].startswith("cabextract -q -L -F d3dx9_43.dll -d "))
-        self.assertEqual(
-            commands[2:],
-            [
-                "wine reg add HKCU\\Software\\Wine\\DllOverrides /v *d3dx9_43 "
+        self.assertIn("/v *d3dx9_43 /t REG_SZ /d native /f", commands[2])
+        self.assertIn("/v3.1.1/dxvk-3.1.1.tar.gz", commands[3])
+        self.assertTrue(commands[4].startswith("verify "))
+        self.assertEqual(commands[5], "extract")
+        for dll in ("dxgi", "d3d8", "d3d9", "d3d10core", "d3d11"):
+            self.assertEqual(
+                (self.prefix / f"drive_c/windows/syswow64/{dll}.dll").read_text(),
+                "x32",
+            )
+            self.assertEqual(
+                (self.prefix / f"drive_c/windows/system32/{dll}.dll").read_text(),
+                "x64",
+            )
+            self.assertIn(
+                f"wine reg add HKCU\\Software\\Wine\\DllOverrides /v {dll} "
                 "/t REG_SZ /d native /f",
-                "winetricks -q dxvk",
-                "wineserver --wait",
-            ],
-        )
-        self.assertTrue(
-            (self.prefix / "drive_c/windows/syswow64/d3dx9_43.dll").exists()
-        )
-        cache_paths = (self.root / "cache-path").read_text().splitlines()
-        self.assertEqual(len(cache_paths), 1)
-        self.assertEqual(Path(cache_paths[0]).name, "winetricks-cache")
-        self.assertFalse(Path(cache_paths[0]).exists())
+                commands,
+            )
+        self.assertEqual(commands[-1], "wineserver --wait")
 
-    def test_stops_on_directx_setup_or_dxvk_failure(self):
-        for environment, expected in (
-            ({"FAIL_COMPONENT": "DXSETUP"}, "wine DXSETUP.exe /silent"),
-            ({"FAIL_VERB": "dxvk"}, "winetricks -q dxvk"),
-        ):
-            with self.subTest(environment=environment):
-                result = self.install(**environment)
-                self.assertNotEqual(result.returncode, 0)
-                commands = self.log.read_text().splitlines()
-                self.assertIn(expected, commands)
-                self.assertNotIn("wineserver --wait", commands)
-                self.log.unlink(missing_ok=True)
+    def test_stops_before_extracting_dxvk_if_checksum_fails(self):
+        result = self.install(BAD_CHECKSUM="1")
+        self.assertNotEqual(result.returncode, 0)
+        commands = self.log.read_text().splitlines()
+        self.assertTrue(commands[-1].startswith("verify "))
+        self.assertFalse((self.prefix / "drive_c/windows/syswow64/d3d9.dll").exists())
+
+    def test_stops_on_directx_setup_failure(self):
+        result = self.install(FAIL_COMPONENT="DXSETUP")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.log.read_text().splitlines(), ["wine DXSETUP.exe /silent"])
 
     def test_rejects_mismatch_between_bundled_and_installed_d3dx9(self):
         self.cab_dll.write_bytes(b"different DLL")
         result = self.install()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("did not install the expected D3DX9 library", result.stderr)
-        self.assertNotIn("winetricks -q dxvk", self.log.read_text())
+        self.assertNotIn("curl ", self.log.read_text())
 
 
 if __name__ == "__main__":
