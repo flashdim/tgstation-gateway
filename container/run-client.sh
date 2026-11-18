@@ -14,8 +14,20 @@ export PATH="/opt/wine-proton/bin:$PATH"
 export WINELOADER="/opt/wine-proton/bin/wine"
 export WINESERVER="/opt/wine-proton/bin/wineserver"
 
+display_ready() {
+    if [ "${SELKIES_WAYLAND:-false}" = true ]; then
+        # KWin sets these after Selkies writes container-env.
+        local session_env="$XDG_RUNTIME_DIR/byond-xwayland"
+        [ -r "$session_env" ] &&
+            { IFS= read -r DISPLAY && IFS= read -r XAUTHORITY; } <"$session_env" &&
+            [ -n "$DISPLAY" ] && [ -n "$XAUTHORITY" ] && [ -r "$XAUTHORITY" ] || return 1
+        export DISPLAY XAUTHORITY
+    fi
+    timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null 2>&1
+}
+
 export DISPLAY="${DISPLAY:-:20}"
-until timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; do
+until display_ready; do
     sleep 1
 done
 

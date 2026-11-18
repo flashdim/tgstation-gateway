@@ -23,14 +23,23 @@ fi
 address="$(docker port "$container" 8080/tcp)"
 for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
-        docker exec "$container" pgrep -x labwc >/dev/null &&
+        docker exec "$container" pgrep -x kwin_wayland >/dev/null &&
+        docker exec "$container" pgrep -x plasmashell >/dev/null &&
         docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
         docker exec "$container" sh -c \
-            '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = true && xdpyinfo -display "$DISPLAY" >/dev/null'; then
-        docker exec "$container" s6-svc -d /etc/service/window-manager
+            'set -e
+            runtime="${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}"
+            . "$runtime/container-env"
+            test "$SELKIES_WAYLAND" = true
+            { IFS= read -r DISPLAY && IFS= read -r XAUTHORITY; } < "$runtime/byond-xwayland"
+            test -n "$DISPLAY"
+            test -n "$XAUTHORITY"
+            test -r "$XAUTHORITY"
+            export DISPLAY XAUTHORITY
+            timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null'; then
         sleep 3
         if docker exec "$container" /usr/local/bin/healthcheck; then
-            echo "Wayland compositor, XWayland and BYOND health checks passed"
+            echo "Plasma Wayland, XWayland and BYOND health checks passed"
             exit 0
         fi
     fi

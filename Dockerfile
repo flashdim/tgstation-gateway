@@ -5,7 +5,8 @@
 FROM scratch AS wine-prefix-cache
 FROM scratch AS wine-download-cache
 
-FROM ghcr.io/selkies-project/selkies/base:2.2.1-ubuntu26.04@sha256:4b70c739ea5aa650dd35a143d92c4bf80b7a527f2c66ee88718b08a5211267ff
+# This Plasma release was built on the Selkies 2.2.1 Ubuntu 26.04 base.
+FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04-20261113052020
 
 USER root
 SHELL ["/bin/sh", "-c"]
@@ -21,7 +22,7 @@ RUN set -eu; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
-      openbox trayer fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
+      fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
@@ -91,7 +92,7 @@ RUN curl -fsSL --retry 3 \
 COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
 
 USER 1000
-ARG SELKIES_WAYLAND=false
+ARG SELKIES_WAYLAND=true
 ENV PATH=/opt/wine-proton/bin:${PATH} \
     WINELOADER=/opt/wine-proton/bin/wine \
     WINESERVER=/opt/wine-proton/bin/wineserver \
@@ -100,6 +101,7 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     WINEPREFIX=/home/ubuntu/.wine \
     WINEARCH=win64 \
     SELKIES_WAYLAND=${SELKIES_WAYLAND} \
+    SELKIES_WAYLAND_X11_FALLBACK=false \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_MANUAL_WIDTH=1920 \
@@ -130,11 +132,11 @@ RUN /usr/local/bin/install-byond
 RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \
+RUN install -d -o 1000 -g 1000 /etc/service/byond && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
-COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
-COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run
+COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
+COPY --chmod=644 container/byond-xwayland.desktop /etc/xdg/autostart/byond-xwayland.desktop
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

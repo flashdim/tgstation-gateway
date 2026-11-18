@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=BYOND XWayland environment
+Exec=/usr/local/bin/publish-xwayland-env
+OnlyShowIn=KDE;
+NoDisplay=true

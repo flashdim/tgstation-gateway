@@ -25,8 +25,8 @@ Provide an independently usable, single-player Wine/BYOND image.
   Winetricks dependencies and browser streaming; support an optional checksum.
 - Start the BYOND pager or connect directly to an operator-configured server;
   expose the streaming endpoint and provide local Compose examples.
-- Use a desktop-free X11 session with Openbox and a pager tray; support optional
-  AMD/Intel GPU access.
+- Use Selkies' EGL KDE Plasma desktop with KWin on Wayland by default and
+  Plasma on X11/Xvfb as a comparison mode; support optional AMD/Intel GPU access.
 - Keep seccomp enabled with a narrowly scoped exception for Wine's 32-bit
   `socket` syscall; use the same profile in examples and smoke tests.
 - Build and publish the development image before CI validation; publish the
@@ -66,9 +66,8 @@ Wine 10 packages provide runtime dependencies. WineHQ staging and GE-Proton
 experiments were reverted and are not part of the current image. Its graphics
 setup runs BYOND's bundled DirectX installer for `d3dx9_43`, verifies the
 installed DLL against BYOND's CAB, and configures the native DLL override.
-Winetricks installs DXVK through its `dxvk` verb; the resolved DXVK release is
-not separately version-pinned. An earlier attempt to install native
-`d3dx9_43` did not improve the scene, but the user reports that restoring
+Graphics setup also installs checksum-verified DXVK 3.1.1. An earlier attempt
+to install native `d3dx9_43` did not improve the scene, but the user reports that restoring
 BYOND's bundled DirectX installer fixed the lighting rendering issue in the
 current setup. This points to the bundled installer being important for
 lighting in that test; it does not establish the underlying mechanism or

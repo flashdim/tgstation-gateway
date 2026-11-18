@@ -29,7 +29,10 @@ class SmokeContainerTest(unittest.TestCase):
                 "  exec)\n"
                 '    case "$3" in\n'
                 '      pgrep) if [ "$4" = "-x" ]; then '
-                '[ "${NO_WINDOW_MANAGER:-0}" = 0 ]; '
+                'case "$5" in\n'
+                '  kwin_x11|plasmashell) [ "$5" != "${MISSING_PROCESS:-}" ] ;;\n'
+                "  *) exit 1 ;;\n"
+                "esac; "
                 'else test ! -f "$SERVICE_STOPPED"; fi ;;\n'
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
@@ -86,11 +89,15 @@ class SmokeContainerTest(unittest.TestCase):
         self.assertIn("Health check passed without the BYOND pager", result.stderr)
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
-    def test_requires_window_manager(self):
-        result = self.smoke(NO_WINDOW_MANAGER="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("exited before it became ready", result.stderr)
-        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
+    def test_requires_plasma_and_kwin(self):
+        for process in ("kwin_x11", "plasmashell"):
+            with self.subTest(process=process):
+                result = self.smoke(MISSING_PROCESS=process)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("exited before it became ready", result.stderr)
+                self.assertEqual(
+                    self.log.read_text().splitlines()[-1], "rm -f test-container"
+                )
 
     def test_requires_x11_session(self):
         result = self.smoke(WRONG_DISPLAY="1")

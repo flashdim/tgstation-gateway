@@ -19,8 +19,8 @@ address="$(docker port "$container" 8080/tcp)"
 for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
         docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
-        docker exec "$container" pgrep -x openbox >/dev/null &&
-        docker exec "$container" pgrep -x trayer >/dev/null &&
+        docker exec "$container" pgrep -x kwin_x11 >/dev/null &&
+        docker exec "$container" pgrep -x plasmashell >/dev/null &&
         docker exec "$container" sh -c \
             '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = false && xdpyinfo -display "$DISPLAY" >/dev/null'; then
         sleep 3
@@ -47,7 +47,7 @@ for _ in {1..120}; do
                 echo "Health check passed without the BYOND pager" >&2
                 exit 1
             fi
-            echo "Selkies and BYOND health checks passed"
+            echo "Plasma X11, Selkies and BYOND health checks passed"
             exit 0
         fi
     fi
