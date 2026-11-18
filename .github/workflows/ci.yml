@@ -28,6 +28,19 @@ jobs:
         run: |
           "$RUNNER_TEMP/format-env/bin/pre-commit" run --all-files --show-diff-on-failure
 
+  unit-tests:
+    needs: formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
   image:
     needs: formatting
     runs-on: ubuntu-latest
@@ -101,9 +114,6 @@ jobs:
         run: |
           docker tag tgstation-gateway-player:ci "$IMAGE"
           docker push "$IMAGE"
-
-      - name: Run unit tests
-        run: python3 -m unittest discover -s tests -v
 
       - name: Validate Compose example
         run: |
