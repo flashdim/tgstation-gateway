@@ -25,8 +25,8 @@ Provide an independently usable, single-player Wine/BYOND image.
   Winetricks dependencies and browser streaming; support an optional checksum.
 - Start the BYOND pager or connect directly to an operator-configured server;
   expose the streaming endpoint and provide local Compose examples.
-- Use Selkies' Wayland session with labwc by default, with an X11/Xvfb
-  comparison mode and a pager tray; support optional AMD/Intel GPU access.
+- Use Selkies' EGL KDE Plasma desktop with KWin on Wayland by default and
+  Plasma on X11/Xvfb as a comparison mode; support optional AMD/Intel GPU access.
 - Keep seccomp enabled with a narrowly scoped exception for Wine's 32-bit
   `socket` syscall; use the same profile in examples and smoke tests.
 - Build and publish the development image before CI validation; publish the

@@ -25,13 +25,14 @@ docker compose -f examples/compose.yaml up
 
 Open [http://localhost:8080](http://localhost:8080). The default setup opens the BYOND pager; sign in and choose a server. If the image is not available from GHCR yet, build it locally as described below.
 
-The session uses Selkies' Wayland mode with labwc by default. To compare with
-the X11/Xvfb mode, set `SELKIES_WAYLAND=false` when running Compose.
+The image uses Selkies' EGL KDE Plasma desktop with KWin on Wayland by
+default. Set `SELKIES_WAYLAND=false` when running Compose to compare with
+Plasma on X11/Xvfb.
 To test the published development image explicitly in Wayland mode, run:
 
 ```sh
 GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev SELKIES_WAYLAND=true \
-  docker compose -f examples/compose.yaml up
+  docker compose -f examples/compose.yaml up --pull always
 ```
 
 Press **Ctrl+C** to stop the running container. To remove it and its temporary player data, run:
