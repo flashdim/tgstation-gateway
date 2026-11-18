@@ -45,21 +45,20 @@ class InstallGraphicsTest(unittest.TestCase):
             ),
             "wineserver": 'printf "wineserver %s\\n" "$*" >> "$COMMAND_LOG"\n',
             "curl": (
-                'printf "curl %s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'printf archive > "$8"\n'
+                'printf "curl %s\\n" "$*" >> "$COMMAND_LOG"\nprintf archive > "$8"\n'
             ),
             "sha256sum": (
-                'read -r digest archive\n'
+                "read -r digest archive\n"
                 'test -s "$archive"\n'
                 'printf "verify %s\\n" "$digest" >> "$COMMAND_LOG"\n'
                 '[ "${BAD_CHECKSUM:-0}" = 0 ]\n'
             ),
             "tar": (
                 'printf "extract\\n" >> "$COMMAND_LOG"\n'
-                'for arch in x32 x64; do\n'
+                "for arch in x32 x64; do\n"
                 '  dir="$4/dxvk-3.1.1/$arch"\n'
                 '  mkdir -p "$dir"\n'
-                '  for dll in dxgi d3d8 d3d9 d3d10core d3d11; do\n'
+                "  for dll in dxgi d3d8 d3d9 d3d10core d3d11; do\n"
                 '    printf "%s" "$arch" > "$dir/$dll.dll"\n'
                 "  done\n"
                 "done\n"
@@ -125,7 +124,9 @@ class InstallGraphicsTest(unittest.TestCase):
     def test_stops_on_directx_setup_failure(self):
         result = self.install(FAIL_COMPONENT="DXSETUP")
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(self.log.read_text().splitlines(), ["wine DXSETUP.exe /silent"])
+        self.assertEqual(
+            self.log.read_text().splitlines(), ["wine DXSETUP.exe /silent"]
+        )
 
     def test_rejects_mismatch_between_bundled_and_installed_d3dx9(self):
         self.cab_dll.write_bytes(b"different DLL")
