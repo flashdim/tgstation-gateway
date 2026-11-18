@@ -28,6 +28,8 @@ Open [http://localhost:8080](http://localhost:8080). The default setup opens the
 The image uses Selkies' EGL KDE Plasma desktop with KWin on Wayland by
 default. Set `SELKIES_WAYLAND=false` when running Compose to compare with
 Plasma on X11/Xvfb.
+In Wayland mode, BYOND starts once Plasma shares its authenticated XWayland
+display with the gateway's launcher.
 To test the published development image explicitly in Wayland mode, run:
 
 ```sh

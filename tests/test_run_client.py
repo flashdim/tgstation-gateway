@@ -9,19 +9,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RunClientTest(unittest.TestCase):
-    def run_client(self, server=None, gpu=None, fail_registry=False):
+    def run_client(self, server=None, gpu=None, fail_registry=False, wayland=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             commands = root / "bin"
             commands.mkdir()
             for name, body in {
                 "timeout": 'shift\nexec "$@"',
-                "xdpyinfo": 'test "$1" = "-display" && test "$2" = ":42"',
+                "xdpyinfo": (
+                    'test "$1" = "-display" && test "$2" = "$EXPECTED_DISPLAY" && '
+                    'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY"'
+                ),
                 "wine": (
                     'case "$PATH" in /opt/wine-proton/bin:*) ;; '
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
                     'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
                     'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
+                    'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 95\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
@@ -41,9 +45,11 @@ class RunClientTest(unittest.TestCase):
             runtime = root / "runtime"
             runtime.mkdir()
             prefix = root / "wine prefix"
+            authority = runtime / "kwin authority"
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
+                f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
             )
@@ -54,9 +60,28 @@ class RunClientTest(unittest.TestCase):
                 "WINE_LOG": str(root / "wine-log"),
                 "FAIL_REGISTRY": "1" if fail_registry else "0",
                 "LD_PRELOAD": "libm.so.6",
+                "EXPECTED_DISPLAY": ":7" if wayland else ":42",
+                "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
+            env.pop("XAUTHORITY", None)
+            if wayland:
+                authority.write_text("test cookie")
+                subprocess.run(
+                    ["sh", str(ROOT / "container/publish-xwayland-env.sh")],
+                    env={
+                        **env,
+                        "XDG_SESSION_TYPE": "wayland",
+                        "DISPLAY": ":7",
+                        "XAUTHORITY": str(authority),
+                    },
+                    check=True,
+                    timeout=5,
+                )
+                handoff = runtime / "byond-xwayland"
+                self.assertEqual(handoff.stat().st_mode & 0o777, 0o600)
+                self.assertNotIn("test cookie", handoff.read_text())
             result = subprocess.run(
                 ["bash", str(ROOT / "container/run-client.sh")],
                 env=env,
@@ -66,6 +91,14 @@ class RunClientTest(unittest.TestCase):
             )
             log = root / "wine-log"
             return result, prefix, log.read_text().splitlines() if log.exists() else []
+
+    def test_launches_wine_with_authenticated_plasma_display(self):
+        result, prefix, _ = self.run_client(wayland=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [":7", str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe")],
+        )
 
     def test_launches_byond_after_loading_session_environment(self):
         for server in (None, ""):

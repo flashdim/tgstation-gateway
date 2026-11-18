@@ -27,7 +27,16 @@ for _ in {1..120}; do
         docker exec "$container" pgrep -x plasmashell >/dev/null &&
         docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
         docker exec "$container" sh -c \
-            '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = true && xdpyinfo -display "$DISPLAY" >/dev/null'; then
+            'set -e
+            runtime="${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}"
+            . "$runtime/container-env"
+            test "$SELKIES_WAYLAND" = true
+            { IFS= read -r DISPLAY && IFS= read -r XAUTHORITY; } < "$runtime/byond-xwayland"
+            test -n "$DISPLAY"
+            test -n "$XAUTHORITY"
+            test -r "$XAUTHORITY"
+            export DISPLAY XAUTHORITY
+            timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null'; then
         sleep 3
         if docker exec "$container" /usr/local/bin/healthcheck; then
             echo "Plasma Wayland, XWayland and BYOND health checks passed"
