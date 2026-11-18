@@ -33,12 +33,25 @@ class WorkflowTest(unittest.TestCase):
                         workflow.index(f"docker tag tgstation-gateway-player:{tag}"),
                     )
 
-    def test_ci_publishes_dev_image_before_validation(self):
+    def test_ci_unit_tests_and_image_run_independently_after_formatting(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        jobs = dict(
+            re.findall(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:|\Z)", workflow, re.M | re.S)
+        )
+        for job in ("unit-tests", "image"):
+            with self.subTest(job=job):
+                self.assertEqual(
+                    re.findall(r"^    needs: (.+)$", jobs[job], re.M), ["formatting"]
+                )
+        command = "python3 -m unittest discover -s tests -v"
+        self.assertIn(command, jobs["unit-tests"])
+        self.assertNotIn(command, jobs["image"])
+
+    def test_ci_publishes_dev_image_before_container_validation(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         publish = workflow.index("name: Publish development image")
         self.assertLess(workflow.index("name: Build player image"), publish)
         for validation in (
-            "name: Run unit tests",
             "name: Validate Compose example",
             "name: Smoke-test player image",
             "name: Smoke-test Wayland session",
