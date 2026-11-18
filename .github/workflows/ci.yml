@@ -41,17 +41,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run unit tests
-        run: python3 -m unittest discover -s tests -v
-
-      - name: Validate Compose example
-        run: |
-          docker compose -f examples/compose.yaml config --quiet
-          docker compose -f examples/compose.yaml config --format json |
-            python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=./seccomp.json"]'
-          python3 -c 'import json; p=json.load(open("examples/seccomp.json")); assert p["defaultAction"] == "SCMP_ACT_ERRNO" and any(rule["names"] == ["socket"] and rule["action"] == "SCMP_ACT_ALLOW" and rule.get("includes", {}).get("arches") == ["SCMP_ARCH_X86"] for rule in p["syscalls"])'
-          DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
-
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -82,6 +71,16 @@ jobs:
           path: ${{ runner.temp }}/wine-download-cache/wine-proton.tar.xz
           key: ${{ steps.wine-download.outputs.cache-primary-key }}
 
+      - name: Log in to GHCR
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build player image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -92,6 +91,27 @@ jobs:
           build-contexts: |
             wine-prefix-cache=${{ runner.temp }}/wine-prefix-cache
             wine-download-cache=${{ runner.temp }}/wine-download-cache
+
+      - name: Publish development image
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:dev
+        run: |
+          docker tag tgstation-gateway-player:ci "$IMAGE"
+          docker push "$IMAGE"
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Validate Compose example
+        run: |
+          docker compose -f examples/compose.yaml config --quiet
+          docker compose -f examples/compose.yaml config --format json |
+            python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=./seccomp.json"]'
+          python3 -c 'import json; p=json.load(open("examples/seccomp.json")); assert p["defaultAction"] == "SCMP_ACT_ERRNO" and any(rule["names"] == ["socket"] and rule["action"] == "SCMP_ACT_ALLOW" and rule.get("includes", {}).get("arches") == ["SCMP_ARCH_X86"] for rule in p["syscalls"])'
+          DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
 
       - name: Smoke-test player image
         id: smoke-x11
@@ -187,23 +207,3 @@ jobs:
           docker image inspect \
             --format='{{index .RepoTags 0}} {{.Size}} bytes' \
             tgstation-gateway-player:ci
-
-      - name: Log in to GHCR
-        if: >-
-          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish tested development image
-        if: >-
-          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}:dev
-        run: |
-          docker tag tgstation-gateway-player:ci "$IMAGE"
-          docker push "$IMAGE"

@@ -1,8 +1,10 @@
 # GitHub Actions workflows
 
-`ci.yml` runs formatting, unit tests, Compose validation, image builds, smoke
-tests for both display modes, and Wine runtime checks. It publishes the tested
-development image for trusted branches and pull requests from this repository.
+`ci.yml` runs formatting, image builds, unit tests, Compose validation, smoke
+tests for both display modes, and Wine runtime checks. It publishes the
+development image immediately after the build for trusted branches and pull
+requests from this repository, before those tests and checks run. The `dev` tag
+may therefore point to an image that fails validation.
 `publish.yml` tests and smoke-tests a release image before publishing it.
 
 ## Build caches
