@@ -31,6 +31,13 @@ class InstallClientTest(unittest.TestCase):
                 + (
                     'printf "%s\\n" "$W_CACHE" >> "$CACHE_LOG"\n'
                     'printf "installer" > "$W_CACHE/installer.exe"\n'
+                    'if [ "$2" = corefonts ] && [ -n "${COREFONTS_FAILURE:-}" ]; then\n'
+                    '    if [ "$COREFONTS_FAILURE" = always ] || '
+                    '[ ! -f "$W_CACHE/corefonts-attempted" ]; then\n'
+                    '        touch "$W_CACHE/corefonts-attempted"\n'
+                    "        exit 1\n"
+                    "    fi\n"
+                    "fi\n"
                     '[ "${FAIL_COMPONENT:-}" != "$2" ] || exit 17\n'
                     if name == "winetricks"
                     else ""
@@ -135,6 +142,30 @@ class InstallClientTest(unittest.TestCase):
         result = self.install(FAIL_COMPONENT="corefonts")
         self.assertEqual(result.returncode, 17)
         self.assertIn("Winetricks corefonts failed", result.stderr)
+        self.assertNotIn("winetricks -q webview2", self.log.read_text())
+
+    def test_retries_corefonts_after_wine_shuts_down(self):
+        self.create_file(
+            "drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application/"
+            "123/msedgewebview2.exe"
+        )
+        result = self.install(COREFONTS_FAILURE="once")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.log.read_text().splitlines()[-5:],
+            [
+                "winetricks -q corefonts",
+                "wineserver --wait",
+                "winetricks -q corefonts",
+                "winetricks -q webview2",
+                "wineserver --wait",
+            ],
+        )
+
+    def test_does_not_continue_after_two_corefonts_failures(self):
+        result = self.install(COREFONTS_FAILURE="always")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 2)
         self.assertNotIn("winetricks -q webview2", self.log.read_text())
 
     def test_fails_if_webview_runtime_is_missing(self):

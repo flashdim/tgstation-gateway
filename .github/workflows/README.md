@@ -21,6 +21,10 @@ Prefixes carry a Proton-version marker so runtimes cannot be mixed. Delete the
 matching `wine-prefix-v4-proton-...` cache to force a fresh prefix. No cache
 contains player session data.
 
+On a cache miss, the prefix installer retries Winetricks `corefonts` once
+after Wine shuts down if registration exits with status 1. A second failure
+still stops the build.
+
 Ubuntu Wine 10 packages are installed as version-pinned runtime dependencies,
 while Proton's standalone runtime is selected first in PATH. Graphics setup
 runs BYOND's bundled DirectX installer, verifies the installed `d3dx9_43.dll`
