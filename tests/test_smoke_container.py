@@ -31,8 +31,8 @@ class SmokeContainerTest(unittest.TestCase):
                 '      pgrep) if [ "$4" = "-x" ]; then '
                 'case "$5" in\n'
                 '  kwin_x11|plasmashell) [ "$5" != "${MISSING_PROCESS:-}" ] ;;\n'
-                '  *) exit 1 ;;\n'
-                'esac; '
+                "  *) exit 1 ;;\n"
+                "esac; "
                 'else test ! -f "$SERVICE_STOPPED"; fi ;;\n'
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
