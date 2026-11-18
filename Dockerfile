@@ -91,7 +91,7 @@ RUN curl -fsSL --retry 3 \
 COPY --chmod=755 container/install-client.sh /usr/local/bin/install-client
 
 USER 1000
-ARG SELKIES_WAYLAND=false
+ARG SELKIES_WAYLAND=true
 ENV PATH=/opt/wine-proton/bin:${PATH} \
     WINELOADER=/opt/wine-proton/bin/wine \
     WINESERVER=/opt/wine-proton/bin/wineserver \
