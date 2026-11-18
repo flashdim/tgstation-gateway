@@ -30,8 +30,8 @@ Provide an independently usable, single-player Wine/BYOND image.
   access.
 - Keep seccomp enabled with a narrowly scoped exception for Wine's 32-bit
   `socket` syscall; use the same profile in examples and smoke tests.
-- Build and smoke-test the image in CI, publish a tested development image and
-  publish the tested image on release.
+- Build and publish the development image before CI validation; publish the
+  release image only after it passes tests and smoke tests.
 
 **Progress:** CI has built, smoke-tested and published the desktop-free `dev`
 image. A user report confirms that the menu, dialogs and audio work, but the

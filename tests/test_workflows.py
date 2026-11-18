@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkflowTest(unittest.TestCase):
-    def test_ci_and_release_publish_the_smoke_tested_player_image(self):
+    def test_ci_and_release_build_local_player_images(self):
         for filename, tag in (("ci.yml", "ci"), ("publish.yml", "release")):
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
@@ -27,10 +27,25 @@ class WorkflowTest(unittest.TestCase):
                     )
                 self.assertIn("tests/check-wine-runtime.sh", workflow)
                 self.assertIn(f"docker tag tgstation-gateway-player:{tag}", workflow)
-                self.assertLess(
-                    workflow.index("tests/check-wine-runtime.sh"),
-                    workflow.index(f"docker tag tgstation-gateway-player:{tag}"),
-                )
+                if filename == "publish.yml":
+                    self.assertLess(
+                        workflow.index("tests/check-wine-runtime.sh"),
+                        workflow.index(f"docker tag tgstation-gateway-player:{tag}"),
+                    )
+
+    def test_ci_publishes_dev_image_before_validation(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        publish = workflow.index("name: Publish development image")
+        self.assertLess(workflow.index("name: Build player image"), publish)
+        for validation in (
+            "name: Run unit tests",
+            "name: Validate Compose example",
+            "name: Smoke-test player image",
+            "name: Smoke-test Wayland session",
+            "tests/check-wine-runtime.sh",
+        ):
+            with self.subTest(validation=validation):
+                self.assertLess(publish, workflow.index(validation))
 
     def test_cached_prefix_requires_selected_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
