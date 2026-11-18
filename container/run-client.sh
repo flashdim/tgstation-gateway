@@ -11,6 +11,8 @@ done
 # crash and leave BYOND panels blank.
 unset LD_PRELOAD
 export PATH="/opt/wine-proton/bin:$PATH"
+export WINELOADER="/opt/wine-proton/bin/wine"
+export WINESERVER="/opt/wine-proton/bin/wineserver"
 
 export DISPLAY="${DISPLAY:-:20}"
 until timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; do

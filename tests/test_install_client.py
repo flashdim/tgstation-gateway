@@ -20,6 +20,9 @@ class InstallClientTest(unittest.TestCase):
             command = self.bin / name
             command.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
+                'printf "%s|%s\\n" "${WINELOADER-unset}" "${WINESERVER-unset}" '
+                '>> "$RUNTIME_LOG"\n'
+                'printf "%s\\n" "${LD_PRELOAD-unset}" >> "$PRELOAD_LOG"\n'
                 + (
                     'printf "%s\\n" "${WINEDLLOVERRIDES-unset}" >> "$OVERRIDE_LOG"\n'
                     if name in ("wineboot", "winetricks")
@@ -58,8 +61,11 @@ class InstallClientTest(unittest.TestCase):
                 "WINEPREFIX": str(self.prefix),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "COMMAND_LOG": str(self.log),
+                "RUNTIME_LOG": str(self.root / "runtime"),
+                "PRELOAD_LOG": str(self.root / "preload"),
                 "OVERRIDE_LOG": str(self.root / "overrides"),
                 "CACHE_LOG": str(self.root / "cache-paths"),
+                "LD_PRELOAD": "selkies-interposer.so",
                 "WINEDLLOVERRIDES": "example=b",
                 **extra_env,
             },
@@ -73,27 +79,38 @@ class InstallClientTest(unittest.TestCase):
             "drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application/"
             "123/msedgewebview2.exe"
         )
-        result = self.install()
+        result = self.install(
+            WINELOADER="/usr/bin/wine",
+            WINESERVER="/usr/bin/wineserver",
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
-                "wineboot --init",
+                "wineboot --update",
                 "wineserver --wait",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
                 "winetricks -q corefonts",
-                "winetricks -q riched20",
-                "winetricks -q msftedit",
                 "winetricks -q webview2",
                 "wineserver --wait",
             ],
         )
+        self.assertEqual(
+            (self.root / "runtime").read_text().splitlines(),
+            ["/opt/wine-proton/bin/wine|/opt/wine-proton/bin/wineserver"] * 7,
+        )
+        self.assertIn(
+            "Starting Wine prefix initialization (timeout: 300s)", result.stdout
+        )
         self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
+            (self.root / "preload").read_text().splitlines(), ["unset"] * 7
+        )
+        self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
-            ["mscoree,mshtml=d"] + ["example=b"] * 6,
+            ["mscoree,mshtml=d"] + ["example=b"] * 4,
         )
         cache_paths = (self.root / "cache-paths").read_text().splitlines()
         self.assertEqual(len(set(cache_paths)), 1)
@@ -114,14 +131,11 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Winetricks webview2 timed out after 240s", result.stderr)
         self.assertEqual(self.log.read_text().count("wineserver --wait"), 1)
 
-    def test_fails_if_new_component_fails(self):
-        for component in ("corefonts", "riched20", "msftedit"):
-            with self.subTest(component=component):
-                result = self.install(FAIL_COMPONENT=component)
-                self.assertEqual(result.returncode, 17)
-                self.assertIn(f"Winetricks {component} failed", result.stderr)
-                self.assertNotIn("winetricks -q webview2", self.log.read_text())
-                self.log.unlink()
+    def test_fails_if_corefonts_fails(self):
+        result = self.install(FAIL_COMPONENT="corefonts")
+        self.assertEqual(result.returncode, 17)
+        self.assertIn("Winetricks corefonts failed", result.stderr)
+        self.assertNotIn("winetricks -q webview2", self.log.read_text())
 
     def test_fails_if_webview_runtime_is_missing(self):
         result = self.install()

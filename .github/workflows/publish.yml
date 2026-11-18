@@ -39,7 +39,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/wine-prefix-cache/prefix.tar.gz
-          key: wine-prefix-v2-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/download-wine.sh', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
+          key: wine-prefix-v4-proton-${{ hashFiles('Dockerfile', 'container/wine-proton.env', 'container/install-client.sh', 'container/install-byond.sh', 'container/install-graphics.sh') }}
 
       - name: Prepare Wine prefix cache directory
         run: mkdir -p "$RUNNER_TEMP/wine-prefix-cache"
@@ -75,6 +75,15 @@ jobs:
 
       - name: Smoke-test release image
         run: bash tests/smoke-container.sh tgstation-gateway-player:release
+
+      - name: Smoke-test Wayland release session
+        run: bash tests/smoke-wayland.sh tgstation-gateway-player:release
+
+      - name: Check release Wine runtime
+        run: |
+          docker run --rm --entrypoint sh \
+            -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
+            tgstation-gateway-player:release /tmp/check-wine-runtime.sh
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3

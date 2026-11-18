@@ -34,6 +34,7 @@ class SmokeContainerTest(unittest.TestCase):
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
                 'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
+                '      sh) [ "${WRONG_DISPLAY:-0}" = 0 ] ;;\n'
                 "      *) exit 1 ;;\n"
                 "    esac ;;\n"
                 "  logs|rm) exit 0 ;;\n"
@@ -70,7 +71,7 @@ class SmokeContainerTest(unittest.TestCase):
         self.assertEqual(
             commands[0],
             "run -d --init --security-opt seccomp=examples/seccomp.json "
-            "--shm-size=2g -p 127.0.0.1::8080 example:ci",
+            "--shm-size=2g -p 127.0.0.1::8080 -e SELKIES_WAYLAND=false example:ci",
         )
         self.assertIn("exec test-container s6-svc -d /etc/service/byond", commands)
         self.assertEqual(
@@ -89,6 +90,11 @@ class SmokeContainerTest(unittest.TestCase):
         result = self.smoke(NO_WINDOW_MANAGER="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("exited before it became ready", result.stderr)
+        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
+
+    def test_requires_x11_session(self):
+        result = self.smoke(WRONG_DISPLAY="1")
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
     def test_reports_logs_and_removes_exited_container(self):

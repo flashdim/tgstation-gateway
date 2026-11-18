@@ -24,15 +24,17 @@ run_stage() {
 }
 
 export WINEDEBUG=-all,err+all
+export PATH="/opt/wine-proton/bin:$PATH"
+export WINELOADER="/opt/wine-proton/bin/wine"
+export WINESERVER="/opt/wine-proton/bin/wineserver"
+unset LD_PRELOAD
 # Mono and Gecko setup dialogs cannot be answered on the virtual display.
-run_stage "Wine prefix initialization" 90s \
-    env WINEDLLOVERRIDES=mscoree,mshtml=d wineboot --init
+run_stage "Wine prefix initialization" 300s \
+    env 'WINEDLLOVERRIDES=mscoree,mshtml=d' wineboot --update
 run_stage "Wine prefix startup" 30s wineserver --wait
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
 run_stage "Winetricks dxtrans" 120s winetricks -q dxtrans
 run_stage "Winetricks corefonts" 180s winetricks -q corefonts
-run_stage "Winetricks riched20" 300s winetricks -q riched20
-run_stage "Winetricks msftedit" 900s winetricks -q msftedit
 run_stage "Winetricks webview2" 240s winetricks -q webview2
 run_stage "Wine server shutdown" 30s wineserver --wait
 if ! find "$WINEPREFIX/drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application" \
