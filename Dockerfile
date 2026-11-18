@@ -21,7 +21,7 @@ RUN set -eu; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
-      openbox trayer fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
+      trayer fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
@@ -130,10 +130,9 @@ RUN /usr/local/bin/install-byond
 RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
-RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/window-manager /etc/service/byond-tray && \
+RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/byond-tray && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
-COPY --chown=1000:1000 --chmod=755 container/run-window-manager.sh /etc/service/window-manager/run
 COPY --chown=1000:1000 --chmod=755 container/run-tray.sh /etc/service/byond-tray/run
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000

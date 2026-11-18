@@ -29,7 +29,8 @@ class SmokeContainerTest(unittest.TestCase):
                 "  exec)\n"
                 '    case "$3" in\n'
                 '      pgrep) if [ "$4" = "-x" ]; then '
-                '[ "${NO_WINDOW_MANAGER:-0}" = 0 ]; '
+                'if [ "$5" = "openbox" ]; then '
+                '[ "${OPENBOX_RUNNING:-0}" = 1 ]; else exit 0; fi; '
                 'else test ! -f "$SERVICE_STOPPED"; fi ;;\n'
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
@@ -86,8 +87,8 @@ class SmokeContainerTest(unittest.TestCase):
         self.assertIn("Health check passed without the BYOND pager", result.stderr)
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
-    def test_requires_window_manager(self):
-        result = self.smoke(NO_WINDOW_MANAGER="1")
+    def test_rejects_running_openbox(self):
+        result = self.smoke(OPENBOX_RUNNING="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("exited before it became ready", result.stderr)
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")

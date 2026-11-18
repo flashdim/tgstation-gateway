@@ -19,7 +19,7 @@ address="$(docker port "$container" 8080/tcp)"
 for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
         docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
-        docker exec "$container" pgrep -x openbox >/dev/null &&
+        ! docker exec "$container" pgrep -x openbox >/dev/null &&
         docker exec "$container" pgrep -x trayer >/dev/null &&
         docker exec "$container" sh -c \
             '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = false && xdpyinfo -display "$DISPLAY" >/dev/null'; then

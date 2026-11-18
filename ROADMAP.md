@@ -25,8 +25,9 @@ Provide an independently usable, single-player Wine/BYOND image.
   Winetricks dependencies and browser streaming; support an optional checksum.
 - Start the BYOND pager or connect directly to an operator-configured server;
   expose the streaming endpoint and provide local Compose examples.
-- Use a desktop-free X11 session with Openbox and a pager tray; support optional
-  AMD/Intel GPU access.
+- Use a desktop-free X11 session with the Selkies-provided Xvfb and a pager
+  tray, without an additional window manager; support optional AMD/Intel GPU
+  access.
 - Keep seccomp enabled with a narrowly scoped exception for Wine's 32-bit
   `socket` syscall; use the same profile in examples and smoke tests.
 - Build and smoke-test the image in CI, publish a tested development image and
