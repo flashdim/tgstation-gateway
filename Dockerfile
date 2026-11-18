@@ -5,7 +5,8 @@
 FROM scratch AS wine-prefix-cache
 FROM scratch AS wine-download-cache
 
-FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04@sha256:cee92447ae1445c0af4c26a73e32caa7d7cf31aed51b5c5e6549d94cc8fa8c9e
+# This Plasma release was built on the Selkies 2.2.1 Ubuntu 26.04 base.
+FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04-20261113052020
 
 USER root
 SHELL ["/bin/sh", "-c"]
