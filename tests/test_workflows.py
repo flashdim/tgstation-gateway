@@ -129,10 +129,10 @@ class WorkflowTest(unittest.TestCase):
         copy = f"COPY --chmod=644 container/spacestation13-saved.txt {staging}"
 
         self.assertEqual(len(settings), len(lines))
-        self.assertEqual(settings["mainwindow.size"], '"1920x1006"')
-        self.assertEqual(settings["mapwindow.size"], '"1274x1006"')
-        self.assertEqual(settings["info_and_buttons.size"], '"642x1006"')
-        self.assertEqual(settings["mainwindow.split.splitter"], '"66.510399"')
+        self.assertEqual(settings["mainwindow.size"], '"1920x998"')
+        self.assertEqual(settings["mapwindow.size"], '"1264x998"')
+        self.assertEqual(settings["info_and_buttons.size"], '"652x998"')
+        self.assertEqual(settings["mainwindow.split.splitter"], '"65.989601"')
         self.assertIn(copy, dockerfile)
         self.assertLess(
             dockerfile.index("RUN /usr/local/bin/install-byond"),
