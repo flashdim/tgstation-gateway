@@ -110,7 +110,7 @@ jobs:
           ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:dev
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.event_name == 'pull_request' && format('dev-pr{0}', github.event.pull_request.number) || 'dev' }}
         run: |
           docker tag tgstation-gateway-player:ci "$IMAGE"
           docker push "$IMAGE"
