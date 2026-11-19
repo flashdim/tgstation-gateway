@@ -16,7 +16,7 @@ class InstallClientTest(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.log = self.root / "commands"
-        for name in ("wineboot", "wineserver", "winetricks"):
+        for name in ("wine", "wineboot", "wineserver", "winetricks"):
             command = self.bin / name
             command.write_text(
                 f'#!/bin/sh\nprintf "%s\\n" "{name} $*" >> "$COMMAND_LOG"\n'
@@ -99,6 +99,7 @@ class InstallClientTest(unittest.TestCase):
             [
                 "wineboot --update",
                 "wineserver --wait",
+                "wine reg add HKCU\\Software\\Wine\\X11 Driver /v LogPixels /t REG_DWORD /d 96 /f",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
                 "winetricks -q corefonts",
@@ -108,7 +109,7 @@ class InstallClientTest(unittest.TestCase):
         )
         self.assertEqual(
             (self.root / "runtime").read_text().splitlines(),
-            ["/opt/wine-proton/bin/wine|/opt/wine-proton/bin/wineserver"] * 7,
+            ["/opt/wine-proton/bin/wine|/opt/wine-proton/bin/wineserver"] * 8,
         )
         self.assertIn(
             "Starting Wine prefix initialization (timeout: 300s)", result.stdout
@@ -116,7 +117,7 @@ class InstallClientTest(unittest.TestCase):
         self.assertIn("Starting Winetricks webview2 (timeout: 240s)", result.stdout)
         self.assertIn("Completed Winetricks webview2", result.stdout)
         self.assertEqual(
-            (self.root / "preload").read_text().splitlines(), ["unset"] * 7
+            (self.root / "preload").read_text().splitlines(), ["unset"] * 8
         )
         self.assertEqual(
             (self.root / "overrides").read_text().splitlines(),
