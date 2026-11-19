@@ -124,14 +124,9 @@ class WorkflowTest(unittest.TestCase):
         source = ROOT / "container/spacestation13-saved.txt"
         lines = source.read_text().splitlines()
         settings = dict(line.split(" = ", 1) for line in lines)
-        destination = (
-            "/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/"
-            "Skins/exadv1/spacestation13/saved.txt"
-        )
-        copy = (
-            "COPY --chown=1000:1000 --chmod=644 "
-            f"container/spacestation13-saved.txt {destination}"
-        )
+        destination = "drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/spacestation13/saved.txt"
+        staging = "/tmp/spacestation13-saved.txt"
+        copy = f"COPY --chmod=644 container/spacestation13-saved.txt {staging}"
 
         self.assertEqual(len(settings), len(lines))
         self.assertEqual(settings["mainwindow.size"], '"1712x1238"')
@@ -143,6 +138,31 @@ class WorkflowTest(unittest.TestCase):
             dockerfile.index("RUN /usr/local/bin/install-byond"),
             dockerfile.index(copy),
         )
+        before, after = dockerfile.split(f"{copy}\nRUN ", 1)
+        self.assertEqual(before.rsplit("\nUSER ", 1)[1].splitlines()[0], "1000")
+        command = after.replace("\\\n", " ").splitlines()[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "prefix"
+            subprocess.run(
+                ["sh", "-ec", command.replace(staging, '"$LAYOUT_SOURCE"')],
+                env={
+                    **os.environ,
+                    "WINEPREFIX": str(prefix),
+                    "LAYOUT_SOURCE": str(source),
+                },
+                check=True,
+            )
+            layout = prefix / destination
+            self.assertEqual(layout.read_bytes(), source.read_bytes())
+            self.assertEqual(layout.stat().st_mode & 0o777, 0o644)
+            self.assertTrue(os.access(layout, os.W_OK))
+            for parent in layout.parents:
+                if parent == prefix:
+                    break
+                self.assertEqual(parent.stat().st_mode & 0o700, 0o700)
+            subprocess.run(
+                ["tar", "-C", str(prefix), "-czf", os.devnull, "."], check=True
+            )
 
 
 if __name__ == "__main__":
