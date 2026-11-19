@@ -9,13 +9,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RunClientTest(unittest.TestCase):
-    def run_client(self, server=None, gpu=None, fail_registry=False, wayland=False):
+    def run_client(
+        self, server=None, gpu=None, fail_registry=False, wayland=False, sessions=None
+    ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             commands = root / "bin"
             commands.mkdir()
             for name, body in {
                 "timeout": 'shift\nexec "$@"',
+                "curl": (
+                    'printf "%s\\n" "$*" >> "$STARTUP_LOG"\n'
+                    'printf "%s\\n" "$BROWSER_SESSIONS"'
+                ),
+                "sleep": 'printf "sleep %s\\n" "$*" >> "$STARTUP_LOG"',
                 "xdpyinfo": (
                     'test "$1" = "-display" && test "$2" = "$EXPECTED_DISPLAY" && '
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY"'
@@ -62,6 +69,9 @@ class RunClientTest(unittest.TestCase):
                 "LD_PRELOAD": "libm.so.6",
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
+                "BYOND_WAIT_FOR_BROWSER": "1" if sessions is not None else "0",
+                "BROWSER_SESSIONS": sessions or "",
+                "STARTUP_LOG": str(root / "startup-log"),
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
@@ -88,6 +98,10 @@ class RunClientTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 timeout=5,
+            )
+            startup_log = root / "startup-log"
+            self.startup = (
+                startup_log.read_text().splitlines() if startup_log.exists() else []
             )
             log = root / "wine-log"
             return result, prefix, log.read_text().splitlines() if log.exists() else []
@@ -123,6 +137,7 @@ class RunClientTest(unittest.TestCase):
             with self.subTest(server=server):
                 result, prefix, _ = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.startup, [])
                 self.assertEqual(
                     result.stdout.splitlines(),
                     [
@@ -134,6 +149,27 @@ class RunClientTest(unittest.TestCase):
                         url,
                     ],
                 )
+
+    def test_waits_for_primary_browser_controller_when_enabled(self):
+        result, _, _ = self.run_client(
+            "example.org:1337",
+            sessions='{"sessions":[{"role":"controller","display":"primary"}]}',
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.startup), 2)
+        self.assertTrue(self.startup[0].endswith("http://localhost:8080/api/sessions"))
+        self.assertEqual(self.startup[1], "sleep 2")
+        self.assertIn("dreamseeker.exe", result.stdout)
+
+    def test_still_launches_if_no_primary_controller_connects(self):
+        result, _, _ = self.run_client(
+            "example.org:1337",
+            sessions='{"sessions":[{"role":"viewer","display":"primary"}]}',
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.startup.count("sleep 1"), 15)
+        self.assertIn("starting Dream Seeker anyway", result.stderr)
+        self.assertIn("dreamseeker.exe", result.stdout)
 
     def test_rejects_invalid_server(self):
         for server in (

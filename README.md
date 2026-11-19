@@ -55,6 +55,13 @@ A BYOND account or server-side authentication may still be required.
 
 ## Customize the session
 
+If Dream Seeker opens with oversized text until restarted, try setting
+`BYOND_WAIT_FOR_BROWSER=1` when starting Compose with `BYOND_SERVER` set.
+Dream Seeker will wait for a browser controlling Selkies' primary display,
+then give the display two seconds to settle before launching. If no controller
+is detected within the bounded wait, it starts anyway. This does not change
+the stream resolution or the BYOND pager's startup.
+
 KWin maximizes the LazorGator Party game window without entering true
 fullscreen. The rule does not apply to the BYOND pager or other window
 titles.
