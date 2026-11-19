@@ -92,7 +92,9 @@ class InstallGraphicsTest(unittest.TestCase):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.log.read_text().splitlines()
-        self.assertEqual(commands[:2], ["wine DXSETUP.exe /silent", "wineserver --wait"])
+        self.assertEqual(
+            commands[:2], ["wine DXSETUP.exe /silent", "wineserver --wait"]
+        )
         self.assertTrue(commands[2].startswith("cabextract -q -L -F d3dx9_43.dll -d "))
         self.assertTrue(commands[3].startswith("wine reg add "))
         self.assertIn("/v *d3dx9_43 /t REG_SZ /d native /f", commands[3])
