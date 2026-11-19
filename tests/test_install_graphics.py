@@ -92,12 +92,13 @@ class InstallGraphicsTest(unittest.TestCase):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.log.read_text().splitlines()
-        self.assertEqual(commands[0], "wine DXSETUP.exe /silent")
-        self.assertTrue(commands[1].startswith("cabextract -q -L -F d3dx9_43.dll -d "))
-        self.assertIn("/v *d3dx9_43 /t REG_SZ /d native /f", commands[2])
-        self.assertIn("/v3.1.1/dxvk-3.1.1.tar.gz", commands[3])
-        self.assertTrue(commands[4].startswith("verify "))
-        self.assertEqual(commands[5], "extract")
+        self.assertEqual(commands[:2], ["wine DXSETUP.exe /silent", "wineserver --wait"])
+        self.assertTrue(commands[2].startswith("cabextract -q -L -F d3dx9_43.dll -d "))
+        self.assertTrue(commands[3].startswith("wine reg add "))
+        self.assertIn("/v *d3dx9_43 /t REG_SZ /d native /f", commands[3])
+        self.assertIn("/v3.1.1/dxvk-3.1.1.tar.gz", commands[4])
+        self.assertTrue(commands[5].startswith("verify "))
+        self.assertEqual(commands[6], "extract")
         for dll in ("dxgi", "d3d8", "d3d9", "d3d10core", "d3d11"):
             self.assertEqual(
                 (self.prefix / f"drive_c/windows/syswow64/{dll}.dll").read_text(),
