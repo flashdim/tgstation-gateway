@@ -31,27 +31,6 @@ until display_ready; do
     sleep 1
 done
 
-wait_for_browser() {
-    local prefix="${SELKIES_SUBFOLDER-${SUBFOLDER-}}" url response attempt
-    prefix="${prefix#/}"
-    prefix="${prefix%/}"
-    url="localhost:${SELKIES_PORT:-8080}${prefix:+/$prefix}/api/sessions"
-    for ((attempt = 0; attempt < 15; attempt++)); do
-        if response="$(curl -fs --noproxy '*' --max-time 1 "http://$url" ||
-            curl -fsk --noproxy '*' --max-time 1 "https://$url")" &&
-            python3 -c 'import json, sys
-sessions = json.load(sys.stdin)["sessions"]
-sys.exit(not any(s.get("role") == "controller" and s.get("display") == "primary"
-                 for s in sessions))' <<<"$response" 2>/dev/null; then
-            # The session appears before the browser finishes negotiating its display size.
-            sleep 2
-            return
-        fi
-        sleep 1
-    done
-    echo "No Selkies browser controller detected; starting Dream Seeker anyway" >&2
-}
-
 case "${BYOND_WEBVIEW2_GPU:-0}" in
     0 | "") ;;
     1)
@@ -74,9 +53,6 @@ if [ -n "${BYOND_SERVER:-}" ]; then
         ((10#${BASH_REMATCH[2]} < 1 || 10#${BASH_REMATCH[2]} > 65535)); then
         echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
         exit 1
-    fi
-    if [ "${BYOND_WAIT_FOR_BROWSER:-0}" = 1 ]; then
-        wait_for_browser
     fi
     exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe" "byond://$server"
 fi
