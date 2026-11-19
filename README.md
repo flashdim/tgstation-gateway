@@ -55,14 +55,18 @@ A BYOND account or server-side authentication may still be required.
 
 ## Customize the session
 
-The browser session uses a 1920x1080 display by default. Choose another fixed size with:
+KWin maximizes the LazorGator Party game window without entering true
+fullscreen. The rule does not apply to the BYOND pager or other window
+titles.
+
+Selkies follows the browser's display size by default. To use a fixed size:
 
 ```sh
 SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
   docker compose -f examples/compose.yaml up
 ```
 
-Set both values to `0` to let the browser control the display size. Change the local web address port with `GATEWAY_PORT`, for example `GATEWAY_PORT=8081`.
+Change the local web address port with `GATEWAY_PORT`, for example `GATEWAY_PORT=8081`.
 
 ## Build locally
 

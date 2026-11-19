@@ -78,12 +78,9 @@ rendering; those additions have been removed.
 Build and interactive compatibility on other configurations remain to be
 verified; prior results are not proof of universal gameplay compatibility.
 
-The image defaults to fixed 1920x1080 Selkies resolution. This display-size
-experiment was prompted by reported first-connection scaling distortion;
-whether it improves browser scaling remains unverified. Automatic Dream Seeker
-maximization also remains unresolved. No verified Dream Seeker startup flag or
-local sizing setting was found; BYOND's documented maximization parameter is a
-game-skin setting, not an executable command-line option.
+The image leaves display sizing to Selkies and the browser instead of locking
+it to 1920x1080. A KWin rule forces the LazorGator Party Dream Seeker window
+to maximize without entering true fullscreen.
 
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in its test environment; it did not establish the cause
