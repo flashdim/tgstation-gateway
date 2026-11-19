@@ -32,8 +32,6 @@ unset LD_PRELOAD
 run_stage "Wine prefix initialization" 300s \
     env 'WINEDLLOVERRIDES=mscoree,mshtml=d' wineboot --update
 run_stage "Wine prefix startup" 30s wineserver --wait
-run_stage "Set Wine display DPI" 30s \
-    wine reg add 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d 96 /f
 run_stage "Winetricks vcrun2022" 120s winetricks -q vcrun2022
 run_stage "Winetricks dxtrans" 120s winetricks -q dxtrans
 corefonts_attempt=1
