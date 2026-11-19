@@ -99,7 +99,7 @@ class InstallClientTest(unittest.TestCase):
             [
                 "wineboot --update",
                 "wineserver --wait",
-                "wine reg add HKCU\\Software\\Wine\\X11 Driver /v LogPixels /t REG_DWORD /d 96 /f",
+                "wine reg add HKCU\\Control Panel\\Desktop /v LogPixels /t REG_DWORD /d 96 /f",
                 "winetricks -q vcrun2022",
                 "winetricks -q dxtrans",
                 "winetricks -q corefonts",
