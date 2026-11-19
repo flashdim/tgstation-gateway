@@ -51,6 +51,18 @@ class WorkflowTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         publish = workflow.index("name: Publish development image")
         self.assertLess(workflow.index("name: Build player image"), publish)
+        publish_step = workflow[
+            publish : workflow.index("\n      - name:", publish + 1)
+        ]
+        self.assertIn(
+            "github.event_name == 'pull_request' && "
+            "format('dev-pr{0}', github.event.pull_request.number) || 'dev'",
+            publish_step,
+        )
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            publish_step,
+        )
         for validation in (
             "name: Validate Compose example",
             "name: Smoke-test player image",
