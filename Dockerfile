@@ -129,8 +129,6 @@ ENV BYOND_VERSION=${BYOND_VERSION}
 RUN /usr/local/bin/install-byond
 RUN xvfb-run -a /usr/local/bin/install-graphics
 
-COPY --chown=1000:1000 --chmod=644 container/spacestation13-saved.txt /home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/spacestation13/saved.txt
-
 USER root
 RUN install -d -o 1000 -g 1000 /etc/service/byond && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix

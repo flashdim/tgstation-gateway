@@ -59,11 +59,6 @@ KWin maximizes the LazorGator Party game window without entering true
 fullscreen. The rule does not apply to the BYOND pager or other window
 titles.
 
-For tgstation, the image seeds the BYOND skin layout at
-`Documents/BYOND/Skins/exadv1/spacestation13/saved.txt`. New containers start
-with a 1712×1238 window layout; changes made while playing remain in that
-container and are not persisted when it is removed.
-
 Selkies follows the browser's display size by default. To use a fixed size:
 
 ```sh
