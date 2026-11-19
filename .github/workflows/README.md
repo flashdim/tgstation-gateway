@@ -4,10 +4,10 @@
 tests for both display modes, and Wine runtime checks. After formatting passes,
 unit tests run in a separate job in parallel with the image build and development
 image push. Unit-test failures fail the workflow but do not block that push.
-CI publishes the development image immediately after the build for trusted
-branches and pull requests from this repository, before Compose validation,
-smoke tests, and runtime checks. The `dev` tag may therefore point to an image
-that fails validation.
+CI publishes `dev` for main and `dev-pr<number>` for pull requests from this
+repository immediately after the build, before Compose validation, smoke tests,
+and runtime checks. These tags may therefore point to images that fail
+validation.
 `publish.yml` tests and smoke-tests a release image before publishing it.
 
 ## Build caches
