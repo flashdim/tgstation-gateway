@@ -19,7 +19,7 @@ class HealthcheckTest(unittest.TestCase):
         commands = {
             "pgrep": (
                 'printf "pgrep %s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'test "$1" = -f && test "$2" = "${EXPECTED_PROCESS:-[b]yond.exe}" && '
+                'test "$1" = -f && test "$2" = "${EXPECTED_PROCESS:-/byond[.]exe([[:space:]]|$)}" && '
                 'test "${PAGER_RUNNING:-1}" = 1'
             ),
             "curl": (
@@ -67,13 +67,14 @@ class HealthcheckTest(unittest.TestCase):
     def test_requires_dreamseeker_in_direct_mode(self):
         env = {
             "BYOND_SERVER": "example.org:1337",
-            "EXPECTED_PROCESS": "[d]reamseeker.exe",
+            "EXPECTED_PROCESS": "/dreamseeker[.]exe([[:space:]]|$)",
             "HTTP_OK": "1",
         }
         result = self.check(**env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
-            self.log.read_text().splitlines()[0], "pgrep -f [d]reamseeker.exe"
+            self.log.read_text().splitlines()[0],
+            "pgrep -f /dreamseeker[.]exe([[:space:]]|$)",
         )
 
         result = self.check(**env, PAGER_RUNNING="0")
@@ -88,7 +89,7 @@ class HealthcheckTest(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
-                "pgrep -f [b]yond.exe",
+                "pgrep -f /byond[.]exe([[:space:]]|$)",
                 "curl -fs -k --max-time 2 -o /dev/null https://localhost:8081/player/api/health",
                 "curl -fsS --max-time 2 -o /dev/null http://localhost:8081/player/api/health",
             ],

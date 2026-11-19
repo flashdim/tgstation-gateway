@@ -2,10 +2,10 @@
 set -eu
 
 if [ -n "${BYOND_SERVER:-}" ]; then
-    process='[d]reamseeker.exe'
+    process='/dreamseeker[.]exe([[:space:]]|$)'
     client='Dream Seeker'
 else
-    process='[b]yond.exe'
+    process='/byond[.]exe([[:space:]]|$)'
     client='BYOND pager'
 fi
 

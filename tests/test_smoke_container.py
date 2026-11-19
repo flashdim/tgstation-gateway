@@ -77,6 +77,9 @@ class SmokeContainerTest(unittest.TestCase):
             "--shm-size=2g -p 127.0.0.1::8080 -e SELKIES_WAYLAND=false example:ci",
         )
         self.assertIn("exec test-container s6-svc -d /etc/service/byond", commands)
+        self.assertIn(
+            "exec test-container pgrep -f /byond[.]exe([[:space:]]|$)", commands
+        )
         self.assertEqual(
             commands.count("exec test-container /usr/local/bin/healthcheck"), 2
         )

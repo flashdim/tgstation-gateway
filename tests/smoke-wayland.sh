@@ -25,7 +25,7 @@ for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
         docker exec "$container" pgrep -x kwin_wayland >/dev/null &&
         docker exec "$container" pgrep -x plasmashell >/dev/null &&
-        docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
+        docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null &&
         docker exec "$container" sh -c \
             'set -e
             runtime="${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}"
