@@ -16,6 +16,7 @@ class WorkflowTest(unittest.TestCase):
             with self.subTest(workflow=filename):
                 workflow = (ROOT / ".github/workflows" / filename).read_text()
                 self.assertIn("key: wine-prefix-v4-proton-", workflow)
+                self.assertIn("container/spacestation13-saved.txt", workflow)
                 self.assertIn("wine-download-v1-", workflow)
                 self.assertNotIn("WINE_PACKAGE_SOURCE", workflow)
                 self.assertIn("load: true", workflow)
@@ -117,6 +118,31 @@ class WorkflowTest(unittest.TestCase):
                         cached_version == "10.0-4",
                         result.stderr,
                     )
+
+    def test_tgstation_skin_layout_is_seeded_into_wine_profile(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        source = ROOT / "container/spacestation13-saved.txt"
+        lines = source.read_text().splitlines()
+        settings = dict(line.split(" = ", 1) for line in lines)
+        destination = (
+            "/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/"
+            "Skins/exadv1/spacestation13/saved.txt"
+        )
+        copy = (
+            "COPY --chown=1000:1000 --chmod=644 "
+            f"container/spacestation13-saved.txt {destination}"
+        )
+
+        self.assertEqual(len(settings), len(lines))
+        self.assertEqual(settings["mainwindow.size"], '"1712x1238"')
+        self.assertEqual(settings["mapwindow.size"], '"1412x1238"')
+        self.assertEqual(settings["info_and_buttons.size"], '"296x1238"')
+        self.assertEqual(settings["mainwindow.split.splitter"], '"82.651901"')
+        self.assertIn(copy, dockerfile)
+        self.assertLess(
+            dockerfile.index("RUN /usr/local/bin/install-byond"),
+            dockerfile.index(copy),
+        )
 
 
 if __name__ == "__main__":
