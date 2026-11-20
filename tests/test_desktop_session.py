@@ -60,12 +60,27 @@ class DesktopSessionTest(unittest.TestCase):
             "panel.height = 64",
             "applications:org.kde.dolphin.desktop",
             "applications:org.kde.plasma-systemmonitor.desktop",
-            "file:///usr/share/tgstation-gateway/wallpaper.png",
+            "file:///usr/share/tgstation-gateway/wallpaper.jpg",
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, layout)
         self.assertIn("--key LookAndFeelPackage org.kde.breezedark.desktop", dockerfile)
         self.assertIn("--key ColorScheme BreezeDark", dockerfile)
+        self.assertIn(
+            "assets/glory-to-nanotrasen.jpg "
+            "/usr/share/tgstation-gateway/wallpaper.jpg",
+            dockerfile,
+        )
+
+    def test_glory_to_nanotrasen_asset_and_attribution_are_in_repository(self):
+        asset = ROOT / "assets/glory-to-nanotrasen.jpg"
+        attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
+        self.assertTrue(asset.is_file())
+        self.assertGreater(asset.stat().st_size, 100_000)
+        self.assertIn("Glory to Nanotrasen", attribution)
+        self.assertIn("partheosis", attribution)
+        self.assertIn("CC BY-NC 3.0", attribution)
+        self.assertIn("547539107", attribution)
 
 
 if __name__ == "__main__":

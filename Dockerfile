@@ -144,9 +144,8 @@ RUN set -eu; \
     kwriteconfig6 --file /etc/xdg/plasmarc --group Theme --key name breeze-dark; \
     kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme breeze_cursors; \
     chown root:root /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
-    chmod 644 /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
-    install -D -m 644 /usr/share/wallpapers/Next/contents/images_dark/5120x2880.png \
-      /usr/share/tgstation-gateway/wallpaper.png
+    chmod 644 /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc
+COPY --chmod=644 assets/glory-to-nanotrasen.jpg /usr/share/tgstation-gateway/wallpaper.jpg
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

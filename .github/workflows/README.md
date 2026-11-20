@@ -36,6 +36,7 @@ compatibility.
 
 The X11 smoke test checks the desktop defaults' ownership and permissions;
 both desktop smoke tests query Plasma's panel properties. These checks do not
-verify the wallpaper visually, game-window geometry, or interactive gameplay.
+verify the supplied wallpaper visually, game-window geometry, or interactive
+gameplay.
 When changing the pinned Selkies base, rerun both smoke tests and manually
 verify the first-run desktop layout in both display modes.

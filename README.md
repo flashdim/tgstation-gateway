@@ -81,21 +81,19 @@ replacement configuration files read-only before starting a fresh container,
 or change the appearance and panel in Plasma. If selecting a different global
 look-and-feel, its own first-run layout may replace the gateway panel layout.
 
-The default wallpaper is KDE's **Sub-Arctic** by Krystian Zajdel, provided
-by the base image under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/);
-its metadata is at `/usr/share/wallpapers/Next/metadata.json`. To override it
-without rebuilding, bind-mount an operator-supplied PNG read-only at
-`/usr/share/tgstation-gateway/wallpaper.png` before starting the container.
+The default wallpaper is [**Glory to Nanotrasen**](https://www.deviantart.com/partheosis/art/Glory-to-Nanotrasen-547539107)
+by **partheosis**, used under [CC BY-NC 3.0](https://creativecommons.org/licenses/by-nc/3.0/),
+as indicated by the source URL. The repository copy and attribution record are
+at `assets/glory-to-nanotrasen.jpg` and `assets/ATTRIBUTION.md`.
+
+To override the wallpaper without rebuilding, bind-mount an operator-supplied
+image read-only at `/usr/share/tgstation-gateway/wallpaper.jpg` before starting
+the container.
 For example, add this under the Compose player's `volumes`:
 
 ```yaml
-- /absolute/path/to/wallpaper.png:/usr/share/tgstation-gateway/wallpaper.png:ro
+- /absolute/path/to/wallpaper.jpg:/usr/share/tgstation-gateway/wallpaper.jpg:ro
 ```
-
-The requested [Glory to Nanotrasen artwork](https://www.deviantart.com/partheosis/art/Glory-to-Nanotrasen-547539107)
-by partheosis is not included: its redistribution license could not be
-verified. Operators must verify permission and applicable terms before using
-or distributing their own copy.
 
 ### Desktop verification
 
