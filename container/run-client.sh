@@ -54,7 +54,65 @@ if [ -n "${BYOND_SERVER:-}" ]; then
         echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
         exit 1
     fi
-    exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe" "byond://$server"
+    dreamseeker="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
+    server_url="byond://$server"
+    process='/dreamseeker[.]exe([[:space:]]|$)'
+    warmup_marker="$XDG_RUNTIME_DIR/byond-dpi-warmup-complete"
+
+    dreamseeker_window() {
+        local pids windows window desktop pid process_pid
+        pids="$(pgrep -f "$process" || true)"
+        [ -n "$pids" ] || return 1
+        windows="$(wmctrl -l -p)" || return 1
+        while read -r window desktop pid _; do
+            while IFS= read -r process_pid; do
+                if [ "$pid" = "$process_pid" ]; then
+                    printf '%s\n' "$window"
+                    return 0
+                fi
+            done <<<"$pids"
+        done <<<"$windows"
+        return 1
+    }
+
+    if [ ! -e "$warmup_marker" ]; then
+        : >"$warmup_marker"
+        wine "$dreamseeker" "$server_url" &
+        warmup_pid=$!
+        window=""
+        for _ in {1..120}; do
+            if ! kill -0 "$warmup_pid" 2>/dev/null; then
+                wait "$warmup_pid" || true
+                warmup_pid=""
+                break
+            fi
+            window="$(dreamseeker_window || true)"
+            [ -n "$window" ] && break
+            sleep 1
+        done
+
+        if [ -n "$window" ]; then
+            sleep 5
+            if wmctrl -ic "$window"; then
+                for _ in {1..30}; do
+                    if ! pgrep -f "$process" >/dev/null; then
+                        wait "$warmup_pid" || true
+                        warmup_pid=""
+                        break
+                    fi
+                    sleep 1
+                done
+            fi
+        fi
+
+        if [ -n "$warmup_pid" ]; then
+            echo "Dream Seeker DPI warmup did not close; keeping the first launch running" >&2
+            wait "$warmup_pid"
+            exit $?
+        fi
+    fi
+
+    exec wine "$dreamseeker" "$server_url"
 fi
 
 exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"

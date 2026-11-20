@@ -52,6 +52,11 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
 A BYOND account or server-side authentication may still be required.
+On the first direct-server launch in each container, Dream Seeker opens once
+and is closed normally after its window appears; the gateway then launches the
+regular session. The BYOND pager path is unchanged. This startup cycle is a
+DPI workaround, not a guarantee of corrected DPI or proof of rendering
+compatibility.
 
 ## Customize the session
 

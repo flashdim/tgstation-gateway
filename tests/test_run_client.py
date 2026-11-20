@@ -16,6 +16,22 @@ class RunClientTest(unittest.TestCase):
             commands.mkdir()
             for name, body in {
                 "timeout": 'shift\nexec "$@"',
+                "sleep": "exec /bin/sleep 0.01",
+                "pgrep": (
+                    '[ "$1" = "-f" ] || exit 2\n'
+                    '[ -r "$WINE_PID_FILE" ] || exit 1\n'
+                    'pid=$(cat "$WINE_PID_FILE")\n'
+                    'kill -0 "$pid" 2>/dev/null || exit 1\n'
+                    'printf "%s\\n" "$pid"'
+                ),
+                "wmctrl": (
+                    'if [ "$1" = "-l" ] && [ -r "$WINE_PID_FILE" ]; then\n'
+                    '  printf "0x123 0 %s Dream Seeker\\n" "$(cat "$WINE_PID_FILE")"\n'
+                    'elif [ "$1" = "-ic" ]; then\n'
+                    '  printf "close\\n" >> "$EVENT_LOG"\n'
+                    '  : > "$WINE_CLOSE_FILE"\n'
+                    "fi"
+                ),
                 "xdpyinfo": (
                     'test "$1" = "-display" && test "$2" = "$EXPECTED_DISPLAY" && '
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY"'
@@ -35,6 +51,17 @@ class RunClientTest(unittest.TestCase):
                     '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
                     "  exit $?\n"
                     "fi\n"
+                    'printf "launch\\n" >> "$EVENT_LOG"\n'
+                    'case "$1" in\n'
+                    "  *dreamseeker.exe)\n"
+                    '    launches=$(grep -c "^launch$" "$EVENT_LOG")\n'
+                    '    if [ "$launches" = 1 ]; then\n'
+                    '      printf "%s\\n" "$$" > "$WINE_PID_FILE"\n'
+                    '      while [ ! -e "$WINE_CLOSE_FILE" ]; do /bin/sleep 0.01; done\n'
+                    "      exit 0\n"
+                    "    fi\n"
+                    "    ;;\n"
+                    "esac\n"
                     'printf "%s\\n" "$DISPLAY" "$@"'
                 ),
             }.items():
@@ -58,6 +85,9 @@ class RunClientTest(unittest.TestCase):
                 "PATH": f"{commands}:{os.environ['PATH']}",
                 "XDG_RUNTIME_DIR": str(runtime),
                 "WINE_LOG": str(root / "wine-log"),
+                "EVENT_LOG": str(root / "event-log"),
+                "WINE_PID_FILE": str(root / "wine-pid"),
+                "WINE_CLOSE_FILE": str(root / "wine-close"),
                 "FAIL_REGISTRY": "1" if fail_registry else "0",
                 "LD_PRELOAD": "libm.so.6",
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
@@ -90,10 +120,16 @@ class RunClientTest(unittest.TestCase):
                 timeout=5,
             )
             log = root / "wine-log"
-            return result, prefix, log.read_text().splitlines() if log.exists() else []
+            events = root / "event-log"
+            return (
+                result,
+                prefix,
+                log.read_text().splitlines() if log.exists() else [],
+                events.read_text().splitlines() if events.exists() else [],
+            )
 
     def test_launches_wine_with_authenticated_plasma_display(self):
-        result, prefix, _ = self.run_client(wayland=True)
+        result, prefix, _, _ = self.run_client(wayland=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.splitlines(),
@@ -103,9 +139,10 @@ class RunClientTest(unittest.TestCase):
     def test_launches_byond_after_loading_session_environment(self):
         for server in (None, ""):
             with self.subTest(server=server):
-                result, prefix, registry = self.run_client(server)
+                result, prefix, registry, events = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(registry, [])
+                self.assertEqual(events, ["launch"])
                 self.assertEqual(
                     result.stdout.splitlines(),
                     [
@@ -121,8 +158,9 @@ class RunClientTest(unittest.TestCase):
             ("[::1]:1337", "byond://[::1]:1337"),
         ):
             with self.subTest(server=server):
-                result, prefix, _ = self.run_client(server)
+                result, prefix, _, events = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(events, ["launch", "close", "launch"])
                 self.assertEqual(
                     result.stdout.splitlines(),
                     [
@@ -145,14 +183,15 @@ class RunClientTest(unittest.TestCase):
             ":1337",
         ):
             with self.subTest(server=server):
-                result, _, _ = self.run_client(server)
+                result, _, _, _ = self.run_client(server)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Invalid BYOND_SERVER", result.stderr)
                 self.assertEqual(result.stdout, "")
 
     def test_configures_webview2_gpu_before_launch(self):
-        result, prefix, registry = self.run_client("example.org:1337", gpu="1")
+        result, prefix, registry, events = self.run_client("example.org:1337", gpu="1")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["launch", "close", "launch"])
         self.assertEqual(
             registry,
             [
@@ -179,16 +218,18 @@ class RunClientTest(unittest.TestCase):
         )
 
     def test_fails_without_launch_when_registry_update_fails(self):
-        result, _, registry = self.run_client(gpu="1", fail_registry=True)
+        result, _, registry, events = self.run_client(gpu="1", fail_registry=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(registry)
+        self.assertEqual(events, [])
         self.assertIn("Failed to configure WebView2", result.stderr)
         self.assertEqual(result.stdout, "")
 
     def test_rejects_invalid_webview2_gpu_setting(self):
-        result, _, registry = self.run_client(gpu="yes")
+        result, _, registry, events = self.run_client(gpu="yes")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(registry, [])
+        self.assertEqual(events, [])
         self.assertIn("Invalid BYOND_WEBVIEW2_GPU", result.stderr)
         self.assertEqual(result.stdout, "")
 
