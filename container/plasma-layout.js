@@ -13,7 +13,7 @@ var systemTrayConfigured = false;
 var panelIds = panels();
 
 for (var i = 0; i < panelIds.length; i++) {
-    var panel = panelById(panelIds[i]);
+    var panel = panelIds[i];
     var widgetIds = panel.widgetIds;
     for (var j = 0; j < widgetIds.length; j++) {
         var widget = panel.widgetById(widgetIds[j]);
