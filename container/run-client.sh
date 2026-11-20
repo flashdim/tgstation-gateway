@@ -56,60 +56,73 @@ if [ -n "${BYOND_SERVER:-}" ]; then
     fi
     dreamseeker="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
     server_url="byond://$server"
-    process='/dreamseeker[.]exe([[:space:]]|$)'
+    process='dreamseeker[.]exe'
     warmup_marker="$XDG_RUNTIME_DIR/byond-dpi-warmup-complete"
 
     dreamseeker_window() {
         local pids windows window desktop pid process_pid
-        pids="$(pgrep -f "$process" || true)"
-        [ -n "$pids" ] || return 1
-        windows="$(wmctrl -l -p)" || return 1
+        pids="$(pgrep -ix -u "$EUID" "$process" || true)"
+        windows="$(timeout --kill-after=1s 1s wmctrl -l -p)" || return 1
         while read -r window desktop pid _; do
             while IFS= read -r process_pid; do
                 if [ "$pid" = "$process_pid" ]; then
                     printf '%s\n' "$window"
                     return 0
                 fi
-            done <<<"$pids"
+            done <<<"$warmup_pid"$'\n'"$pids"
         done <<<"$windows"
         return 1
     }
 
+    force_wine_shutdown() {
+        pkill -KILL -ix -u "$EUID" 'dreamseeker[.]exe|byond[.]exe|wineserver[.]exe' || true
+        # The native wineserver uses a different process name; select it by prefix.
+        timeout --kill-after=1s 5s wineserver -k9 || true
+        if ! timeout --kill-after=1s 5s wineserver --wait; then
+            echo "Wine server did not stop; refusing to relaunch Dream Seeker" >&2
+            return 1
+        fi
+        : >"$warmup_marker"
+    }
+
     if [ ! -e "$warmup_marker" ]; then
         : >"$warmup_marker"
+        SECONDS=0
         wine "$dreamseeker" "$server_url" &
         warmup_pid=$!
-        window=""
-        for _ in {1..120}; do
-            if ! kill -0 "$warmup_pid" 2>/dev/null; then
-                wait "$warmup_pid" || true
-                warmup_pid=""
+        close_at=-1
+        close_requested=false
+        warmup_running() {
+            kill -0 "$warmup_pid" 2>/dev/null || pgrep -ix -u "$EUID" "$process" >/dev/null
+        }
+        while ((SECONDS < 15)) && warmup_running; do
+            if ! "$close_requested"; then
+                window="$(dreamseeker_window || true)"
+                if [ -z "$window" ]; then
+                    close_at=-1
+                elif ((close_at < 0)); then
+                    close_at=$((SECONDS + 5))
+                elif ((SECONDS >= close_at && SECONDS < 15)); then
+                    if timeout --kill-after=1s 1s wmctrl -ic "$window"; then
+                        close_requested=true
+                    fi
+                fi
+            fi
+            if ((SECONDS >= 15)); then
                 break
             fi
-            window="$(dreamseeker_window || true)"
-            [ -n "$window" ] && break
             sleep 1
         done
 
-        if [ -n "$window" ]; then
-            sleep 5
-            if wmctrl -ic "$window"; then
-                for _ in {1..30}; do
-                    if ! pgrep -f "$process" >/dev/null; then
-                        wait "$warmup_pid" || true
-                        warmup_pid=""
-                        break
-                    fi
-                    sleep 1
-                done
-            fi
+        if warmup_running; then
+            echo "Dream Seeker DPI warmup timed out after 15 seconds; forcing Wine shutdown before restart" >&2
+            printf '%s\n' cleanup-pending >"$warmup_marker"
+            kill -KILL "$warmup_pid" 2>/dev/null || true
+            force_wine_shutdown
         fi
-
-        if [ -n "$warmup_pid" ]; then
-            echo "Dream Seeker DPI warmup did not close; keeping the first launch running" >&2
-            wait "$warmup_pid"
-            exit $?
-        fi
+        wait "$warmup_pid" 2>/dev/null || true
+    elif grep -qx cleanup-pending "$warmup_marker"; then
+        force_wine_shutdown
     fi
 
     exec wine "$dreamseeker" "$server_url"
