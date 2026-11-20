@@ -74,6 +74,7 @@ class RunClientTest(unittest.TestCase):
                     "  *dreamseeker.exe)\n"
                     '    launches=$(grep -c "^launch$" "$EVENT_LOG")\n'
                     '    if [ "$launches" = 1 ] && [ "$WARMUP" != "cleanup-pending" ]; then\n'
+                    '      [ "$(cat "$WARMUP_MARKER")" = cleanup-pending ] || exit 99\n'
                     '      [ "$WARMUP" != "early-exit" ] || exit 0\n'
                     '      printf "%s\\n" "$$" > "$WINE_PID_FILE"\n'
                     '      while [ ! -e "$WINE_CLOSE_FILE" ]; do /bin/sleep 0.01; done\n'
@@ -90,8 +91,9 @@ class RunClientTest(unittest.TestCase):
 
             runtime = root / "runtime"
             runtime.mkdir()
+            marker = runtime / "byond-dpi-warmup-complete"
             if warmup == "cleanup-pending":
-                (runtime / "byond-dpi-warmup-complete").write_text("cleanup-pending\n")
+                marker.write_text("cleanup-pending\n")
             prefix = root / "wine prefix"
             authority = runtime / "kwin authority"
             (runtime / "container-env").write_text(
@@ -111,6 +113,7 @@ class RunClientTest(unittest.TestCase):
                 "WINE_PID_FILE": str(root / "wine-pid"),
                 "WINE_CLOSE_FILE": str(root / "wine-close"),
                 "WARMUP": warmup,
+                "WARMUP_MARKER": str(marker),
                 "EXPECTED_PREFIX": str(prefix),
                 "FAIL_REGISTRY": "1" if fail_registry else "0",
                 "LD_PRELOAD": "libm.so.6",
@@ -150,10 +153,11 @@ class RunClientTest(unittest.TestCase):
                 prefix,
                 log.read_text().splitlines() if log.exists() else [],
                 events.read_text().splitlines() if events.exists() else [],
+                marker.read_text() if marker.exists() else None,
             )
 
     def test_launches_wine_with_authenticated_plasma_display(self):
-        result, prefix, _, _ = self.run_client(wayland=True)
+        result, prefix, _, _, _ = self.run_client(wayland=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.splitlines(),
@@ -163,10 +167,11 @@ class RunClientTest(unittest.TestCase):
     def test_launches_byond_after_loading_session_environment(self):
         for server in (None, ""):
             with self.subTest(server=server):
-                result, prefix, registry, events = self.run_client(server)
+                result, prefix, registry, events, marker = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(registry, [])
                 self.assertEqual(events, ["launch"])
+                self.assertIsNone(marker)
                 self.assertEqual(
                     result.stdout.splitlines(),
                     [
@@ -182,9 +187,10 @@ class RunClientTest(unittest.TestCase):
             ("[::1]:1337", "byond://[::1]:1337"),
         ):
             with self.subTest(server=server):
-                result, prefix, _, events = self.run_client(server)
+                result, prefix, _, events, marker = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch", "close", "launch"])
+                self.assertEqual(marker, "")
                 self.assertEqual(
                     result.stdout.splitlines(),
                     [
@@ -207,24 +213,28 @@ class RunClientTest(unittest.TestCase):
             ":1337",
         ):
             with self.subTest(server=server):
-                result, _, _, _ = self.run_client(server)
+                result, _, _, _, _ = self.run_client(server)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Invalid BYOND_SERVER", result.stderr)
                 self.assertEqual(result.stdout, "")
 
     def test_relaunches_if_warmup_exits_before_a_window_appears(self):
-        result, _, _, events = self.run_client("example.org:1337", warmup="early-exit")
+        result, _, _, events, marker = self.run_client(
+            "example.org:1337", warmup="early-exit"
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch", "launch"])
+        self.assertEqual(marker, "")
 
     def test_forces_shutdown_before_relaunch_if_warmup_does_not_exit(self):
         for warmup, close_events in (("stuck", ["close"]), ("no-window", [])):
             with self.subTest(warmup=warmup):
-                result, _, _, events = self.run_client(
+                result, _, _, events, marker = self.run_client(
                     "example.org:1337", warmup=warmup
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("timed out after 15 seconds", result.stderr)
+                self.assertEqual(marker, "")
                 self.assertEqual(
                     events,
                     ["launch"]
@@ -233,28 +243,33 @@ class RunClientTest(unittest.TestCase):
                 )
 
     def test_does_not_relaunch_when_wine_shutdown_fails(self):
-        result, _, _, events = self.run_client(
+        result, _, _, events, marker = self.run_client(
             "example.org:1337", warmup="cleanup-fails"
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Wine server did not stop", result.stderr)
+        self.assertEqual(marker, "cleanup-pending\n")
         self.assertEqual(
             events, ["launch", "close", "kill-clients", "kill-server", "wait-server"]
         )
 
     def test_service_restart_retries_pending_cleanup_before_launch(self):
-        result, _, _, events = self.run_client(
+        result, _, _, events, marker = self.run_client(
             "example.org:1337", warmup="cleanup-pending"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(marker, "")
         self.assertEqual(
             events, ["kill-clients", "kill-server", "wait-server", "launch"]
         )
 
     def test_configures_webview2_gpu_before_launch(self):
-        result, prefix, registry, events = self.run_client("example.org:1337", gpu="1")
+        result, prefix, registry, events, marker = self.run_client(
+            "example.org:1337", gpu="1"
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch", "close", "launch"])
+        self.assertEqual(marker, "")
         self.assertEqual(
             registry,
             [
@@ -281,7 +296,7 @@ class RunClientTest(unittest.TestCase):
         )
 
     def test_fails_without_launch_when_registry_update_fails(self):
-        result, _, registry, events = self.run_client(gpu="1", fail_registry=True)
+        result, _, registry, events, _ = self.run_client(gpu="1", fail_registry=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(registry)
         self.assertEqual(events, [])
@@ -289,7 +304,7 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_rejects_invalid_webview2_gpu_setting(self):
-        result, _, registry, events = self.run_client(gpu="yes")
+        result, _, registry, events, _ = self.run_client(gpu="yes")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(registry, [])
         self.assertEqual(events, [])

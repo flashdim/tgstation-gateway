@@ -82,11 +82,10 @@ if [ -n "${BYOND_SERVER:-}" ]; then
             echo "Wine server did not stop; refusing to relaunch Dream Seeker" >&2
             return 1
         fi
-        : >"$warmup_marker"
     }
 
     if [ ! -e "$warmup_marker" ]; then
-        : >"$warmup_marker"
+        printf '%s\n' cleanup-pending >"$warmup_marker"
         SECONDS=0
         wine "$dreamseeker" "$server_url" &
         warmup_pid=$!
@@ -121,8 +120,10 @@ if [ -n "${BYOND_SERVER:-}" ]; then
             force_wine_shutdown
         fi
         wait "$warmup_pid" 2>/dev/null || true
+        : >"$warmup_marker"
     elif grep -qx cleanup-pending "$warmup_marker"; then
         force_wine_shutdown
+        : >"$warmup_marker"
     fi
 
     exec wine "$dreamseeker" "$server_url"
