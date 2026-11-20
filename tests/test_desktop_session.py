@@ -7,6 +7,42 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DesktopSessionTest(unittest.TestCase):
+    def test_plasma_task_manager_and_tray_are_configured_at_login(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        layout = (ROOT / "container/plasma-layout.js").read_text()
+        autostart = (ROOT / "container/configure-plasma.desktop").read_text()
+        self.assertIn(
+            "container/configure-plasma.desktop /etc/xdg/autostart/configure-plasma.desktop",
+            dockerfile,
+        )
+        self.assertIn('widget.type === "org.kde.plasma.taskmanager"', layout)
+        self.assertIn(
+            'widget.writeConfig("launchers", "applications:reset-session.desktop")',
+            layout,
+        )
+        self.assertIn('"org.kde.plasma.volume"', layout)
+        self.assertIn('"org.kde.plasma.clipboard"', layout)
+        self.assertIn(
+            'systray.writeConfig("shownItems", ["org.kde.plasma.volume"])', layout
+        )
+        self.assertIn('systray.writeConfig("hiddenItems", hiddenItems)', layout)
+        self.assertIn('systray.writeConfig("extraItems", [', layout)
+        self.assertIn("Exec=/usr/local/bin/configure-plasma", autostart)
+
+    def test_reset_session_shortcut_stops_wine_and_byond_processes(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        desktop = (ROOT / "container/reset-session.desktop").read_text()
+        script = (ROOT / "container/reset-session.sh").read_text()
+        self.assertIn(
+            "container/reset-session.desktop /usr/share/applications/reset-session.desktop",
+            dockerfile,
+        )
+        self.assertIn("Name=Reset Session", desktop)
+        self.assertIn("Exec=/usr/local/bin/reset-session", desktop)
+        self.assertIn("dreamseeker[.]exe|byond[.]exe|wineserver[.]exe", script)
+        self.assertIn("wineserver -k9", script)
+        self.assertIn("wineserver --wait", script)
+
     def test_wayland_is_default_and_configurable_in_compose(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         compose = (ROOT / "examples/compose.yaml").read_text()

@@ -66,6 +66,10 @@ KWin maximizes the LazorGator Party game window without entering true
 fullscreen. The rule does not apply to the BYOND pager or other window
 titles.
 
+The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
+supervised client can restart. The system tray always shows audio volume,
+shows the clipboard when relevant, and hides its other known entries.
+
 Selkies follows the browser's display size by default. To use a fixed size:
 
 ```sh
