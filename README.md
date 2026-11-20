@@ -30,6 +30,11 @@ default. Set `SELKIES_WAYLAND=false` when running Compose to compare with
 Plasma on X11/Xvfb.
 In Wayland mode, BYOND starts once Plasma shares its authenticated XWayland
 display with the gateway's launcher.
+Compose disables gamepad, microphone, and webcam forwarding by default. It
+selects H.264 and allows Selkies to use an available GPU for rendering and
+encoding; the GPU Compose override passes through `/dev/dri`. The container
+does not receive Bluetooth hardware or the host system bus, so Bluetooth is
+unavailable in this setup.
 To test the published development image explicitly in Wayland mode, run:
 
 ```sh
@@ -66,7 +71,10 @@ KWin maximizes the LazorGator Party game window without entering true
 fullscreen. The rule does not apply to the BYOND pager or other window
 titles.
 
-Selkies follows the browser's display size by default. To use a fixed size:
+Selkies follows the browser's display size by default. Common stream and
+display settings can be overridden with `SELKIES_FRAMERATE`,
+`SELKIES_VIDEO_BITRATE`, `SELKIES_AUDIO_BITRATE`, `SELKIES_ENABLE_RESIZE`, and
+`SELKIES_SCALING_DPI`. To use a fixed size:
 
 ```sh
 SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
