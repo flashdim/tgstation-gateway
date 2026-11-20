@@ -67,8 +67,7 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn("--key LookAndFeelPackage org.kde.breezedark.desktop", dockerfile)
         self.assertIn("--key ColorScheme BreezeDark", dockerfile)
         self.assertIn(
-            "assets/glory-to-nanotrasen.jpg "
-            "/usr/share/tgstation-gateway/wallpaper.jpg",
+            "assets/glory-to-nanotrasen.jpg /usr/share/tgstation-gateway/wallpaper.jpg",
             dockerfile,
         )
 
