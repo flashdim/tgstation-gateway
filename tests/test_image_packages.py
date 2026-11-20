@@ -31,6 +31,8 @@ APP_PACKAGES = {
     "sweeper",
     "vlc",
     "plasma-discover",
+    "xterm",
+    "vim",
 }
 
 
