@@ -52,17 +52,28 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
 A BYOND account or server-side authentication may still be required.
+On the first direct-server launch in each container, Dream Seeker opens once
+and the gateway tries to close it normally before launching the regular
+session. If Dream Seeker is still running 15 seconds after launch, the gateway
+force-stops the BYOND processes and the session's Wine server before
+relaunching. The user verified that this startup cycle achieves the corrected
+DPI goal in their setup. The BYOND pager path is unchanged; this result does
+not establish general rendering or gameplay compatibility.
 
 ## Customize the session
 
-The browser session uses a 1920x1080 display by default. Choose another fixed size with:
+KWin maximizes the LazorGator Party game window without entering true
+fullscreen. The rule does not apply to the BYOND pager or other window
+titles.
+
+Selkies follows the browser's display size by default. To use a fixed size:
 
 ```sh
 SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
   docker compose -f examples/compose.yaml up
 ```
 
-Set both values to `0` to let the browser control the display size. Change the local web address port with `GATEWAY_PORT`, for example `GATEWAY_PORT=8081`.
+Change the local web address port with `GATEWAY_PORT`, for example `GATEWAY_PORT=8081`.
 
 ## Build locally
 

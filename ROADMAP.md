@@ -78,18 +78,23 @@ rendering; those additions have been removed.
 Build and interactive compatibility on other configurations remain to be
 verified; prior results are not proof of universal gameplay compatibility.
 
-The image defaults to fixed 1920x1080 Selkies resolution. This display-size
-experiment was prompted by reported first-connection scaling distortion;
-whether it improves browser scaling remains unverified. Automatic Dream Seeker
-maximization also remains unresolved. No verified Dream Seeker startup flag or
-local sizing setting was found; BYOND's documented maximization parameter is a
-game-skin setting, not an executable command-line option.
+The image leaves display sizing to Selkies and the browser instead of locking
+it to 1920x1080. A KWin rule forces the LazorGator Party Dream Seeker window
+to maximize without entering true fullscreen.
 
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in its test environment; it did not establish the cause
 of other rendering behavior. A direct launch to the configured host has been
 observed. A complete authenticated gameplay session and release publication
 remain unverified.
+
+The user has since confirmed that the direct-server startup cycle—opening
+Dream Seeker once, closing it, then launching it again—reliably achieves the
+corrected-DPI goal in their setup. If the first instance does not close within
+15 seconds, the launcher stops BYOND and the session's Wine server before
+relaunching; it does not start a second client if Wine shutdown cannot be
+confirmed. This confirms the reported DPI behavior for that setup, not general
+gameplay or rendering compatibility.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not

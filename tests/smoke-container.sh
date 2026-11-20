@@ -18,13 +18,13 @@ trap cleanup EXIT
 address="$(docker port "$container" 8080/tcp)"
 for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
-        docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null &&
+        docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null &&
         docker exec "$container" pgrep -x kwin_x11 >/dev/null &&
         docker exec "$container" pgrep -x plasmashell >/dev/null &&
         docker exec "$container" sh -c \
             '. "${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/container-env"; test "$SELKIES_WAYLAND" = false && xdpyinfo -display "$DISPLAY" >/dev/null'; then
         sleep 3
-        if docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
+        if docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then
             health_command="$(docker inspect -f '{{json .Config.Healthcheck.Test}}' "$container")"
             if [ "$health_command" != '["CMD","/usr/local/bin/healthcheck"]' ]; then
                 echo "Player image has an unexpected health check: $health_command" >&2
@@ -33,12 +33,12 @@ for _ in {1..120}; do
             docker exec "$container" /usr/local/bin/healthcheck
             docker exec "$container" s6-svc -d /etc/service/byond
             for _ in {1..20}; do
-                if ! docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
+                if ! docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then
                     break
                 fi
                 sleep 1
             done
-            if docker exec "$container" pgrep -f '[b]yond.exe' >/dev/null; then
+            if docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then
                 echo "BYOND pager did not stop" >&2
                 exit 1
             fi

@@ -5,8 +5,8 @@
 FROM scratch AS wine-prefix-cache
 FROM scratch AS wine-download-cache
 
-# This Plasma release was built on the Selkies 2.2.1 Ubuntu 26.04 base.
-FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04-20261113052020
+# Latest Ubuntu 26.04 Plasma image as of 2026-11-19 (Selkies 2.2.1).
+FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04@sha256:cee92447ae1445c0af4c26a73e32caa7d7cf31aed51b5c5e6549d94cc8fa8c9e
 
 USER root
 SHELL ["/bin/sh", "-c"]
@@ -21,7 +21,7 @@ RUN set -eu; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
-      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
+      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
@@ -104,8 +104,6 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     SELKIES_WAYLAND_X11_FALLBACK=false \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
-    SELKIES_MANUAL_WIDTH=1920 \
-    SELKIES_MANUAL_HEIGHT=1080 \
     SELKIES_COMMAND_ENABLED=false
 
 RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
@@ -137,6 +135,7 @@ RUN install -d -o 1000 -g 1000 /etc/service/byond && \
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
 COPY --chmod=644 container/byond-xwayland.desktop /etc/xdg/autostart/byond-xwayland.desktop
+COPY --chmod=644 container/kwinrulesrc /etc/xdg/kwinrulesrc
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

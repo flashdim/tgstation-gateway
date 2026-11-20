@@ -32,9 +32,12 @@ class InstallClientTest(unittest.TestCase):
                     'printf "%s\\n" "$W_CACHE" >> "$CACHE_LOG"\n'
                     'printf "installer" > "$W_CACHE/installer.exe"\n'
                     'if [ "$2" = corefonts ] && [ -n "${COREFONTS_FAILURE:-}" ]; then\n'
+                    '    attempts=$(cat "$W_CACHE/corefonts-attempts" 2>/dev/null || echo 0)\n'
+                    "    attempts=$((attempts + 1))\n"
+                    '    printf "%s\\n" "$attempts" > "$W_CACHE/corefonts-attempts"\n'
                     '    if [ "$COREFONTS_FAILURE" = always ] || '
-                    '[ ! -f "$W_CACHE/corefonts-attempted" ]; then\n'
-                    '        touch "$W_CACHE/corefonts-attempted"\n'
+                    '([ "$COREFONTS_FAILURE" = once ] && [ "$attempts" -le 1 ]) || '
+                    '([ "$COREFONTS_FAILURE" = twice ] && [ "$attempts" -le 2 ]); then\n'
                     "        exit 1\n"
                     "    fi\n"
                     "fi\n"
@@ -162,10 +165,22 @@ class InstallClientTest(unittest.TestCase):
             ],
         )
 
-    def test_does_not_continue_after_two_corefonts_failures(self):
+    def test_retries_corefonts_twice_after_wine_shuts_down(self):
+        self.create_file(
+            "drive_c/Program Files (x86)/Microsoft/EdgeWebView/Application/"
+            "123/msedgewebview2.exe"
+        )
+        result = self.install(COREFONTS_FAILURE="twice")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 3)
+        self.assertEqual(self.log.read_text().count("wineserver --wait"), 4)
+        self.assertIn("attempt 3 of 3", result.stderr)
+
+    def test_does_not_continue_after_three_corefonts_failures(self):
         result = self.install(COREFONTS_FAILURE="always")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 2)
+        self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 3)
+        self.assertEqual(self.log.read_text().count("wineserver --wait"), 3)
         self.assertNotIn("winetricks -q webview2", self.log.read_text())
 
     def test_fails_if_webview_runtime_is_missing(self):
