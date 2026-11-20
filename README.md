@@ -55,10 +55,10 @@ A BYOND account or server-side authentication may still be required.
 On the first direct-server launch in each container, Dream Seeker opens once
 and the gateway tries to close it normally before launching the regular
 session. If Dream Seeker is still running 15 seconds after launch, the gateway
-force-stops the BYOND processes and the session's Wine server before relaunching.
-The BYOND pager path is unchanged. This startup cycle is a
-DPI workaround, not a guarantee of corrected DPI or proof of rendering
-compatibility.
+force-stops the BYOND processes and the session's Wine server before
+relaunching. The user verified that this startup cycle achieves the corrected
+DPI goal in their setup. The BYOND pager path is unchanged; this result does
+not establish general rendering or gameplay compatibility.
 
 ## Customize the session
 

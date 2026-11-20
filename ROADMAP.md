@@ -88,6 +88,14 @@ of other rendering behavior. A direct launch to the configured host has been
 observed. A complete authenticated gameplay session and release publication
 remain unverified.
 
+The user has since confirmed that the direct-server startup cycle—opening
+Dream Seeker once, closing it, then launching it again—reliably achieves the
+corrected-DPI goal in their setup. If the first instance does not close within
+15 seconds, the launcher stops BYOND and the session's Wine server before
+relaunching; it does not start a second client if Wine shutdown cannot be
+confirmed. This confirms the reported DPI behavior for that setup, not general
+gameplay or rendering compatibility.
+
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
 demonstrate interactive play or the release publish.
