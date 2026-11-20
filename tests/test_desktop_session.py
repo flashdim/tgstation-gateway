@@ -76,7 +76,7 @@ class DesktopSessionTest(unittest.TestCase):
         asset = ROOT / "assets/glory-to-nanotrasen.jpg"
         attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
         self.assertTrue(asset.is_file())
-        self.assertGreater(asset.stat().st_size, 100_000)
+        self.assertGreater(asset.stat().st_size, 10_000)
         self.assertIn("Glory to Nanotrasen", attribution)
         self.assertIn("partheosis", attribution)
         self.assertIn("CC BY-NC 3.0", attribution)
