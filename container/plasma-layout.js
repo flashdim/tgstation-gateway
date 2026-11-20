@@ -47,4 +47,4 @@ for (var i = 0; i < panelIds.length; i++) {
     }
 }
 
-taskManagerConfigured && systemTrayConfigured ? "configured" : "waiting";
+print(taskManagerConfigured && systemTrayConfigured ? "configured" : "waiting");
