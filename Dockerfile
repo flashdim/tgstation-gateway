@@ -19,6 +19,11 @@ RUN set -eu; \
     selkies-privileged-files release; \
     dpkg --add-architecture i386; \
     apt-get update; \
+    removable_packages="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' | \
+      awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
+    if [ -n "$removable_packages" ]; then \
+      apt-get remove -y $removable_packages; \
+    fi; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
