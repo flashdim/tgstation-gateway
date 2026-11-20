@@ -20,7 +20,7 @@ RUN set -eu; \
     dpkg --add-architecture i386; \
     apt-get update; \
     removable_packages="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' | \
-      awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover|xterm|vim)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
+      awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover|xterm|vim|systemsettings|plasma-systemmonitor)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
     if [ -n "$removable_packages" ]; then \
       apt-get remove -y $removable_packages; \
     fi; \
