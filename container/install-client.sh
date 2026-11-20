@@ -48,8 +48,8 @@ while :; do
     fi
     # Winetricks returns 1 when font registration loses its wineserver connection.
     [ "$corefonts_status" -eq 1 ] || exit "$corefonts_status"
-    [ "$corefonts_attempt" -lt 6 ] || exit "$corefonts_status"
-    echo "Retrying Winetricks corefonts after Wine shuts down (attempt $((corefonts_attempt + 1)) of 6)" >&2
+    [ "$corefonts_attempt" -lt 3 ] || exit "$corefonts_status"
+    echo "Retrying Winetricks corefonts after Wine shuts down (attempt $((corefonts_attempt + 1)) of 3)" >&2
     run_stage "Wine server shutdown before corefonts retry" 30s wineserver --wait
     corefonts_attempt=$((corefonts_attempt + 1))
 done

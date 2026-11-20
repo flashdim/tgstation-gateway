@@ -174,13 +174,13 @@ class InstallClientTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 3)
         self.assertEqual(self.log.read_text().count("wineserver --wait"), 4)
-        self.assertIn("attempt 3 of 6", result.stderr)
+        self.assertIn("attempt 3 of 3", result.stderr)
 
-    def test_does_not_continue_after_six_corefonts_failures(self):
+    def test_does_not_continue_after_three_corefonts_failures(self):
         result = self.install(COREFONTS_FAILURE="always")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 6)
-        self.assertEqual(self.log.read_text().count("wineserver --wait"), 6)
+        self.assertEqual(self.log.read_text().count("winetricks -q corefonts"), 3)
+        self.assertEqual(self.log.read_text().count("wineserver --wait"), 3)
         self.assertNotIn("winetricks -q webview2", self.log.read_text())
 
     def test_fails_if_webview_runtime_is_missing(self):
