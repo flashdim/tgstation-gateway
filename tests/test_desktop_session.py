@@ -42,6 +42,31 @@ class DesktopSessionTest(unittest.TestCase):
                 self.assertEqual(rule.getboolean(setting), enabled)
                 self.assertEqual(rule.getint(f"{setting}rule"), 2)  # Force.
 
+    def test_plasma_defaults_are_installed_as_system_defaults(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        layout = (ROOT / "container/plasma-layout.js").read_text()
+        self.assertIn(
+            "container/plasma-layout.js "
+            "/usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/"
+            "contents/layouts/org.kde.plasma.desktop-layout.js",
+            dockerfile,
+        )
+        for setting in (
+            'panel.alignment = "center"',
+            'panel.lengthMode = "fit"',
+            'panel.hiding = "autohide"',
+            'panel.opacity = "opaque"',
+            "panel.floating = false",
+            "panel.height = 64",
+            "applications:org.kde.dolphin.desktop",
+            "applications:org.kde.plasma-systemmonitor.desktop",
+            "file:///usr/share/tgstation-gateway/wallpaper.png",
+        ):
+            with self.subTest(setting=setting):
+                self.assertIn(setting, layout)
+        self.assertIn("--key LookAndFeelPackage org.kde.breezedark.desktop", dockerfile)
+        self.assertIn("--key ColorScheme BreezeDark", dockerfile)
+
 
 if __name__ == "__main__":
     unittest.main()

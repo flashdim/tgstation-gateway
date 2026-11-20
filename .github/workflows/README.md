@@ -33,3 +33,9 @@ checksum-verified DXVK 3.1.1. The BYOND download remains versioned but has an
 optional checksum. Successful
 startup smoke tests do not demonstrate interactive gameplay or rendering
 compatibility.
+
+The X11 smoke test checks the desktop defaults' ownership and permissions;
+both desktop smoke tests query Plasma's panel properties. These checks do not
+verify the wallpaper visually, game-window geometry, or interactive gameplay.
+When changing the pinned Selkies base, rerun both smoke tests and manually
+verify the first-run desktop layout in both display modes.

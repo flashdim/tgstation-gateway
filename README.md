@@ -66,6 +66,49 @@ KWin maximizes the LazorGator Party game window without entering true
 fullscreen. The rule does not apply to the BYOND pager or other window
 titles.
 
+Fresh Plasma sessions use Breeze Dark colors, a dark Plasma theme, Breeze
+window decorations, dark icons and Breeze cursors. The bottom panel is
+centered, fits its contents, auto-hides, is opaque and non-floating, and is
+64 pixels high. Its icons-only task manager pins Dolphin and System Monitor.
+These are first-run defaults: changes made in Plasma remain in the session's
+user configuration, which is discarded with the container.
+
+The defaults are installed in `/etc/xdg/kdeglobals`, `/etc/xdg/plasmarc`
+and `/etc/xdg/kcminputrc`. The first-run panel and wallpaper layout is
+`/usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js`;
+the game window rule is `/etc/xdg/kwinrulesrc`. Operators can mount
+replacement configuration files read-only before starting a fresh container,
+or change the appearance and panel in Plasma. If selecting a different global
+look-and-feel, its own first-run layout may replace the gateway panel layout.
+
+The default wallpaper is KDE's **Sub-Arctic** by Krystian Zajdel, provided
+by the base image under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/);
+its metadata is at `/usr/share/wallpapers/Next/metadata.json`. To override it
+without rebuilding, bind-mount an operator-supplied PNG read-only at
+`/usr/share/tgstation-gateway/wallpaper.png` before starting the container.
+For example, add this under the Compose player's `volumes`:
+
+```yaml
+- /absolute/path/to/wallpaper.png:/usr/share/tgstation-gateway/wallpaper.png:ro
+```
+
+The requested [Glory to Nanotrasen artwork](https://www.deviantart.com/partheosis/art/Glory-to-Nanotrasen-547539107)
+by partheosis is not included: its redistribution license could not be
+verified. Operators must verify permission and applicable terms before using
+or distributing their own copy.
+
+### Desktop verification
+
+The layout and panel properties were queried in fresh **desktop-only** test
+containers based on the pinned Selkies image, in both X11 and Wayland.
+Screenshots, the requested wallpaper, and the BYOND window's maximized
+geometry and usability with the hidden panel have **not** been manually
+verified in the complete player image. To verify, start a fresh container in
+each display mode, capture the desktop and panel before and after hovering
+at the bottom edge, then connect to a test server and capture the maximized
+game window with the panel hidden. Record the image digest, display mode,
+screenshots and any failures separately from startup or health checks.
+
 Selkies follows the browser's display size by default. To use a fixed size:
 
 ```sh

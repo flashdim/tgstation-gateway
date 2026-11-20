@@ -136,6 +136,17 @@ COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/ru
 COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
 COPY --chmod=644 container/byond-xwayland.desktop /etc/xdg/autostart/byond-xwayland.desktop
 COPY --chmod=644 container/kwinrulesrc /etc/xdg/kwinrulesrc
+COPY --chmod=644 container/plasma-layout.js /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+RUN set -eu; \
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key LookAndFeelPackage org.kde.breezedark.desktop; \
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BreezeDark; \
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group Icons --key Theme breeze-dark; \
+    kwriteconfig6 --file /etc/xdg/plasmarc --group Theme --key name breeze-dark; \
+    kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme breeze_cursors; \
+    chown root:root /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
+    chmod 644 /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
+    install -D -m 644 /usr/share/wallpapers/Next/contents/images_dark/5120x2880.png \
+      /usr/share/tgstation-gateway/wallpaper.png
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 
