@@ -22,7 +22,7 @@ matching `wine-prefix-v4-proton-...` cache to force a fresh prefix. No cache
 contains player session data.
 
 On a cache miss, the prefix installer retries Winetricks `corefonts` up to
-twice after Wine shuts down if registration exits with status 1. A third
+five times after Wine shuts down if registration exits with status 1. A sixth
 failure still stops the build.
 
 Ubuntu Wine 10 packages are installed as version-pinned runtime dependencies,
