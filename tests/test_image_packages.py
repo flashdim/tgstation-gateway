@@ -33,6 +33,8 @@ APP_PACKAGES = {
     "plasma-discover",
     "xterm",
     "vim",
+    "systemsettings",
+    "plasma-systemmonitor",
 }
 
 
