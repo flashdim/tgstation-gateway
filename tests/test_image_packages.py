@@ -32,8 +32,6 @@ APP_PACKAGES = {
     "vlc",
     "plasma-discover",
     "dolphin",
-    "xterm",
-    "xterm:i386",
     "kdf",
     "ksystemlog",
     "kcalc",
