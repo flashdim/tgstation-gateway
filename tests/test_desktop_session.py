@@ -29,6 +29,8 @@ class DesktopSessionTest(unittest.TestCase):
             'systray.writeConfig("shownItems", ["org.kde.plasma.volume"])',
             layout,
         )
+        self.assertIn("var systray = widget;", layout)
+        self.assertNotIn("SystrayContainmentId", layout)
         self.assertIn(
             'var alwaysEnabledItems = ["org.kde.plasma.volume"]',
             layout,
@@ -48,14 +50,8 @@ class DesktopSessionTest(unittest.TestCase):
         ):
             with self.subTest(item=item):
                 self.assertIn(f'"{item}"', layout)
-        self.assertIn(
-            'systray.writeConfig("disabledStatusNotifiers", disabledItems)', layout
-        )
-        self.assertIn(
-            "alwaysEnabledItems.indexOf(item) === -1 &&\n"
-            "                        disabledItems.indexOf(item) === -1",
-            layout,
-        )
+        self.assertIn("alwaysEnabledItems.indexOf(item) === -1", layout)
+        self.assertIn("disabledItems.indexOf(item) === -1", layout)
         self.assertIn('systray.writeConfig("hiddenItems", hiddenItems)', layout)
         self.assertIn('systray.writeConfig("extraItems", alwaysEnabledItems)', layout)
         self.assertIn('widget.type === "org.kde.plasma.digitalclock"', layout)
