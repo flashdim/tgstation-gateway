@@ -63,9 +63,12 @@ not establish general rendering or gameplay compatibility.
 ## Customize the session
 
 The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
-supervised client can restart. The system tray scales icons with panel height,
-always shows audio volume, disables clipboard and the configured unused tray
-entries, and adds the digital clock.
+supervised client can restart. The system tray scales icons with panel height
+and always shows audio volume. Clipboard, Camera Indicator, Disks & Devices,
+Keyboard Layout, Lock Keys Status, Disk Quota, Input Method, Media Player,
+Notifications, Trashcan, and Weather Report are disabled. The digital clock is
+also present in the panel. Tray preferences are applied to the Plasma 6 system
+tray containment at login.
 
 Fresh Plasma sessions use Breeze Dark colors, a dark Plasma theme, Breeze
 window decorations, dark icons and Breeze cursors. The bottom panel is

@@ -82,9 +82,11 @@ The image leaves display sizing to Selkies and the browser instead of locking
 it to 1920x1080. The Plasma panel pins only a Reset Session shortcut that
 restarts the supervised client, uses a task manager that shows window labels
 with icons, and dodges application windows. The system tray scales icons with
-the panel, always shows audio volume, and disables clipboard plus the configured
-camera, device, keyboard, disk quota, input method, media player, notification,
-trash and weather entries. These customizations are unverified in an interactive
+the panel, always shows audio volume, and disables Clipboard, Camera Indicator,
+Disks & Devices, Keyboard Layout, Lock Keys Status, Disk Quota, Input Method,
+Media Player, Notifications, Trashcan and Weather Report. The digital clock is
+also present in the panel. Login configuration targets the Plasma 6 system tray
+containment directly. These customizations are unverified in an interactive
 session.
 
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
