@@ -48,6 +48,11 @@ Press **Ctrl+C** to stop the running container. To remove it and its temporary p
 docker compose -f examples/compose.yaml down
 ```
 
+The Compose example mounts the host's `/etc/localtime` read-only so the
+container uses the host's date, time and timezone. Set `TZ` (for example
+`TZ=Europe/Berlin`) to override the timezone. On hosts without
+`/etc/localtime`, remove that volume and set `TZ`.
+
 ## Connect directly to a server
 
 To start the client connected to a server instead of opening the pager, provide its address and port:
