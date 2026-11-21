@@ -68,9 +68,10 @@ clipboard, adds the digital clock, and hides its other known entries.
 
 Fresh Plasma sessions use Breeze Dark colors, a dark Plasma theme, Breeze
 window decorations, dark icons and Breeze cursors. The bottom panel is
-centered, fits its contents, auto-hides, is opaque and non-floating, and is
-64 pixels high. Its icons-only task manager pins Reset Session. These are
-first-run defaults; the shortcut and tray settings are reapplied at login.
+centered, fits its contents, dodges application windows, is opaque and
+non-floating, and is 64 pixels high. Its task manager displays window labels
+with icons and pins Reset Session. These are first-run defaults; the shortcut
+and tray settings are reapplied at login.
 Other changes made in Plasma remain in the session's user configuration,
 which is discarded with the container.
 
@@ -101,12 +102,13 @@ For example, add this under the Compose player's `volumes`:
 The layout and panel properties were queried in fresh **desktop-only** test
 containers based on the pinned Selkies image, in both X11 and Wayland.
 Screenshots, the requested wallpaper, and the BYOND window's geometry and
-usability with the hidden panel have **not** been manually
+usability while the panel dodges windows have **not** been manually
 verified in the complete player image. To verify, start a fresh container in
-each display mode, capture the desktop and panel before and after hovering
-at the bottom edge, then connect to a test server and capture the game window
-with the panel hidden. Record the image digest, display mode,
-screenshots and any failures separately from startup or health checks.
+each display mode, capture the desktop and panel before and while an
+application window overlaps the panel, then connect to a test server and
+capture the game window with the panel dodging it. Record the image digest,
+display mode, screenshots and any failures separately from startup or health
+checks.
 
 Selkies follows the browser's display size by default. To use a fixed size:
 

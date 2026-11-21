@@ -78,6 +78,8 @@ class DesktopSessionTest(unittest.TestCase):
             'panel.opacity = "opaque"',
             "panel.floating = false",
             "panel.height = 64",
+            'panel.addWidget("org.kde.plasma.taskmanager")',
+            'tasks.writeConfig("maxTextLines", 1)',
             "applications:reset-session.desktop",
             'panel.addWidget("org.kde.plasma.systemtray")',
             'panel.addWidget("org.kde.plasma.digitalclock")',

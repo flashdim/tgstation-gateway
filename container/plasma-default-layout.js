@@ -7,9 +7,10 @@ panel.opacity = "opaque";
 panel.floating = false;
 panel.height = 64;
 
-var tasks = panel.addWidget("org.kde.plasma.icontasks");
+var tasks = panel.addWidget("org.kde.plasma.taskmanager");
 tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", "applications:reset-session.desktop");
+tasks.writeConfig("maxTextLines", 1);
 panel.addWidget("org.kde.plasma.systemtray");
 panel.addWidget("org.kde.plasma.digitalclock");
 
