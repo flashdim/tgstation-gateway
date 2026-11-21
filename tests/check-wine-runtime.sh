@@ -17,8 +17,7 @@ if [ "$WINE_PROTON_VERSION" != 11.0-2 ] ||
     echo "Wine prefix does not match WINE_PROTON_VERSION" >&2
     exit 1
 fi
-for binary in /opt/wine-proton/bin/wine /opt/wine-proton/bin/wine-preloader \
-    /opt/wine-proton/bin/wineserver; do
+for binary in /opt/wine-proton/bin/wine /opt/wine-proton/bin/wineserver; do
     if [ ! -x "$binary" ]; then
         echo "Missing or non-executable $binary" >&2
         exit 1
@@ -28,6 +27,10 @@ for architecture in i386 x86_64; do
     directory="/opt/wine-proton/lib/wine/$architecture-unix"
     if [ ! -d "$directory" ]; then
         echo "Missing $architecture Unix modules" >&2
+        exit 1
+    fi
+    if [ ! -x "$directory/wine-preloader" ]; then
+        echo "Missing or non-executable $directory/wine-preloader" >&2
         exit 1
     fi
     for module in ntdll.so win32u.so winex11.so winewayland.so \

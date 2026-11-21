@@ -52,7 +52,7 @@ class WineRuntimeTest(unittest.TestCase):
             for name in LIBRARIES:
                 (libraries / name).touch()
         (self.runtime / "bin").mkdir()
-        for name in ("wine", "wine-preloader", "wineserver"):
+        for name in ("wine", "wineserver"):
             path = self.runtime / "bin" / name
             path.touch()
             path.chmod(0o755)
@@ -72,6 +72,14 @@ class WineRuntimeTest(unittest.TestCase):
             path.chmod(0o755)
 
         dockerfile = (ROOT / "Dockerfile").read_text()
+        extraction_check = re.search(
+            r"tar -xJf .*?; \\\n(.*?)    rm /tmp/wine-proton.tar.xz",
+            dockerfile,
+            re.S,
+        )[1]
+        self.extraction_check = "set -eu; " + extraction_check.replace(
+            "\\\n", " "
+        ).replace("/opt/wine-proton", str(self.runtime))
         check_block = re.search(
             r"# Build-time gate.*?\nRUN (set -eu;.*?)(?:\n\n)", dockerfile, re.S
         )[1]
@@ -113,6 +121,25 @@ class WineRuntimeTest(unittest.TestCase):
                 )
         self.assertIn(str(self.runtime / "bin/wine"), checked)
         self.assertIn(str(self.runtime / "bin/wineserver"), checked)
+
+    def test_preloaders_are_required_in_each_architecture_directory(self):
+        prefix = self.root / "prefix"
+        prefix.mkdir()
+        (prefix / ".gateway-proton-version").write_text(PROTON_VERSION)
+        for script in (self.extraction_check, self.docker_check, self.runtime_check):
+            with self.subTest(script=script):
+                result = self.run_check(script, WINEPREFIX=str(prefix))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for architecture in ("i386", "x86_64"):
+                    preloader = (
+                        self.runtime
+                        / "lib/wine"
+                        / f"{architecture}-unix/wine-preloader"
+                    )
+                    preloader.chmod(0o644)
+                    result = self.run_check(script, WINEPREFIX=str(prefix))
+                    self.assertNotEqual(result.returncode, 0)
+                    preloader.chmod(0o755)
 
     def test_requires_all_ubuntu_wine_packages_at_pinned_version(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

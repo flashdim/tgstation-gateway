@@ -46,7 +46,9 @@ RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
     mkdir -p /opt/wine-proton; \
     tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton; \
     test -x /opt/wine-proton/bin/wine; \
-    test -x /opt/wine-proton/bin/wine-preloader; \
+    for architecture in i386 x86_64; do \
+      test -x "/opt/wine-proton/lib/wine/$architecture-unix/wine-preloader"; \
+    done; \
     rm /tmp/wine-proton.tar.xz
 
 # Build-time gate shared by CI and releases. Do not fake SONAME links.
@@ -55,9 +57,9 @@ RUN set -eu; \
       test "$(dpkg-query -W -f='${Version}' "$package")" = "$WINE_PACKAGE_VERSION"; \
     done; \
     test -x /opt/wine-proton/bin/wine; \
-    test -x /opt/wine-proton/bin/wine-preloader; \
     for architecture in i386 x86_64; do \
       directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
+      test -x "$directory/wine-preloader"; \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
           libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
         test -r "/usr/lib/$architecture-linux-gnu/$library" || \
