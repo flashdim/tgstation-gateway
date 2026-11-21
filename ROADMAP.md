@@ -79,8 +79,9 @@ Build and interactive compatibility on other configurations remain to be
 verified; prior results are not proof of universal gameplay compatibility.
 
 The image leaves display sizing to Selkies and the browser instead of locking
-it to 1920x1080. A KWin rule forces the LazorGator Party Dream Seeker window
-to maximize without entering true fullscreen.
+it to 1920x1080. The Plasma panel pins only a Reset Session shortcut that
+restarts the supervised client, and the system tray is limited to audio volume
+and clipboard; these customizations are unverified in an interactive session.
 
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in its test environment; it did not establish the cause

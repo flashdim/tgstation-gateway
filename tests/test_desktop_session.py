@@ -1,4 +1,3 @@
-from configparser import ConfigParser
 from pathlib import Path
 import unittest
 
@@ -56,27 +55,6 @@ class DesktopSessionTest(unittest.TestCase):
             with self.subTest(setting=setting):
                 self.assertNotIn(setting, dockerfile)
                 self.assertIn(f"      {setting}:\n", compose)
-
-    def test_kwin_forces_maximization_only_for_the_matching_game_window(self):
-        dockerfile = (ROOT / "Dockerfile").read_text()
-        self.assertIn("container/kwinrulesrc /etc/xdg/kwinrulesrc", dockerfile)
-        config = ConfigParser()
-        config.read(ROOT / "container/kwinrulesrc")
-        rule = config[config["General"]["rules"]]
-        self.assertEqual(rule["wmclass"], "steam_proton")
-        self.assertEqual(rule.getint("wmclassmatch"), 1)  # Exact match.
-        self.assertFalse(rule.getboolean("wmclasscomplete"))
-        self.assertEqual(rule.getint("types"), 1)  # Normal windows only.
-        self.assertEqual(rule["title"], "LazorGator Party")
-        self.assertEqual(rule.getint("titlematch"), 2)  # Substring match.
-        for setting, enabled in (
-            ("maximizehoriz", True),
-            ("maximizevert", True),
-            ("fullscreen", False),
-        ):
-            with self.subTest(setting=setting):
-                self.assertEqual(rule.getboolean(setting), enabled)
-                self.assertEqual(rule.getint(f"{setting}rule"), 2)  # Force.
 
 
 if __name__ == "__main__":

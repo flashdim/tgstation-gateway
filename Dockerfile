@@ -135,7 +135,6 @@ RUN install -d -o 1000 -g 1000 /etc/service/byond && \
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
 COPY --chmod=644 container/byond-xwayland.desktop /etc/xdg/autostart/byond-xwayland.desktop
-COPY --chmod=644 container/kwinrulesrc /etc/xdg/kwinrulesrc
 COPY --chmod=755 container/configure-plasma.sh /usr/local/bin/configure-plasma
 COPY --chmod=644 container/plasma-layout.js /usr/local/share/plasma-layout.js
 COPY --chmod=644 container/reset-session.desktop /usr/share/applications/reset-session.desktop
