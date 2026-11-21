@@ -1,19 +1,70 @@
-var panel = new Panel;
-panel.location = "bottom";
-panel.alignment = "center";
-panel.lengthMode = "fit";
-panel.hiding = "autohide";
-panel.opacity = "opaque";
-panel.floating = false;
-panel.height = 64;
-
-var tasks = panel.addWidget("org.kde.plasma.icontasks");
-tasks.currentConfigGroup = ["General"];
-tasks.writeConfig("launchers", "applications:org.kde.dolphin.desktop,applications:org.kde.plasma-systemmonitor.desktop");
-
-var desktopsArray = desktopsForActivity(currentActivity());
-for (var i = 0; i < desktopsArray.length; i++) {
-    desktopsArray[i].wallpaperPlugin = "org.kde.image";
-    desktopsArray[i].currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-    desktopsArray[i].writeConfig("Image", "file:///usr/share/tgstation-gateway/wallpaper.jpg");
+function asList(value) {
+    if (Array.isArray(value)) {
+        return value;
+    }
+    if (typeof value === "string" && value.length > 0) {
+        return value.split(",");
+    }
+    return [];
 }
+
+var taskManagerConfigured = false;
+var systemTrayConfigured = false;
+var digitalClockConfigured = false;
+var systemTrayPanel = null;
+var panelIds = panels();
+
+for (var i = 0; i < panelIds.length; i++) {
+    var panel = panelIds[i];
+    var widgetIds = panel.widgetIds;
+    for (var j = 0; j < widgetIds.length; j++) {
+        var widget = panel.widgetById(widgetIds[j]);
+        if (
+            widget.type === "org.kde.plasma.taskmanager" ||
+            widget.type === "org.kde.plasma.icontasks"
+        ) {
+            widget.currentConfigGroup = ["General"];
+            widget.writeConfig("launchers", "applications:reset-session.desktop");
+            widget.reloadConfig();
+            taskManagerConfigured = true;
+        } else if (widget.type === "org.kde.plasma.digitalclock") {
+            digitalClockConfigured = true;
+        } else if (widget.type === "org.kde.plasma.systemtray") {
+            var systrayId = widget.readConfig("SystrayContainmentId");
+            if (systrayId) {
+                var systray = desktopById(systrayId);
+                systray.currentConfigGroup = ["General"];
+                var knownItems = asList(systray.readConfig("knownItems", []));
+                var hiddenItems = knownItems.filter(function (item) {
+                    return (
+                        item !== "org.kde.plasma.volume" &&
+                        item !== "org.kde.plasma.clipboard"
+                    );
+                });
+                systray.writeConfig("extraItems", [
+                    "org.kde.plasma.volume",
+                    "org.kde.plasma.clipboard",
+                ]);
+                systray.writeConfig("shownItems", [
+                    "org.kde.plasma.volume",
+                    "org.kde.plasma.clipboard",
+                ]);
+                systray.writeConfig("hiddenItems", hiddenItems);
+                systray.reloadConfig();
+                systemTrayConfigured = true;
+                systemTrayPanel = panel;
+            }
+        }
+    }
+}
+
+if (!digitalClockConfigured && systemTrayPanel) {
+    systemTrayPanel.addWidget("org.kde.plasma.digitalclock");
+    digitalClockConfigured = true;
+}
+
+print(
+    taskManagerConfigured && systemTrayConfigured && digitalClockConfigured
+        ? "configured"
+        : "waiting"
+);

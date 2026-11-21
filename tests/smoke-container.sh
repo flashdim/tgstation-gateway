@@ -44,7 +44,7 @@ for _ in {1..120}; do
                 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/selkies-session-bus"
                 test "$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
                     '"'"'var p = panels()[0]; print([p.alignment,p.lengthMode,p.hiding,p.opacity,p.floating,p.height].join(",").toString());'"'"')" \
-                    = "center,fit,autohide,opaque,false,64"'
+                    = "center,fit,dodgewindows,opaque,false,64"'
             docker exec "$container" s6-svc -d /etc/service/byond
             for _ in {1..20}; do
                 if ! docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then

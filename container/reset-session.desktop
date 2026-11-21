@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Reset Session
+Comment=Restart the BYOND session
+Exec=/usr/local/bin/reset-session
+Icon=system-reboot
+Terminal=false
+StartupNotify=false

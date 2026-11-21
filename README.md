@@ -62,21 +62,23 @@ not establish general rendering or gameplay compatibility.
 
 ## Customize the session
 
-KWin maximizes the LazorGator Party game window without entering true
-fullscreen. The rule does not apply to the BYOND pager or other window
-titles.
+The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
+supervised client can restart. The system tray always shows audio volume and
+clipboard, adds the digital clock, and hides its other known entries.
 
 Fresh Plasma sessions use Breeze Dark colors, a dark Plasma theme, Breeze
 window decorations, dark icons and Breeze cursors. The bottom panel is
-centered, fits its contents, auto-hides, is opaque and non-floating, and is
-64 pixels high. Its icons-only task manager pins Dolphin and System Monitor.
-These are first-run defaults: changes made in Plasma remain in the session's
-user configuration, which is discarded with the container.
+centered, fits its contents, dodges application windows, is opaque and
+non-floating, and is 64 pixels high. Its task manager displays window labels
+with icons and pins Reset Session. These are first-run defaults; the shortcut
+and tray settings are reapplied at login.
+Other changes made in Plasma remain in the session's user configuration,
+which is discarded with the container.
 
 The defaults are installed in `/etc/xdg/kdeglobals`, `/etc/xdg/plasmarc`
 and `/etc/xdg/kcminputrc`. The first-run panel and wallpaper layout is
-`/usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js`;
-the game window rule is `/etc/xdg/kwinrulesrc`. Operators can mount
+`/usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js`.
+Operators can mount
 replacement configuration files read-only before starting a fresh container,
 or change the appearance and panel in Plasma. If selecting a different global
 look-and-feel, its own first-run layout may replace the gateway panel layout.
@@ -99,13 +101,14 @@ For example, add this under the Compose player's `volumes`:
 
 The layout and panel properties were queried in fresh **desktop-only** test
 containers based on the pinned Selkies image, in both X11 and Wayland.
-Screenshots, the requested wallpaper, and the BYOND window's maximized
-geometry and usability with the hidden panel have **not** been manually
+Screenshots, the requested wallpaper, and the BYOND window's geometry and
+usability while the panel dodges windows have **not** been manually
 verified in the complete player image. To verify, start a fresh container in
-each display mode, capture the desktop and panel before and after hovering
-at the bottom edge, then connect to a test server and capture the maximized
-game window with the panel hidden. Record the image digest, display mode,
-screenshots and any failures separately from startup or health checks.
+each display mode, capture the desktop and panel before and while an
+application window overlaps the panel, then connect to a test server and
+capture the game window with the panel dodging it. Record the image digest,
+display mode, screenshots and any failures separately from startup or health
+checks.
 
 Selkies follows the browser's display size by default. To use a fixed size:
 
