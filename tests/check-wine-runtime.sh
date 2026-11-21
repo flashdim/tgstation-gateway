@@ -12,7 +12,7 @@ for package in wine wine32:i386 wine64; do
         exit 1
     fi
 done
-if [ "$WINE_PROTON_VERSION" != 10.0-4 ] ||
+if [ "$WINE_PROTON_VERSION" != 11.0-2 ] ||
     [ "$(cat "$WINEPREFIX/.gateway-proton-version")" != "$WINE_PROTON_VERSION" ]; then
     echo "Wine prefix does not match WINE_PROTON_VERSION" >&2
     exit 1

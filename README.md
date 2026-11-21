@@ -8,7 +8,7 @@
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker"></a>
   <a href="https://github.com/selkies-project/selkies"><img src="assets/selkies-logo.png" alt="Selkies" height="24"></a>
   <a href="https://www.byond.com/"><img src="assets/byond-logo.png" alt="BYOND" height="24"></a>
-  <a href="https://github.com/Kron4ek/Wine-Builds"><img src="https://img.shields.io/badge/Proton%20Wine-10.0--4-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Proton Wine 10.0-4"></a>
+  <a href="https://github.com/Kron4ek/Wine-Builds"><img src="https://img.shields.io/badge/Proton%20Wine-11.0--2-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Proton Wine 11.0-2"></a>
 </p>
 
 Run the BYOND player in your browser without installing BYOND on your computer. This experimental project streams the player's screen and audio; it does not host a game server.
@@ -151,7 +151,7 @@ docker buildx build --load --platform linux/amd64 -t tgstation-gateway-player .
 GATEWAY_IMAGE=tgstation-gateway-player docker compose -f examples/compose.yaml up
 ```
 
-The image uses checksum-pinned standalone Proton Wine 10.0-4 as its active
+The image uses checksum-pinned standalone Proton Wine 11.0-2 as its active
 runtime. Ubuntu Wine 10 packages supply runtime dependencies; Wine's executable
 comes from the Proton archive. Graphics setup runs BYOND's bundled DirectX
 installer and verifies its `d3dx9_43.dll` against the bundled CAB. Graphics

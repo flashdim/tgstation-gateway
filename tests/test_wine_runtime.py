@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_VERSION = "10.0~repack-12ubuntu1"
-PROTON_VERSION = "10.0-4"
+PROTON_VERSION = "11.0-2"
 MODULES = (
     "ntdll.so",
     "win32u.so",

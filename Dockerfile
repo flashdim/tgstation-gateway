@@ -13,7 +13,7 @@ SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
-ARG WINE_PROTON_VERSION=10.0-4
+ARG WINE_PROTON_VERSION=11.0-2
 
 RUN set -eu; \
     selkies-privileged-files release; \
