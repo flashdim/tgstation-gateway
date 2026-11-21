@@ -10,6 +10,8 @@ function asList(value) {
 
 var taskManagerConfigured = false;
 var systemTrayConfigured = false;
+var digitalClockConfigured = false;
+var systemTrayPanel = null;
 var panelIds = panels();
 
 for (var i = 0; i < panelIds.length; i++) {
@@ -22,6 +24,8 @@ for (var i = 0; i < panelIds.length; i++) {
             widget.writeConfig("launchers", "applications:reset-session.desktop");
             widget.reloadConfig();
             taskManagerConfigured = true;
+        } else if (widget.type === "org.kde.plasma.digitalclock") {
+            digitalClockConfigured = true;
         } else if (widget.type === "org.kde.plasma.systemtray") {
             var systrayId = widget.readConfig("SystrayContainmentId");
             if (systrayId) {
@@ -38,13 +42,26 @@ for (var i = 0; i < panelIds.length; i++) {
                     "org.kde.plasma.volume",
                     "org.kde.plasma.clipboard",
                 ]);
-                systray.writeConfig("shownItems", ["org.kde.plasma.volume"]);
+                systray.writeConfig("shownItems", [
+                    "org.kde.plasma.volume",
+                    "org.kde.plasma.clipboard",
+                ]);
                 systray.writeConfig("hiddenItems", hiddenItems);
                 systray.reloadConfig();
                 systemTrayConfigured = true;
+                systemTrayPanel = panel;
             }
         }
     }
 }
 
-print(taskManagerConfigured && systemTrayConfigured ? "configured" : "waiting");
+if (!digitalClockConfigured && systemTrayPanel) {
+    systemTrayPanel.addWidget("org.kde.plasma.digitalclock");
+    digitalClockConfigured = true;
+}
+
+print(
+    taskManagerConfigured && systemTrayConfigured && digitalClockConfigured
+        ? "configured"
+        : "waiting"
+);

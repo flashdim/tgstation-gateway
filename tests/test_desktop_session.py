@@ -22,10 +22,15 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn('"org.kde.plasma.volume"', layout)
         self.assertIn('"org.kde.plasma.clipboard"', layout)
         self.assertIn(
-            'systray.writeConfig("shownItems", ["org.kde.plasma.volume"])', layout
+            'systray.writeConfig("shownItems", [\n                    "org.kde.plasma.volume",\n                    "org.kde.plasma.clipboard",\n                ])',
+            layout,
         )
         self.assertIn('systray.writeConfig("hiddenItems", hiddenItems)', layout)
         self.assertIn('systray.writeConfig("extraItems", [', layout)
+        self.assertIn('widget.type === "org.kde.plasma.digitalclock"', layout)
+        self.assertIn(
+            'systemTrayPanel.addWidget("org.kde.plasma.digitalclock")', layout
+        )
         self.assertIn("Exec=/usr/local/bin/configure-plasma", autostart)
 
     def test_reset_session_shortcut_stops_wine_and_byond_processes(self):

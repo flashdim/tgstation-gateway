@@ -63,8 +63,8 @@ not establish general rendering or gameplay compatibility.
 ## Customize the session
 
 The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
-supervised client can restart. The system tray always shows audio volume,
-shows the clipboard when relevant, and hides its other known entries.
+supervised client can restart. The system tray always shows audio volume and
+clipboard, adds the digital clock, and hides its other known entries.
 
 Selkies follows the browser's display size by default. To use a fixed size:
 
