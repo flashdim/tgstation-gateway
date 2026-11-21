@@ -60,9 +60,7 @@ class DesktopSessionTest(unittest.TestCase):
             layout,
         )
         self.assertIn('systray.writeConfig("hiddenItems", hiddenItems)', layout)
-        self.assertIn(
-            'systray.writeConfig("extraItems", alwaysEnabledItems)', layout
-        )
+        self.assertIn('systray.writeConfig("extraItems", alwaysEnabledItems)', layout)
         self.assertIn('widget.type === "org.kde.plasma.digitalclock"', layout)
         self.assertIn(
             'systemTrayPanel.addWidget("org.kde.plasma.digitalclock")', layout
