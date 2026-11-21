@@ -74,7 +74,7 @@ class DesktopSessionTest(unittest.TestCase):
         for setting in (
             'panel.alignment = "center"',
             'panel.lengthMode = "fit"',
-            'panel.hiding = "autohide"',
+            'panel.hiding = "dodgewindows"',
             'panel.opacity = "opaque"',
             "panel.floating = false",
             "panel.height = 64",
