@@ -21,13 +21,39 @@ class DesktopSessionTest(unittest.TestCase):
             layout,
         )
         self.assertIn('"org.kde.plasma.volume"', layout)
-        self.assertIn('"org.kde.plasma.clipboard"', layout)
         self.assertIn(
-            'systray.writeConfig("shownItems", [\n                    "org.kde.plasma.volume",\n                    "org.kde.plasma.clipboard",\n                ])',
+            'systray.writeConfig("scaleIconsToFit", true)',
             layout,
         )
+        self.assertIn(
+            'systray.writeConfig("shownItems", ["org.kde.plasma.volume"])',
+            layout,
+        )
+        self.assertIn("var systray = widget;", layout)
+        self.assertNotIn("SystrayContainmentId", layout)
+        self.assertIn(
+            'var alwaysEnabledItems = ["org.kde.plasma.volume"]',
+            layout,
+        )
+        for item in (
+            "org.kde.plasma.clipboard",
+            "org.kde.plasma.cameraindicator",
+            "org.kde.plasma.devicenotifier",
+            "org.kde.plasma.keyboardlayout",
+            "org.kde.plasma.keyboardindicator",
+            "org.kde.plasma.diskquota",
+            "org.kde.plasma.inputmethod",
+            "org.kde.plasma.mediacontroller",
+            "org.kde.plasma.notifications",
+            "org.kde.plasma.trash",
+            "org.kde.plasma.weather",
+        ):
+            with self.subTest(item=item):
+                self.assertIn(f'"{item}"', layout)
+        self.assertIn("alwaysEnabledItems.indexOf(item) === -1", layout)
+        self.assertIn("disabledItems.indexOf(item) === -1", layout)
         self.assertIn('systray.writeConfig("hiddenItems", hiddenItems)', layout)
-        self.assertIn('systray.writeConfig("extraItems", [', layout)
+        self.assertIn('systray.writeConfig("extraItems", alwaysEnabledItems)', layout)
         self.assertIn('widget.type === "org.kde.plasma.digitalclock"', layout)
         self.assertIn(
             'systemTrayPanel.addWidget("org.kde.plasma.digitalclock")', layout
