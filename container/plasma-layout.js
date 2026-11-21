@@ -35,11 +35,9 @@ for (var i = 0; i < panelIds.length; i++) {
                 var systray = desktopById(systrayId);
                 systray.currentConfigGroup = ["General"];
                 var knownItems = asList(systray.readConfig("knownItems", []));
-                var alwaysEnabledItems = [
-                    "org.kde.plasma.volume",
-                    "org.kde.plasma.clipboard",
-                ];
+                var alwaysEnabledItems = ["org.kde.plasma.volume"];
                 var disabledItems = [
+                    "org.kde.plasma.clipboard",
                     "org.kde.plasma.cameraindicator",
                     "org.kde.plasma.devicenotifier",
                     "org.kde.plasma.keyboardlayout",

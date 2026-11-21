@@ -21,7 +21,6 @@ class DesktopSessionTest(unittest.TestCase):
             layout,
         )
         self.assertIn('"org.kde.plasma.volume"', layout)
-        self.assertIn('"org.kde.plasma.clipboard"', layout)
         self.assertIn(
             'systray.writeConfig("scaleIconsToFit", true)',
             layout,
@@ -31,13 +30,11 @@ class DesktopSessionTest(unittest.TestCase):
             layout,
         )
         self.assertIn(
-            "var alwaysEnabledItems = [\n"
-            '                    "org.kde.plasma.volume",\n'
-            '                    "org.kde.plasma.clipboard",\n'
-            "                ];",
+            'var alwaysEnabledItems = ["org.kde.plasma.volume"]',
             layout,
         )
         for item in (
+            "org.kde.plasma.clipboard",
             "org.kde.plasma.cameraindicator",
             "org.kde.plasma.devicenotifier",
             "org.kde.plasma.keyboardlayout",
