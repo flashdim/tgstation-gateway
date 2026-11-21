@@ -110,6 +110,15 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn("CC BY-NC 3.0", attribution)
         self.assertIn("547539107", attribution)
 
+    def test_smoke_tests_expect_configured_panel_hiding_mode(self):
+        layout = (ROOT / "container/plasma-default-layout.js").read_text()
+        self.assertIn('panel.hiding = "dodgewindows"', layout)
+        for script in ("smoke-container.sh", "smoke-wayland.sh"):
+            with self.subTest(script=script):
+                smoke = (ROOT / "tests" / script).read_text()
+                self.assertIn("p.hiding", smoke)
+                self.assertIn("center,fit,dodgewindows,opaque,false,64", smoke)
+
 
 if __name__ == "__main__":
     unittest.main()
