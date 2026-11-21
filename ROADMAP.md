@@ -81,9 +81,11 @@ verified; prior results are not proof of universal gameplay compatibility.
 The image leaves display sizing to Selkies and the browser instead of locking
 it to 1920x1080. The Plasma panel pins only a Reset Session shortcut that
 restarts the supervised client, uses a task manager that shows window labels
-with icons, and dodges application windows. The system tray always shows audio
-volume and clipboard alongside the digital clock while hiding other known
-entries; these customizations are unverified in an interactive session.
+with icons, and dodges application windows. The system tray scales icons with
+the panel, always shows audio volume, shows clipboard when relevant, and disables
+the configured camera, device, keyboard, disk quota, input method, media player,
+notification, trash and weather entries. These customizations are unverified
+in an interactive session.
 
 Earlier testing found that removing Selkies' `LD_PRELOAD` restored game and
 stat-panel rendering in its test environment; it did not establish the cause
