@@ -125,7 +125,8 @@ display mode, screenshots and any failures separately from startup or health
 checks.
 
 Selkies follows the browser's display size by default. Common stream and
-display settings can be overridden with `SELKIES_FRAMERATE`,
+display settings can be overridden with `SELKIES_MODE` (default `webrtc`),
+`SELKIES_FRAMERATE` (default `60`),
 `SELKIES_VIDEO_BITRATE`, `SELKIES_AUDIO_BITRATE`, `SELKIES_ENABLE_RESIZE`, and
 `SELKIES_SCALING_DPI`. To use a fixed size:
 

@@ -83,6 +83,7 @@ class DesktopSessionTest(unittest.TestCase):
     def test_compose_sets_selkies_streaming_defaults_and_exposes_overrides(self):
         compose = (ROOT / "examples/compose.yaml").read_text()
         defaults = {
+            "SELKIES_MODE": "webrtc",
             "SELKIES_AUTO_GPU": "true",
             "SELKIES_USE_CPU": "false",
             "SELKIES_ENCODER": "h264enc",
@@ -113,9 +114,11 @@ class DesktopSessionTest(unittest.TestCase):
             with self.subTest(setting=setting):
                 self.assertIn(f"{setting}: ${{{setting}:-{default}}}", compose)
 
-    def test_docker_image_sets_selkies_ui_defaults(self):
+    def test_docker_image_sets_selkies_defaults(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         defaults = {
+            "SELKIES_MODE": "webrtc",
+            "SELKIES_FRAMERATE": "60",
             "SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS": "false",
             "SELKIES_UI_SIDEBAR_SHOW_AUDIO_SETTINGS": "false",
             "SELKIES_FILE_TRANSFERS": "none",
