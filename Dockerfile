@@ -19,6 +19,12 @@ RUN set -eu; \
     selkies-privileged-files release; \
     dpkg --add-architecture i386; \
     apt-get update; \
+    removable_packages="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' | \
+      awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover|dolphin|kdf|ksystemlog|kcalc|gwenview|vim|systemsettings|plasma-systemmonitor)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
+    if [ -n "$removable_packages" ]; then \
+      apt-get remove -y $removable_packages; \
+      apt-get autoremove -y; \
+    fi; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
@@ -140,6 +146,17 @@ COPY --chmod=644 container/plasma-layout.js /usr/local/share/plasma-layout.js
 COPY --chmod=644 container/reset-session.desktop /usr/share/applications/reset-session.desktop
 COPY --chmod=755 container/reset-session.sh /usr/local/bin/reset-session
 COPY --chmod=644 container/configure-plasma.desktop /etc/xdg/autostart/configure-plasma.desktop
+COPY --chmod=644 container/plasma-default-layout.js /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+RUN set -eu; \
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key LookAndFeelPackage org.kde.breezedark.desktop; \
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme BreezeDark; \
+    kwriteconfig6 --file /etc/xdg/kdeglobals --group Icons --key Theme breeze-dark; \
+    kwriteconfig6 --file /etc/xdg/plasmarc --group Theme --key name breeze-dark; \
+    kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme breeze_cursors; \
+    chown root:root /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
+    chmod 644 /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
+    install -d -o root -g root -m 755 /usr/share/tgstation-gateway
+COPY --chmod=644 assets/glory-to-nanotrasen.jpg /usr/share/tgstation-gateway/wallpaper.jpg
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

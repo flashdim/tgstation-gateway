@@ -19,7 +19,10 @@ for (var i = 0; i < panelIds.length; i++) {
     var widgetIds = panel.widgetIds;
     for (var j = 0; j < widgetIds.length; j++) {
         var widget = panel.widgetById(widgetIds[j]);
-        if (widget.type === "org.kde.plasma.taskmanager") {
+        if (
+            widget.type === "org.kde.plasma.taskmanager" ||
+            widget.type === "org.kde.plasma.icontasks"
+        ) {
             widget.currentConfigGroup = ["General"];
             widget.writeConfig("launchers", "applications:reset-session.desktop");
             widget.reloadConfig();

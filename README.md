@@ -66,6 +66,48 @@ The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
 supervised client can restart. The system tray always shows audio volume and
 clipboard, adds the digital clock, and hides its other known entries.
 
+Fresh Plasma sessions use Breeze Dark colors, a dark Plasma theme, Breeze
+window decorations, dark icons and Breeze cursors. The bottom panel is
+centered, fits its contents, auto-hides, is opaque and non-floating, and is
+64 pixels high. Its icons-only task manager pins Reset Session. These are
+first-run defaults; the shortcut and tray settings are reapplied at login.
+Other changes made in Plasma remain in the session's user configuration,
+which is discarded with the container.
+
+The defaults are installed in `/etc/xdg/kdeglobals`, `/etc/xdg/plasmarc`
+and `/etc/xdg/kcminputrc`. The first-run panel and wallpaper layout is
+`/usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js`.
+Operators can mount
+replacement configuration files read-only before starting a fresh container,
+or change the appearance and panel in Plasma. If selecting a different global
+look-and-feel, its own first-run layout may replace the gateway panel layout.
+
+The default wallpaper is [**Glory to Nanotrasen**](https://www.deviantart.com/partheosis/art/Glory-to-Nanotrasen-547539107)
+by **partheosis**, used under [CC BY-NC 3.0](https://creativecommons.org/licenses/by-nc/3.0/),
+as indicated by the source URL. The repository copy and attribution record are
+at `assets/glory-to-nanotrasen.jpg` and `assets/ATTRIBUTION.md`.
+
+To override the wallpaper without rebuilding, bind-mount an operator-supplied
+image read-only at `/usr/share/tgstation-gateway/wallpaper.jpg` before starting
+the container.
+For example, add this under the Compose player's `volumes`:
+
+```yaml
+- /absolute/path/to/wallpaper.jpg:/usr/share/tgstation-gateway/wallpaper.jpg:ro
+```
+
+### Desktop verification
+
+The layout and panel properties were queried in fresh **desktop-only** test
+containers based on the pinned Selkies image, in both X11 and Wayland.
+Screenshots, the requested wallpaper, and the BYOND window's geometry and
+usability with the hidden panel have **not** been manually
+verified in the complete player image. To verify, start a fresh container in
+each display mode, capture the desktop and panel before and after hovering
+at the bottom edge, then connect to a test server and capture the game window
+with the panel hidden. Record the image digest, display mode,
+screenshots and any failures separately from startup or health checks.
+
 Selkies follows the browser's display size by default. To use a fixed size:
 
 ```sh
