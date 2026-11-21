@@ -64,6 +64,9 @@ class WineRuntimeTest(unittest.TestCase):
                 '[ "${FAIL_LDD:-0}" = 0 ] || exit 2\n'
                 'case "$1" in */wine/*.so) '
                 'test "$LD_LIBRARY_PATH" = "${1%/*}" || exit 3;; esac\n'
+                'case "$1" in */winegstreamer.so) '
+                'printf "%s\\n" "${GSTREAMER_DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"; '
+                "exit;; esac\n"
                 'printf "%s\\n" "${DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"'
             ),
         }.items():
@@ -125,6 +128,30 @@ class WineRuntimeTest(unittest.TestCase):
             INSTALLED_WINE_PACKAGE_VERSION="10.0~repack-12ubuntu2",
         )
         self.assertNotEqual(result.returncode, 0)
+
+    def test_gstreamer_gl_packages_and_module_dependency_checks(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        for architecture in ("amd64", "i386"):
+            self.assertIn(f"libgstreamer-gl1.0-0:{architecture}", dockerfile)
+        for architecture in ("i386", "x86_64"):
+            module = self.runtime / "lib/wine" / f"{architecture}-unix/winegstreamer.so"
+            module.touch()
+        result = self.run_check(self.docker_check)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        checked = self.log.read_text().splitlines()
+        for architecture in ("i386", "x86_64"):
+            self.assertIn(
+                str(
+                    self.runtime / "lib/wine" / f"{architecture}-unix/winegstreamer.so"
+                ),
+                checked,
+            )
+        result = self.run_check(
+            self.docker_check, GSTREAMER_DEPENDENCIES="libgstgl-1.0.so.0 => not found"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing dependencies", result.stderr)
+        self.assertIn("winegstreamer.so", result.stderr)
 
     def test_requires_checksum_pinned_proton_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
