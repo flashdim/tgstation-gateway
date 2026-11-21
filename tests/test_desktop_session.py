@@ -70,6 +70,12 @@ class DesktopSessionTest(unittest.TestCase):
             "assets/glory-to-nanotrasen.jpg /usr/share/tgstation-gateway/wallpaper.jpg",
             dockerfile,
         )
+        self.assertLess(
+            dockerfile.index(
+                "install -d -o root -g root -m 755 /usr/share/tgstation-gateway"
+            ),
+            dockerfile.index("COPY --chmod=644 assets/glory-to-nanotrasen.jpg"),
+        )
 
     def test_glory_to_nanotrasen_asset_and_attribution_are_in_repository(self):
         asset = ROOT / "assets/glory-to-nanotrasen.jpg"

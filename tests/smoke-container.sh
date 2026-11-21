@@ -16,6 +16,8 @@ cleanup() {
 trap cleanup EXIT
 
 docker exec "$container" sh -ec '
+    test "$(stat -c "%u:%g %a" /usr/share/tgstation-gateway)" = "0:0 755"
+    test -r /usr/share/tgstation-gateway/wallpaper.jpg
     for file in /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc \
         /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js \
         /usr/share/tgstation-gateway/wallpaper.jpg; do
