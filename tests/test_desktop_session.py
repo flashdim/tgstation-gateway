@@ -94,10 +94,49 @@ class DesktopSessionTest(unittest.TestCase):
             "SELKIES_VIDEO_BITRATE": "8000",
             "SELKIES_AUDIO_BITRATE": "128000",
             "SELKIES_SCALING_DPI": "96",
+            "SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_AUDIO_SETTINGS": "false",
+            "SELKIES_FILE_TRANSFERS": "none",
+            "SELKIES_PRINTING_ENABLED": "false",
+            "SELKIES_UI_TITLE": "LazorGator Party",
+            "SELKIES_UI_SHOW_LOGO": "false",
+            "SELKIES_UI_SHOW_CORE_BUTTONS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_FILES": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_APPS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_GAMEPADS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_WEBCAM": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_GAMING_MODE": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_TRACKPAD": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_SOFT_BUTTONS": "false",
         }
         for setting, default in defaults.items():
             with self.subTest(setting=setting):
                 self.assertIn(f"{setting}: ${{{setting}:-{default}}}", compose)
+
+    def test_docker_image_sets_selkies_ui_defaults(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        defaults = {
+            "SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_AUDIO_SETTINGS": "false",
+            "SELKIES_FILE_TRANSFERS": "none",
+            "SELKIES_PRINTING_ENABLED": "false",
+            "SELKIES_UI_TITLE": "LazorGator Party",
+            "SELKIES_UI_SHOW_LOGO": "false",
+            "SELKIES_UI_SHOW_CORE_BUTTONS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_FILES": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_APPS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_GAMEPADS": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_WEBCAM": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_GAMING_MODE": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_TRACKPAD": "false",
+            "SELKIES_UI_SIDEBAR_SHOW_SOFT_BUTTONS": "false",
+        }
+        for setting, default in defaults.items():
+            with self.subTest(setting=setting):
+                rendered_default = (
+                    f'"{default}"' if setting == "SELKIES_UI_TITLE" else default
+                )
+                self.assertIn(f"{setting}={rendered_default}", dockerfile)
 
     def test_display_size_is_only_set_by_explicit_compose_overrides(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

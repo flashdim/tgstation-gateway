@@ -110,7 +110,21 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     SELKIES_WAYLAND_X11_FALLBACK=false \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
-    SELKIES_COMMAND_ENABLED=false
+    SELKIES_COMMAND_ENABLED=false \
+    SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS=false \
+    SELKIES_UI_SIDEBAR_SHOW_AUDIO_SETTINGS=false \
+    SELKIES_FILE_TRANSFERS=none \
+    SELKIES_PRINTING_ENABLED=false \
+    SELKIES_UI_TITLE="LazorGator Party" \
+    SELKIES_UI_SHOW_LOGO=false \
+    SELKIES_UI_SHOW_CORE_BUTTONS=false \
+    SELKIES_UI_SIDEBAR_SHOW_FILES=false \
+    SELKIES_UI_SIDEBAR_SHOW_APPS=false \
+    SELKIES_UI_SIDEBAR_SHOW_GAMEPADS=false \
+    SELKIES_UI_SIDEBAR_SHOW_WEBCAM=false \
+    SELKIES_UI_SIDEBAR_SHOW_GAMING_MODE=false \
+    SELKIES_UI_SIDEBAR_SHOW_TRACKPAD=false \
+    SELKIES_UI_SIDEBAR_SHOW_SOFT_BUTTONS=false
 
 RUN --mount=type=bind,from=wine-prefix-cache,target=/tmp/wine-prefix-cache \
     if [ -f /tmp/wine-prefix-cache/prefix.tar.gz ]; then \

@@ -134,6 +134,11 @@ SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
   docker compose -f examples/compose.yaml up
 ```
 
+The Selkies interface title and sidebar controls can be overridden with the
+`SELKIES_UI_*` settings in `examples/compose.yaml`. File transfers and printing
+default to disabled (`SELKIES_FILE_TRANSFERS=none` and
+`SELKIES_PRINTING_ENABLED=false`).
+
 Change the local web address port with `GATEWAY_PORT`, for example `GATEWAY_PORT=8081`.
 
 ## Build locally
