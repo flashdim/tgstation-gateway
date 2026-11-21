@@ -13,7 +13,7 @@ SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
-ARG WINE_PROTON_VERSION=10.0-4
+ARG WINE_PROTON_VERSION=GE-Proton10-34
 
 RUN set -eu; \
     selkies-privileged-files release; \
@@ -36,18 +36,18 @@ RUN set -eu; \
 COPY container/download-wine.sh container/wine-proton.env /tmp/wine-download/
 RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
     set -eu; \
-    if [ -f /tmp/wine-download-cache/wine-proton.tar.xz ]; then \
-      cp /tmp/wine-download-cache/wine-proton.tar.xz /tmp/wine-proton.tar.xz; \
+    if [ -f /tmp/wine-download-cache/wine-proton.tar.gz ]; then \
+      cp /tmp/wine-download-cache/wine-proton.tar.gz /tmp/wine-proton.tar.gz; \
     fi; \
     build_version="$WINE_PROTON_VERSION"; \
     . /tmp/wine-download/wine-proton.env; \
     test "$build_version" = "$WINE_PROTON_VERSION"; \
     sh /tmp/wine-download/download-wine.sh /tmp; \
     mkdir -p /opt/wine-proton; \
-    tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton; \
+    tar -xzf /tmp/wine-proton.tar.gz --strip-components=2 -C /opt/wine-proton; \
     test -x /opt/wine-proton/bin/wine; \
     test -x /opt/wine-proton/bin/wine-preloader; \
-    rm /tmp/wine-proton.tar.xz
+    rm /tmp/wine-proton.tar.gz
 
 # Build-time gate shared by CI and releases. Do not fake SONAME links.
 RUN set -eu; \

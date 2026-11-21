@@ -12,12 +12,12 @@ validation.
 
 ## Build caches
 
-CI and release workflows separately cache the checksum-pinned Proton Wine
+CI and release workflows separately cache the checksum-pinned GE-Proton
 archive and clean build-time Wine prefix. The archive cache key uses
-`container/wine-proton.env`; the runner and image build verify its SHA-256.
+`container/wine-proton.env`; the runner and image build verify its SHA-512.
 Delete the corresponding `wine-download-v1-...` cache to refresh it. The
-versioned prefix key includes the Dockerfile, Proton pin and installer inputs.
-Prefixes carry a Proton-version marker so runtimes cannot be mixed. Delete the
+versioned prefix key includes the Dockerfile, GE-Proton pin and installer inputs.
+Prefixes carry a Wine-runtime marker so runtimes cannot be mixed. Delete the
 matching `wine-prefix-v4-proton-...` cache to force a fresh prefix. No cache
 contains player session data.
 

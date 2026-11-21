@@ -79,7 +79,7 @@ class WorkflowTest(unittest.TestCase):
             dockerfile,
             re.S,
         )[1].replace("\\\n", " ")
-        for cached_version in ("10.0-3", "10.0-4", "11.22", None):
+        for cached_version in ("10.0-3", "10.0-4", "11.22", "GE-Proton10-34", None):
             with self.subTest(cached_version=cached_version):
                 with tempfile.TemporaryDirectory() as temporary:
                     root = Path(temporary)
@@ -107,14 +107,14 @@ class WorkflowTest(unittest.TestCase):
                         env={
                             **os.environ,
                             "WINEPREFIX": str(root / "prefix"),
-                            "WINE_PROTON_VERSION": "10.0-4",
+                            "WINE_PROTON_VERSION": "GE-Proton10-34",
                         },
                         capture_output=True,
                         text=True,
                     )
                     self.assertEqual(
                         result.returncode == 0,
-                        cached_version == "10.0-4",
+                        cached_version == "GE-Proton10-34",
                         result.stderr,
                     )
 
