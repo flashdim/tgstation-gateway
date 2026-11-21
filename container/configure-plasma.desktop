@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Configure Plasma panel
+Exec=/usr/local/bin/configure-plasma
+OnlyShowIn=KDE;
+NoDisplay=true

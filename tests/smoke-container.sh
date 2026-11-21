@@ -15,6 +15,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+docker exec "$container" sh -ec '
+    test "$(stat -c "%u:%g %a" /usr/share/tgstation-gateway)" = "0:0 755"
+    test -r /usr/share/tgstation-gateway/wallpaper.jpg
+    for file in /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc \
+        /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js \
+        /usr/share/tgstation-gateway/wallpaper.jpg; do
+        test "$(stat -c "%u:%g %a" "$file")" = "0:0 644"
+    done'
+
 address="$(docker port "$container" 8080/tcp)"
 for _ in {1..120}; do
     if curl --silent --fail --max-time 2 "http://$address/api/health" >/dev/null &&
@@ -31,6 +40,11 @@ for _ in {1..120}; do
                 exit 1
             fi
             docker exec "$container" /usr/local/bin/healthcheck
+            docker exec "$container" sh -ec '
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/selkies-session-bus"
+                test "$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+                    '"'"'var p = panels()[0]; print([p.alignment,p.lengthMode,p.hiding,p.opacity,p.floating,p.height].join(",").toString());'"'"')" \
+                    = "center,fit,dodgewindows,opaque,false,64"'
             docker exec "$container" s6-svc -d /etc/service/byond
             for _ in {1..20}; do
                 if ! docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then

@@ -39,6 +39,11 @@ for _ in {1..120}; do
             timeout 2 xdpyinfo -display "$DISPLAY" >/dev/null'; then
         sleep 3
         if docker exec "$container" /usr/local/bin/healthcheck; then
+            docker exec "$container" sh -ec '
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/selkies-session-bus"
+                test "$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+                    '"'"'var p = panels()[0]; print([p.alignment,p.lengthMode,p.hiding,p.opacity,p.floating,p.height].join(",").toString());'"'"')" \
+                    = "center,fit,dodgewindows,opaque,false,64"'
             echo "Plasma Wayland, XWayland and BYOND health checks passed"
             exit 0
         fi

@@ -41,6 +41,9 @@ planned features or smoke tests as proof of interactive gameplay.
 
 ## Changes and validation
 
+- Fix failing GitHub Actions runs on the branch the run executed on (check the
+  run's `headBranch`, e.g. a pull request's head branch), not on `main`; do not
+  push such fixes to `main` unless the run itself was on `main`.
 - Before every commit, run CI's `pre-commit run --all-files --show-diff-on-failure`
   and resolve any formatter changes; do not commit until the formatting check
   passes. After pushing each commit, verify that the formatting workflow
