@@ -30,6 +30,11 @@ default. Set `SELKIES_WAYLAND=false` when running Compose to compare with
 Plasma on X11/Xvfb.
 In Wayland mode, BYOND starts once Plasma shares its authenticated XWayland
 display with the gateway's launcher.
+Compose disables gamepad, microphone, and webcam forwarding by default. It
+selects H.264 and allows Selkies to use an available GPU for rendering and
+encoding; the GPU Compose override passes through `/dev/dri`. The container
+does not receive Bluetooth hardware or the host system bus, so Bluetooth is
+unavailable in this setup.
 To test the published development image explicitly in Wayland mode, run:
 
 ```sh
@@ -42,6 +47,11 @@ Press **Ctrl+C** to stop the running container. To remove it and its temporary p
 ```sh
 docker compose -f examples/compose.yaml down
 ```
+
+The Compose example mounts the host's `/etc/localtime` read-only so the
+container uses the host's date, time and timezone. Set `TZ` (for example
+`TZ=Europe/Berlin`) to override the timezone. On hosts without
+`/etc/localtime`, remove that volume and set `TZ`.
 
 ## Connect directly to a server
 
@@ -114,12 +124,21 @@ capture the game window with the panel dodging it. Record the image digest,
 display mode, screenshots and any failures separately from startup or health
 checks.
 
-Selkies follows the browser's display size by default. To use a fixed size:
+Selkies follows the browser's display size by default. Common stream and
+display settings can be overridden with `SELKIES_MODE` (default `webrtc`),
+`SELKIES_FRAMERATE` (default `60`),
+`SELKIES_VIDEO_BITRATE`, `SELKIES_AUDIO_BITRATE`, `SELKIES_ENABLE_RESIZE`, and
+`SELKIES_SCALING_DPI`. To use a fixed size:
 
 ```sh
 SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
   docker compose -f examples/compose.yaml up
 ```
+
+The Selkies interface title and sidebar controls can be overridden with the
+`SELKIES_UI_*` settings in `examples/compose.yaml`. File transfers and printing
+default to disabled (`SELKIES_FILE_TRANSFERS=none` and
+`SELKIES_PRINTING_ENABLED=false`).
 
 Change the local web address port with `GATEWAY_PORT`, for example `GATEWAY_PORT=8081`.
 
