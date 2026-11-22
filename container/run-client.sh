@@ -14,6 +14,8 @@ export PATH="/opt/wine-proton/bin:$PATH"
 export WINELOADER="/opt/wine-proton/bin/wine"
 export WINESERVER="/opt/wine-proton/bin/wineserver"
 export WINEDEBUG=-all,err+all
+# Wine repeatedly reports this unsupported token class even during normal use.
+exec 2> >(grep --binary-files=text --line-buffered -vE '^[[:xdigit:]]+:err:ntdll:NtQueryInformationToken Unhandled token information class 33$' >&2)
 
 display_ready() {
     if [ "${SELKIES_WAYLAND:-false}" = true ]; then

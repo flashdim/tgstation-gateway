@@ -164,6 +164,10 @@ comes from the Proton archive. Graphics setup runs BYOND's bundled DirectX
 installer and verifies its `d3dx9_43.dll` against the bundled CAB. Graphics
 setup also installs checksum-verified DXVK 3.1.1.
 
+At runtime, Wine logging is limited to errors, and the repeated
+`NtQueryInformationToken` unsupported token class 33 diagnostic is filtered out.
+Other Wine errors remain visible in the container logs.
+
 ## Important limitations
 
 - This is an early, single-player experiment. Each player needs a separate container; session management, resource limits, and persistent player data are not provided.

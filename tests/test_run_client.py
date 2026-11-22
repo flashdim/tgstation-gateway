@@ -17,6 +17,8 @@ class RunClientTest(unittest.TestCase):
         wayland=False,
         dimensions="1280x720",
         existing_layout=None,
+        wine_stderr="",
+        wine_exit_code=0,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -40,13 +42,15 @@ class RunClientTest(unittest.TestCase):
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
                     "fi\n"
+                    'printf "%s" "$MOCK_WINE_STDERR" >&2\n'
                     'if [ "$1" = reg ]; then\n'
                     '  printf "%s\\n" "$@" > "$WINE_LOG"\n'
                     '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
                     "  exit $?\n"
                     "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
-                    'printf "%s\\n" "$DISPLAY" "$@"'
+                    'printf "%s\\n" "$DISPLAY" "$@"\n'
+                    'exit "$MOCK_WINE_EXIT_CODE"'
                 ),
             }.items():
                 command = commands / name
@@ -76,6 +80,8 @@ class RunClientTest(unittest.TestCase):
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
                 "DISPLAY_DIMENSIONS": dimensions,
+                "MOCK_WINE_STDERR": wine_stderr,
+                "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
@@ -120,6 +126,23 @@ class RunClientTest(unittest.TestCase):
                 events.read_text().splitlines() if events.exists() else [],
                 layout.read_text() if layout.exists() else None,
             )
+
+    def test_filters_only_the_repeated_wine_token_diagnostic(self):
+        noise = (
+            "0268:err:ntdll:NtQueryInformationToken Unhandled token information class 33\n"
+            "01c8:err:ntdll:NtQueryInformationToken Unhandled token information class 33\n"
+        )
+        other_errors = (
+            "0240:err:ntdll:NtQueryInformationToken Unhandled token information class 330\n"
+            "0240:err:ntdll:AnotherFunction Important error\n"
+            "0240:err:other:SomethingElse Important error\n"
+        )
+        result, _, _, events, _ = self.run_client(
+            gpu="1", wine_stderr=noise + other_errors, wine_exit_code=23
+        )
+        self.assertEqual(result.returncode, 23)
+        self.assertEqual(events, ["launch"])
+        self.assertEqual(result.stderr, other_errors * 2)
 
     def test_writes_display_sized_layout_over_existing_config(self):
         result, _, _, _, layout = self.run_client(
