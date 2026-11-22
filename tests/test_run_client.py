@@ -34,6 +34,7 @@ class RunClientTest(unittest.TestCase):
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
                     'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
                     'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
+                    'test "$WINEDEBUG" = "-all,err+all" || exit 94\n'
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 95\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'

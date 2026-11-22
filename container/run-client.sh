@@ -13,6 +13,7 @@ unset LD_PRELOAD
 export PATH="/opt/wine-proton/bin:$PATH"
 export WINELOADER="/opt/wine-proton/bin/wine"
 export WINESERVER="/opt/wine-proton/bin/wineserver"
+export WINEDEBUG=-all,err+all
 
 display_ready() {
     if [ "${SELKIES_WAYLAND:-false}" = true ]; then
