@@ -97,7 +97,7 @@ The first-run desktop uses a Plasma slideshow of the images in
 `assets/wallpapers/`, including **Glory to Nanotrasen** by **partheosis** and
 the **Space Station 13** logo by **Wirewraith**. See `assets/ATTRIBUTION.md` for
 sources and licenses (also installed at
-`/usr/share/doc/tgstation-gateway/wallpaper-attribution.md` in the image).
+`/usr/share/tgstation-gateway/wallpaper-attribution.md` in the image).
 Plasma's default slide interval is 15 minutes. To add
 images to the built-in collection, place them in `assets/wallpapers/`, record
 their attribution and license, and rebuild the image.

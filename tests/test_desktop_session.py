@@ -192,7 +192,7 @@ class DesktopSessionTest(unittest.TestCase):
             dockerfile,
         )
         self.assertIn(
-            "assets/ATTRIBUTION.md /usr/share/doc/tgstation-gateway/wallpaper-attribution.md",
+            "assets/ATTRIBUTION.md /usr/share/tgstation-gateway/wallpaper-attribution.md",
             dockerfile,
         )
         self.assertLess(
@@ -200,6 +200,10 @@ class DesktopSessionTest(unittest.TestCase):
                 "install -d -o root -g root -m 755 /usr/share/tgstation-gateway/wallpapers"
             ),
             dockerfile.index("COPY --chmod=644 assets/wallpapers/"),
+        )
+        smoke = (ROOT / "tests/smoke-container.sh").read_text()
+        self.assertIn(
+            "test -r /usr/share/tgstation-gateway/wallpaper-attribution.md", smoke
         )
 
     def test_wallpaper_assets_and_attribution_are_in_repository(self):
