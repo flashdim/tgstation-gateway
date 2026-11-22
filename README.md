@@ -151,6 +151,13 @@ docker buildx build --load --platform linux/amd64 -t tgstation-gateway-player .
 GATEWAY_IMAGE=tgstation-gateway-player docker compose -f examples/compose.yaml up
 ```
 
+The package layer upgrades available OS packages, removes selected applications
+and unneeded dependencies, and installs the pinned Wine packages. The upgrade
+fails if it would need to remove packages; the Wine pins must remain available
+in the Ubuntu repositories. Package versions depend on repository state at
+build time. Use `--no-cache` when rebuilding to refresh the package layer;
+Docker may otherwise reuse an older layer.
+
 The image uses checksum-pinned standalone Proton Wine 10.0-4 as its active
 runtime. Ubuntu Wine 10 packages supply runtime dependencies; Wine's executable
 comes from the Proton archive. Graphics setup runs BYOND's bundled DirectX

@@ -23,13 +23,14 @@ RUN set -eu; \
       awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover|dolphin|kdf|ksystemlog|kcalc|gwenview|vim|systemsettings|plasma-systemmonitor)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
     if [ -n "$removable_packages" ]; then \
       apt-get remove -y $removable_packages; \
-      apt-get autoremove -y; \
     fi; \
+    apt-get dist-upgrade -y --no-remove; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
+    apt-get autoremove -y; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
