@@ -144,17 +144,17 @@ class RunClientTest(unittest.TestCase):
                 )
             },
             {
-                "mainwindow.size": '"1215x627"',
-                "mapwindow.size": '"853x627"',
-                "lobby_screen.size": '"853x627"',
-                "info_and_buttons.size": '"426x627"',
+                "mainwindow.size": '"1215x592"',
+                "mapwindow.size": '"853x592"',
+                "lobby_screen.size": '"853x592"',
+                "info_and_buttons.size": '"426x592"',
                 "infobuttons.size": '"426x19"',
-                "infowindow.size": '"426x591"',
+                "infowindow.size": '"426x560"',
                 "statwindow.size": '"426x240"',
                 "outputwindow.size": '"426x360"',
                 "output_selector.size": '"426x360"',
                 "output_browser.size": '"426x360"',
-                "preferences_window.size": '"853x639"',
+                "preferences_window.size": '"853x592"',
             },
         )
         self.assertEqual(settings["map_screen.map.zoom-mode"], '"distort"')
