@@ -21,6 +21,7 @@ docker exec "$container" sh -ec '
     test -r /usr/share/tgstation-gateway/wallpapers/glory-to-nanotrasen.jpg
     for file in /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc \
         /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js \
+        /usr/share/doc/tgstation-gateway/wallpaper-attribution.md \
         /usr/share/tgstation-gateway/wallpapers/*; do
         test "$(stat -c "%u:%g %a" "$file")" = "0:0 644"
     done'

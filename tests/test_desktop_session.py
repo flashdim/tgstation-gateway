@@ -191,6 +191,10 @@ class DesktopSessionTest(unittest.TestCase):
             "assets/wallpapers/ /usr/share/tgstation-gateway/wallpapers/",
             dockerfile,
         )
+        self.assertIn(
+            "assets/ATTRIBUTION.md /usr/share/doc/tgstation-gateway/wallpaper-attribution.md",
+            dockerfile,
+        )
         self.assertLess(
             dockerfile.index(
                 "install -d -o root -g root -m 755 /usr/share/tgstation-gateway/wallpapers"
