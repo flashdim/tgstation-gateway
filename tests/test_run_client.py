@@ -17,6 +17,7 @@ class RunClientTest(unittest.TestCase):
         wayland=False,
         dimensions="1280x720",
         existing_layout=None,
+        wine_exit_code=0,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -34,6 +35,7 @@ class RunClientTest(unittest.TestCase):
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
                     'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
                     'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
+                    'test "$WINEDEBUG" = "-all" || exit 94\n'
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 95\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
@@ -45,7 +47,8 @@ class RunClientTest(unittest.TestCase):
                     "  exit $?\n"
                     "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
-                    'printf "%s\\n" "$DISPLAY" "$@"'
+                    'printf "%s\\n" "$DISPLAY" "$@"\n'
+                    'exit "$MOCK_WINE_EXIT_CODE"'
                 ),
             }.items():
                 command = commands / name
@@ -59,6 +62,7 @@ class RunClientTest(unittest.TestCase):
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
+                "export WINEDEBUG='+all'\n"
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
@@ -75,6 +79,7 @@ class RunClientTest(unittest.TestCase):
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
                 "DISPLAY_DIMENSIONS": dimensions,
+                "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
@@ -119,6 +124,11 @@ class RunClientTest(unittest.TestCase):
                 events.read_text().splitlines() if events.exists() else [],
                 layout.read_text() if layout.exists() else None,
             )
+
+    def test_preserves_wine_exit_status(self):
+        result, _, _, events, _ = self.run_client(wine_exit_code=23)
+        self.assertEqual(result.returncode, 23)
+        self.assertEqual(events, ["launch"])
 
     def test_writes_display_sized_layout_over_existing_config(self):
         result, _, _, _, layout = self.run_client(

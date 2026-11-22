@@ -164,6 +164,10 @@ comes from the Proton archive. Graphics setup runs BYOND's bundled DirectX
 installer and verifies its `d3dx9_43.dll` against the bundled CAB. Graphics
 setup also installs checksum-verified DXVK 3.1.1.
 
+At runtime, all Wine debug channels (including errors) are disabled with
+`WINEDEBUG=-all`. Selkies logs and launcher error messages remain visible.
+Build-time Wine errors are still logged.
+
 ## Important limitations
 
 - This is an early, single-player experiment. Each player needs a separate container; session management, resource limits, and persistent player data are not provided.
