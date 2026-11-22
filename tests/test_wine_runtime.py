@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_VERSION = "10.0~repack-12ubuntu1"
-PROTON_VERSION = "10.0-4"
+PROTON_VERSION = "GE-Proton10-34"
 MODULES = (
     "ntdll.so",
     "win32u.so",
@@ -64,6 +64,9 @@ class WineRuntimeTest(unittest.TestCase):
                 '[ "${FAIL_LDD:-0}" = 0 ] || exit 2\n'
                 'case "$1" in */wine/*.so) '
                 'test "$LD_LIBRARY_PATH" = "${1%/*}" || exit 3;; esac\n'
+                'case "$1" in */winegstreamer.so) '
+                'printf "%s\\n" "${GSTREAMER_DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"; '
+                "exit;; esac\n"
                 'printf "%s\\n" "${DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"'
             ),
         }.items():
@@ -126,13 +129,37 @@ class WineRuntimeTest(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
 
+    def test_gstreamer_gl_packages_and_module_dependency_checks(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        for architecture in ("amd64", "i386"):
+            self.assertIn(f"libgstreamer-gl1.0-0:{architecture}", dockerfile)
+        for architecture in ("i386", "x86_64"):
+            module = self.runtime / "lib/wine" / f"{architecture}-unix/winegstreamer.so"
+            module.touch()
+        result = self.run_check(self.docker_check)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        checked = self.log.read_text().splitlines()
+        for architecture in ("i386", "x86_64"):
+            self.assertIn(
+                str(
+                    self.runtime / "lib/wine" / f"{architecture}-unix/winegstreamer.so"
+                ),
+                checked,
+            )
+        result = self.run_check(
+            self.docker_check, GSTREAMER_DEPENDENCIES="libgstgl-1.0.so.0 => not found"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing dependencies", result.stderr)
+        self.assertIn("winegstreamer.so", result.stderr)
+
     def test_requires_checksum_pinned_proton_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         pin = (ROOT / "container/wine-proton.env").read_text()
         downloader = (ROOT / "container/download-wine.sh").read_text()
         self.assertIn(f"WINE_PROTON_VERSION={PROTON_VERSION}", pin)
-        self.assertRegex(pin, r"WINE_PROTON_SHA256=[0-9a-f]{64}")
-        self.assertIn("sha256sum -c -", downloader)
+        self.assertRegex(pin, r"WINE_PROTON_SHA512=[0-9a-f]{128}")
+        self.assertIn("sha512sum -c -", downloader)
         self.assertIn("WINE_PROTON_VERSION=${WINE_PROTON_VERSION}", dockerfile)
         self.assertIn("/opt/wine-proton/bin", dockerfile)
         self.assertNotIn("winehq-staging", dockerfile)
@@ -146,7 +173,7 @@ class WineRuntimeTest(unittest.TestCase):
         script.write_text((ROOT / "container/download-wine.sh").read_text())
         (script_dir / "wine-proton.env").write_text(
             "WINE_PROTON_VERSION=test\n"
-            f"WINE_PROTON_SHA256={hashlib.sha256(content).hexdigest()}\n"
+            f"WINE_PROTON_SHA512={hashlib.sha512(content).hexdigest()}\n"
         )
         curl = self.bin / "curl"
         curl.write_text(
@@ -170,7 +197,7 @@ class WineRuntimeTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        archive = destination / "wine-proton.tar.xz"
+        archive = destination / "wine-proton.tar.gz"
         self.assertEqual(archive.read_bytes(), content)
 
         result = subprocess.run(
