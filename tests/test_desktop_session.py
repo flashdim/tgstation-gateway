@@ -182,6 +182,7 @@ class DesktopSessionTest(unittest.TestCase):
             'wallpaperPlugin = "org.kde.slideshow"',
             '["Wallpaper", "org.kde.slideshow", "General"]',
             'writeConfig("SlidePaths", "/usr/share/tgstation-gateway/wallpapers")',
+            'writeConfig("FillMode", 4)',
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, layout)
