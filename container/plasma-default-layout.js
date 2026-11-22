@@ -16,7 +16,8 @@ panel.addWidget("org.kde.plasma.digitalclock");
 
 var desktopsArray = desktopsForActivity(currentActivity());
 for (var i = 0; i < desktopsArray.length; i++) {
-    desktopsArray[i].wallpaperPlugin = "org.kde.image";
-    desktopsArray[i].currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
-    desktopsArray[i].writeConfig("Image", "file:///usr/share/tgstation-gateway/wallpaper.jpg");
+    desktopsArray[i].wallpaperPlugin = "org.kde.slideshow";
+    desktopsArray[i].currentConfigGroup = ["Wallpaper", "org.kde.slideshow", "General"];
+    desktopsArray[i].writeConfig("SlidePaths", "/usr/share/tgstation-gateway/wallpapers");
+    desktopsArray[i].writeConfig("Color", "0,0,0");
 }
