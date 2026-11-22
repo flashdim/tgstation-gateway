@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_VERSION = "10.0~repack-12ubuntu1"
-PROTON_VERSION = "10.0-4"
+PROTON_VERSION = "11.0-2"
 MODULES = (
     "ntdll.so",
     "win32u.so",
@@ -52,7 +52,7 @@ class WineRuntimeTest(unittest.TestCase):
             for name in LIBRARIES:
                 (libraries / name).touch()
         (self.runtime / "bin").mkdir()
-        for name in ("wine", "wine-preloader", "wineserver"):
+        for name in ("wine", "wineserver"):
             path = self.runtime / "bin" / name
             path.touch()
             path.chmod(0o755)
@@ -64,6 +64,9 @@ class WineRuntimeTest(unittest.TestCase):
                 '[ "${FAIL_LDD:-0}" = 0 ] || exit 2\n'
                 'case "$1" in */wine/*.so) '
                 'test "$LD_LIBRARY_PATH" = "${1%/*}" || exit 3;; esac\n'
+                'case "$1" in */winegstreamer.so) '
+                'printf "%s\\n" "${GSTREAMER_DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"; '
+                "exit;; esac\n"
                 'printf "%s\\n" "${DEPENDENCIES:-libc.so.6 => /lib/libc.so.6}"'
             ),
         }.items():
@@ -72,6 +75,14 @@ class WineRuntimeTest(unittest.TestCase):
             path.chmod(0o755)
 
         dockerfile = (ROOT / "Dockerfile").read_text()
+        extraction_check = re.search(
+            r"tar -xJf .*?; \\\n(.*?)    rm /tmp/wine-proton.tar.xz",
+            dockerfile,
+            re.S,
+        )[1]
+        self.extraction_check = "set -eu; " + extraction_check.replace(
+            "\\\n", " "
+        ).replace("/opt/wine-proton", str(self.runtime))
         check_block = re.search(
             r"# Build-time gate.*?\nRUN (set -eu;.*?)(?:\n\n)", dockerfile, re.S
         )[1]
@@ -114,6 +125,25 @@ class WineRuntimeTest(unittest.TestCase):
         self.assertIn(str(self.runtime / "bin/wine"), checked)
         self.assertIn(str(self.runtime / "bin/wineserver"), checked)
 
+    def test_preloaders_are_required_in_each_architecture_directory(self):
+        prefix = self.root / "prefix"
+        prefix.mkdir()
+        (prefix / ".gateway-proton-version").write_text(PROTON_VERSION)
+        for script in (self.extraction_check, self.docker_check, self.runtime_check):
+            with self.subTest(script=script):
+                result = self.run_check(script, WINEPREFIX=str(prefix))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for architecture in ("i386", "x86_64"):
+                    preloader = (
+                        self.runtime
+                        / "lib/wine"
+                        / f"{architecture}-unix/wine-preloader"
+                    )
+                    preloader.chmod(0o644)
+                    result = self.run_check(script, WINEPREFIX=str(prefix))
+                    self.assertNotEqual(result.returncode, 0)
+                    preloader.chmod(0o755)
+
     def test_requires_all_ubuntu_wine_packages_at_pinned_version(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         self.assertIn(f"ARG WINE_PACKAGE_VERSION={PACKAGE_VERSION}", dockerfile)
@@ -125,6 +155,29 @@ class WineRuntimeTest(unittest.TestCase):
             INSTALLED_WINE_PACKAGE_VERSION="10.0~repack-12ubuntu2",
         )
         self.assertNotEqual(result.returncode, 0)
+
+    def test_winegstreamer_dependencies_are_checked_for_both_architectures(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        for architecture in ("i386", "amd64"):
+            self.assertIn(f"libgstreamer-gl1.0-0:{architecture}", dockerfile)
+        for architecture in ("i386", "x86_64"):
+            module = self.runtime / "lib/wine" / f"{architecture}-unix/winegstreamer.so"
+            module.touch()
+        result = self.run_check(self.docker_check)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for architecture in ("i386", "x86_64"):
+            self.assertIn(
+                str(
+                    self.runtime / "lib/wine" / f"{architecture}-unix/winegstreamer.so"
+                ),
+                self.log.read_text().splitlines(),
+            )
+        result = self.run_check(
+            self.docker_check, GSTREAMER_DEPENDENCIES="libgstgl-1.0.so.0 => not found"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing dependencies", result.stderr)
+        self.assertIn("winegstreamer.so", result.stderr)
 
     def test_requires_checksum_pinned_proton_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

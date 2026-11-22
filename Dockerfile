@@ -13,7 +13,7 @@ SHELL ["/bin/sh", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
-ARG WINE_PROTON_VERSION=10.0-4
+ARG WINE_PROTON_VERSION=11.0-2
 
 RUN set -eu; \
     selkies-privileged-files release; \
@@ -31,8 +31,9 @@ RUN set -eu; \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
-      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
-    apt-get autoremove -y; \
+      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 \
+      libgstreamer-gl1.0-0:amd64 libgstreamer-gl1.0-0:i386; \
+      apt-get autoremove -y; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
@@ -49,7 +50,9 @@ RUN --mount=type=bind,from=wine-download-cache,target=/tmp/wine-download-cache \
     mkdir -p /opt/wine-proton; \
     tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /opt/wine-proton; \
     test -x /opt/wine-proton/bin/wine; \
-    test -x /opt/wine-proton/bin/wine-preloader; \
+    for architecture in i386 x86_64; do \
+      test -x "/opt/wine-proton/lib/wine/$architecture-unix/wine-preloader"; \
+    done; \
     rm /tmp/wine-proton.tar.xz
 
 # Build-time gate shared by CI and releases. Do not fake SONAME links.
@@ -58,9 +61,9 @@ RUN set -eu; \
       test "$(dpkg-query -W -f='${Version}' "$package")" = "$WINE_PACKAGE_VERSION"; \
     done; \
     test -x /opt/wine-proton/bin/wine; \
-    test -x /opt/wine-proton/bin/wine-preloader; \
     for architecture in i386 x86_64; do \
       directory="/opt/wine-proton/lib/wine/$architecture-unix"; \
+      test -x "$directory/wine-preloader"; \
       for library in libfreetype.so.6 libfontconfig.so.1 libgnutls.so.30 \
           libgssapi_krb5.so.2 libGL.so.1 libEGL.so.1 libvulkan.so.1; do \
         test -r "/usr/lib/$architecture-linux-gnu/$library" || \
