@@ -9,7 +9,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RunClientTest(unittest.TestCase):
-    def run_client(self, server=None, gpu=None, fail_registry=False, wayland=False):
+    def run_client(
+        self,
+        server=None,
+        gpu=None,
+        fail_registry=False,
+        wayland=False,
+        dimensions="1280x720",
+        existing_layout=None,
+    ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             commands = root / "bin"
@@ -18,7 +26,8 @@ class RunClientTest(unittest.TestCase):
                 "timeout": 'case "$1" in --kill-after=*) shift;; esac\nshift\nexec "$@"',
                 "xdpyinfo": (
                     'test "$1" = "-display" && test "$2" = "$EXPECTED_DISPLAY" && '
-                    'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY"'
+                    'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 1\n'
+                    'printf "  dimensions: %s pixels\\n" "$DISPLAY_DIMENSIONS"'
                 ),
                 "wine": (
                     'case "$PATH" in /opt/wine-proton/bin:*) ;; '
@@ -65,10 +74,19 @@ class RunClientTest(unittest.TestCase):
                 "LD_PRELOAD": "libm.so.6",
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
+                "DISPLAY_DIMENSIONS": dimensions,
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
             env.pop("XAUTHORITY", None)
+            layout = (
+                prefix
+                / "drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/"
+                / "spacestation13/saved.txt"
+            )
+            if existing_layout is not None:
+                layout.parent.mkdir(parents=True)
+                layout.write_text(existing_layout)
             if wayland:
                 authority.write_text("test cookie")
                 subprocess.run(
@@ -99,10 +117,52 @@ class RunClientTest(unittest.TestCase):
                 prefix,
                 log.read_text().splitlines() if log.exists() else [],
                 events.read_text().splitlines() if events.exists() else [],
+                layout.read_text() if layout.exists() else None,
             )
 
+    def test_writes_display_sized_layout_over_existing_config(self):
+        result, _, _, _, layout = self.run_client(
+            dimensions="1279x719", existing_layout="outdated layout"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        settings = dict(line.split(" = ", 1) for line in layout.splitlines())
+        self.assertEqual(
+            {
+                name: settings[name]
+                for name in (
+                    "mainwindow.size",
+                    "mapwindow.size",
+                    "lobby_screen.size",
+                    "info_and_buttons.size",
+                    "infobuttons.size",
+                    "infowindow.size",
+                    "statwindow.size",
+                    "outputwindow.size",
+                    "output_selector.size",
+                    "output_browser.size",
+                    "preferences_window.size",
+                )
+            },
+            {
+                "mainwindow.size": '"1215x591"',
+                "mapwindow.size": '"853x591"',
+                "lobby_screen.size": '"853x591"',
+                "info_and_buttons.size": '"426x591"',
+                "infobuttons.size": '"426x19"',
+                "infowindow.size": '"426x559"',
+                "statwindow.size": '"426x240"',
+                "outputwindow.size": '"426x360"',
+                "output_selector.size": '"426x360"',
+                "output_browser.size": '"426x360"',
+                "preferences_window.size": '"853x591"',
+            },
+        )
+        self.assertEqual(settings["map_screen.map.zoom-mode"], '"distort"')
+        self.assertEqual(settings["mainwindow.split.splitter"], '"66.666667"')
+        self.assertNotIn("outdated layout", layout)
+
     def test_launches_wine_with_authenticated_plasma_display(self):
-        result, prefix, _, _ = self.run_client(wayland=True)
+        result, prefix, _, _, _ = self.run_client(wayland=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.splitlines(),
@@ -112,7 +172,7 @@ class RunClientTest(unittest.TestCase):
     def test_launches_byond_after_loading_session_environment(self):
         for server in (None, ""):
             with self.subTest(server=server):
-                result, prefix, registry, events = self.run_client(server)
+                result, prefix, registry, events, _ = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(registry, [])
                 self.assertEqual(events, ["launch"])
@@ -131,7 +191,7 @@ class RunClientTest(unittest.TestCase):
             ("[::1]:1337", "byond://[::1]:1337"),
         ):
             with self.subTest(server=server):
-                result, prefix, _, events = self.run_client(server)
+                result, prefix, _, events, _ = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(
@@ -156,13 +216,15 @@ class RunClientTest(unittest.TestCase):
             ":1337",
         ):
             with self.subTest(server=server):
-                result, _, _, _ = self.run_client(server)
+                result, _, _, _, _ = self.run_client(server)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Invalid BYOND_SERVER", result.stderr)
                 self.assertEqual(result.stdout, "")
 
     def test_configures_webview2_gpu_before_launch(self):
-        result, prefix, registry, events = self.run_client("example.org:1337", gpu="1")
+        result, prefix, registry, events, _ = self.run_client(
+            "example.org:1337", gpu="1"
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch"])
         self.assertEqual(
@@ -191,7 +253,7 @@ class RunClientTest(unittest.TestCase):
         )
 
     def test_fails_without_launch_when_registry_update_fails(self):
-        result, _, registry, events = self.run_client(gpu="1", fail_registry=True)
+        result, _, registry, events, _ = self.run_client(gpu="1", fail_registry=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(registry)
         self.assertEqual(events, [])
@@ -199,7 +261,7 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_rejects_invalid_webview2_gpu_setting(self):
-        result, _, registry, events = self.run_client(gpu="yes")
+        result, _, registry, events, _ = self.run_client(gpu="yes")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(registry, [])
         self.assertEqual(events, [])
