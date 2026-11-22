@@ -34,3 +34,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Nanotrasen logo
+
+- Artist: **LiamLime**
+- Source: [Wikimedia Commons: Nanotrasen Logo](https://commons.wikimedia.org/wiki/File:Nanotrasen_Logo.png)
+- Original source: [tgstation13.org: NTlogo.png](https://tgstation13.org/wiki/File:NTlogo.png)
+- License: **Public domain** — simple text-and-shape logo, as recorded on the
+  Commons file page
+- Repository copy: `wallpapers/nanotrasen-logo.png`
+- Modifications: none.
+
+## SS13 Paradise Ian Shuttle
+
+- Artist: **Wakafanykai123**
+- Source: [Wikimedia Commons: SS13-Paradise-IanShuttle.png](https://commons.wikimedia.org/wiki/File:SS13-Paradise-IanShuttle.png)
+- License: **CC BY-SA 4.0** — [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/)
+- Repository copy: `wallpapers/ss13-paradise-ian-shuttle.png`
+- Modifications: browser-captured PNG from the Commons original.

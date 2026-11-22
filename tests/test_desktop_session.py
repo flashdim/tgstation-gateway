@@ -209,11 +209,17 @@ class DesktopSessionTest(unittest.TestCase):
     def test_wallpaper_assets_and_attribution_are_in_repository(self):
         asset = ROOT / "assets/wallpapers/glory-to-nanotrasen.jpg"
         logo = ROOT / "assets/wallpapers/space-station-13-logo.svg"
+        nanotrasen = ROOT / "assets/wallpapers/nanotrasen-logo.png"
+        paradise = ROOT / "assets/wallpapers/ss13-paradise-ian-shuttle.png"
         attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
         self.assertTrue(asset.is_file())
         self.assertGreater(asset.stat().st_size, 10_000)
         self.assertTrue(logo.is_file())
         self.assertIn("<svg", logo.read_text())
+        self.assertTrue(nanotrasen.is_file())
+        self.assertGreater(nanotrasen.stat().st_size, 1_000)
+        self.assertTrue(paradise.is_file())
+        self.assertGreater(paradise.stat().st_size, 1_000)
         self.assertIn("Glory to Nanotrasen", attribution)
         self.assertIn("partheosis", attribution)
         self.assertIn("CC BY-NC 3.0", attribution)
@@ -221,6 +227,12 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn("Wirewraith", attribution)
         self.assertIn("MIT License", attribution)
         self.assertIn("Copyright (c) 2022 Space Station 13", attribution)
+        self.assertIn("LiamLime", attribution)
+        self.assertIn("Public domain", attribution)
+        self.assertIn("Nanotrasen_Logo.png", attribution)
+        self.assertIn("Wakafanykai123", attribution)
+        self.assertIn("CC BY-SA 4.0", attribution)
+        self.assertIn("SS13-Paradise-IanShuttle.png", attribution)
 
     def test_smoke_tests_expect_configured_panel_hiding_mode(self):
         layout = (ROOT / "container/plasma-default-layout.js").read_text()
