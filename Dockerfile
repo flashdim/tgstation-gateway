@@ -18,19 +18,22 @@ ARG WINE_PROTON_VERSION=GE-Proton10-34
 RUN set -eu; \
     selkies-privileged-files release; \
     dpkg --add-architecture i386; \
+    rm -f /etc/apt/sources.list.d/steam-stable.list /etc/apt/sources.list.d/steam-beta.list; \
     apt-get update; \
     removable_packages="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' | \
       awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover|dolphin|kdf|ksystemlog|kcalc|gwenview|vim|systemsettings|plasma-systemmonitor)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
     if [ -n "$removable_packages" ]; then \
       apt-get remove -y $removable_packages; \
-      apt-get autoremove -y; \
     fi; \
+    apt-mark hold kwin-addons kwin-common kwin-data kwin-wayland libkwin6; \
+    apt-get dist-upgrade -y --no-remove; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
-      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
+      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 \
       libgstreamer-gl1.0-0:amd64 libgstreamer-gl1.0-0:i386; \
+    apt-get autoremove -y; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
 
@@ -112,6 +115,7 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false \
+    SELKIES_RUN_AFTER_CONNECT=/usr/local/bin/reset-session \
     SELKIES_MODE=webrtc \
     SELKIES_FRAMERATE=60 \
     SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS=false \

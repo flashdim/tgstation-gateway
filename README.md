@@ -62,13 +62,9 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
 A BYOND account or server-side authentication may still be required.
-On the first direct-server launch in each container, Dream Seeker opens once
-and the gateway tries to close it normally before launching the regular
-session. If Dream Seeker is still running 15 seconds after launch, the gateway
-force-stops the BYOND processes and the session's Wine server before
-relaunching. The user verified that this startup cycle achieves the corrected
-DPI goal in their setup. The BYOND pager path is unchanged; this result does
-not establish general rendering or gameplay compatibility.
+Dream Seeker launches once and remains running. The desktop's **Reset Session**
+action restarts it after Selkies clients connect. The BYOND pager path is
+unchanged.
 
 ## Customize the session
 
@@ -150,6 +146,28 @@ To build the image from this repository and use it with Compose:
 docker buildx build --load --platform linux/amd64 -t tgstation-gateway-player .
 GATEWAY_IMAGE=tgstation-gateway-player docker compose -f examples/compose.yaml up
 ```
+
+The package layer upgrades available OS packages, removes selected applications
+and unneeded dependencies, and installs the pinned Wine packages. The upgrade
+fails if it would need to remove packages; the Wine pins must remain available
+in the Ubuntu repositories. Package versions depend on repository state at
+build time. Use `--no-cache` when rebuilding to refresh the package layer;
+Docker may otherwise reuse an older layer.
+The Selkies-patched KWin packages are held at the base image's versions to
+preserve its Wayland compositor; dependent packages may also be kept back.
+Update the pinned base image to refresh them.
+The unused Steam apt sources are removed with the Steam launcher.
+
+The package layer upgrades available OS packages, removes selected applications
+and unneeded dependencies, and installs the pinned Wine packages. The upgrade
+fails if it would need to remove packages; the Wine pins must remain available
+in the Ubuntu repositories. Package versions depend on repository state at
+build time. Use `--no-cache` when rebuilding to refresh the package layer;
+Docker may otherwise reuse an older layer.
+The Selkies-patched KWin packages are held at the base image's versions to
+preserve its Wayland compositor; dependent packages may also be kept back.
+Update the pinned base image to refresh them.
+The unused Steam apt sources are removed with the Steam launcher.
 
 This testing branch uses GE-Proton 10-34 as its Wine runtime. Ubuntu Wine 10
 packages supply runtime dependencies; Wine's executable comes from the GE-Proton
