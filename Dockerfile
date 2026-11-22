@@ -29,7 +29,7 @@ RUN set -eu; \
     apt-get dist-upgrade -y --no-remove; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
-      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
+      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
     apt-get autoremove -y; \
@@ -114,6 +114,7 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false \
+    SELKIES_RUN_AFTER_CONNECT=/usr/local/bin/reset-session \
     SELKIES_MODE=webrtc \
     SELKIES_FRAMERATE=60 \
     SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS=false \
