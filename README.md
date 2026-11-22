@@ -157,6 +157,10 @@ fails if it would need to remove packages; the Wine pins must remain available
 in the Ubuntu repositories. Package versions depend on repository state at
 build time. Use `--no-cache` when rebuilding to refresh the package layer;
 Docker may otherwise reuse an older layer.
+The Selkies-patched KWin packages are held at the base image's versions to
+preserve its Wayland compositor; dependent packages may also be kept back.
+Update the pinned base image to refresh them.
+The unused Steam apt sources are removed with the Steam launcher.
 
 The image uses checksum-pinned standalone Proton Wine 10.0-4 as its active
 runtime. Ubuntu Wine 10 packages supply runtime dependencies; Wine's executable

@@ -54,7 +54,7 @@ class ImagePackagesTest(unittest.TestCase):
         self.assertIn("$2 ~ /^libreoffice/", dockerfile)
         self.assertIn('$1 == "installed"', dockerfile)
 
-    def run_package_layer(self, installed="", fail_apt=""):
+    def run_package_layer(self, installed="", fail_apt="", fail_hold=False):
         dockerfile = (ROOT / "Dockerfile").read_text()
         script = re.search(r"RUN (set -eu;.*?)(?:\n\n)", dockerfile, re.S)[1]
         with tempfile.TemporaryDirectory() as temporary:
@@ -64,6 +64,9 @@ class ImagePackagesTest(unittest.TestCase):
                 "selkies-privileged-files": 'printf "selkies %s\\n" "$*" >> "$LOG"',
                 "dpkg": 'printf "dpkg %s\\n" "$*" >> "$LOG"',
                 "dpkg-query": 'printf "%s" "$INSTALLED"',
+                "apt-mark": (
+                    'printf "apt-mark %s\\n" "$*" >> "$LOG"\n[ "$FAIL_HOLD" != "true" ]'
+                ),
                 "apt-get": (
                     'printf "apt-get %s\\n" "$*" >> "$LOG"\n[ "$1" != "$FAIL_APT" ]'
                 ),
@@ -80,6 +83,7 @@ class ImagePackagesTest(unittest.TestCase):
                     "LOG": str(log),
                     "INSTALLED": installed,
                     "FAIL_APT": fail_apt,
+                    "FAIL_HOLD": str(fail_hold).lower(),
                     "WINE_PACKAGE_VERSION": "test-version",
                 },
                 capture_output=True,
@@ -100,6 +104,14 @@ class ImagePackagesTest(unittest.TestCase):
                     bool(installed),
                 )
                 update = commands.index("apt-get update")
+                remove_sources = commands.index(
+                    "rm -f /etc/apt/sources.list.d/steam-stable.list"
+                    " /etc/apt/sources.list.d/steam-beta.list"
+                )
+                hold = commands.index(
+                    "apt-mark hold kwin-addons kwin-common kwin-data"
+                    " kwin-wayland libkwin6"
+                )
                 upgrade = commands.index("apt-get dist-upgrade -y --no-remove")
                 install = next(
                     i
@@ -108,7 +120,9 @@ class ImagePackagesTest(unittest.TestCase):
                 )
                 autoremove = commands.index("apt-get autoremove -y")
                 clean = commands.index("apt-get clean")
-                self.assertLess(update, upgrade)
+                self.assertLess(remove_sources, update)
+                self.assertLess(update, hold)
+                self.assertLess(hold, upgrade)
                 self.assertLess(upgrade, install)
                 self.assertLess(install, autoremove)
                 self.assertLess(autoremove, clean)
@@ -121,6 +135,12 @@ class ImagePackagesTest(unittest.TestCase):
         result, commands = self.run_package_layer(fail_apt="dist-upgrade")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(commands[-1], "apt-get dist-upgrade -y --no-remove")
+
+    def test_failed_kwin_hold_stops_before_upgrade(self):
+        result, commands = self.run_package_layer(fail_hold=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(commands[-1].startswith("apt-mark hold "))
+        self.assertNotIn("apt-get dist-upgrade -y --no-remove", commands)
 
 
 if __name__ == "__main__":

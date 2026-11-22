@@ -18,12 +18,14 @@ ARG WINE_PROTON_VERSION=10.0-4
 RUN set -eu; \
     selkies-privileged-files release; \
     dpkg --add-architecture i386; \
+    rm -f /etc/apt/sources.list.d/steam-stable.list /etc/apt/sources.list.d/steam-beta.list; \
     apt-get update; \
     removable_packages="$(dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' | \
       awk '$1 == "installed" && ($2 ~ /^(steam-launcher|heroic|lutris|firefox|google-chrome-stable|transmission-qt|kget|kdeconnect|kwrite|kate|kinfocenter|kmenuedit|kmouth|kmag|ktimer|kmousetool|kcharselect|kde-spectacle|kfind|konsole|ark|filelight|okular|sweeper|vlc|plasma-discover|dolphin|kdf|ksystemlog|kcalc|gwenview|vim|systemsettings|plasma-systemmonitor)$/ || $2 ~ /^libreoffice/) { print $2 }')"; \
     if [ -n "$removable_packages" ]; then \
       apt-get remove -y $removable_packages; \
     fi; \
+    apt-mark hold kwin-addons kwin-common kwin-data kwin-wayland libkwin6; \
     apt-get dist-upgrade -y --no-remove; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
