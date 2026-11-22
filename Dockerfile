@@ -27,7 +27,7 @@ RUN set -eu; \
     fi; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
-      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget wmctrl xz-utils \
+      "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
