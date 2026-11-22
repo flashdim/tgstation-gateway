@@ -164,6 +164,16 @@ case "${BYOND_WEBVIEW2_GPU:-0}" in
         ;;
 esac
 
+max_framerate="${BYOND_DXVK_MAX_FRAMERATE:-60}"
+case "$max_framerate" in
+    -1 | [1-9] | [1-9][0-9] | [1-9][0-9][0-9] | 1000) ;;
+    *)
+        echo "Invalid BYOND_DXVK_MAX_FRAMERATE: expected -1 or an integer from 1 to 1000" >&2
+        exit 1
+        ;;
+esac
+export DXVK_CONFIG="dxvk.maxFrameRate=$max_framerate"
+
 if [ -n "${BYOND_SERVER:-}" ]; then
     server="${BYOND_SERVER#byond://}"
     if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||

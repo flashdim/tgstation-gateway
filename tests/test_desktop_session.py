@@ -119,6 +119,7 @@ class DesktopSessionTest(unittest.TestCase):
         defaults = {
             "SELKIES_MODE": "webrtc",
             "SELKIES_FRAMERATE": "60",
+            "BYOND_DXVK_MAX_FRAMERATE": "60",
             "SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS": "false",
             "SELKIES_UI_SIDEBAR_SHOW_AUDIO_SETTINGS": "false",
             "SELKIES_FILE_TRANSFERS": "none",

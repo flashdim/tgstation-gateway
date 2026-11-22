@@ -17,6 +17,7 @@ class RunClientTest(unittest.TestCase):
         wayland=False,
         dimensions="1280x720",
         existing_layout=None,
+        max_framerate=None,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -44,6 +45,10 @@ class RunClientTest(unittest.TestCase):
                     '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
                     "  exit $?\n"
                     "fi\n"
+                    'if [ "${DXVK_CONFIG:-}" != "$EXPECTED_DXVK_CONFIG" ]; then\n'
+                    '  echo "Wrong DXVK configuration" >&2\n'
+                    "  exit 94\n"
+                    "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
                     'printf "%s\\n" "$DISPLAY" "$@"'
                 ),
@@ -62,6 +67,11 @@ class RunClientTest(unittest.TestCase):
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
+                + (
+                    f"export BYOND_DXVK_MAX_FRAMERATE='{max_framerate}'\n"
+                    if max_framerate is not None
+                    else ""
+                )
             )
             env = {
                 **os.environ,
@@ -75,6 +85,7 @@ class RunClientTest(unittest.TestCase):
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
                 "DISPLAY_DIMENSIONS": dimensions,
+                "EXPECTED_DXVK_CONFIG": (f"dxvk.maxFrameRate={max_framerate or 60}"),
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
@@ -205,6 +216,25 @@ class RunClientTest(unittest.TestCase):
                         url,
                     ],
                 )
+
+    def test_configures_dreamseeker_framerate_through_dxvk(self):
+        for max_framerate in ("30", "-1"):
+            with self.subTest(max_framerate=max_framerate):
+                result, _, _, events, _ = self.run_client(
+                    "example.org:1337", max_framerate=max_framerate
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(events, ["launch"])
+
+    def test_rejects_invalid_dreamseeker_framerate(self):
+        for max_framerate in ("0", "01", "1001", "60;dxvk.hud=full"):
+            with self.subTest(max_framerate=max_framerate):
+                result, _, _, events, _ = self.run_client(
+                    "example.org:1337", max_framerate=max_framerate
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Invalid BYOND_DXVK_MAX_FRAMERATE", result.stderr)
+                self.assertEqual(events, [])
 
     def test_rejects_invalid_server(self):
         for server in (

@@ -64,7 +64,13 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 A BYOND account or server-side authentication may still be required.
 Dream Seeker launches once and remains running. The desktop's **Reset Session**
 action restarts it after Selkies clients connect. The BYOND pager path is
-unchanged.
+unchanged. The BYOND client uses DXVK's `dxvk.maxFrameRate` limit, set to
+60 FPS by default. Override it with `BYOND_DXVK_MAX_FRAMERATE` (for example,
+`30`), or set it to `-1` to disable the limit. This is separate from
+`SELKIES_FRAMERATE`, which limits streamed video output, and does not change
+the game server's tick rate. The DXVK cap can reduce rendering work only when
+the client would otherwise exceed it and is using DXVK; GPU usage reduction
+has not been measured in this project and depends on the scene and driver.
 
 ## Customize the session
 
