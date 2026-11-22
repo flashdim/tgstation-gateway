@@ -164,9 +164,9 @@ comes from the Proton archive. Graphics setup runs BYOND's bundled DirectX
 installer and verifies its `d3dx9_43.dll` against the bundled CAB. Graphics
 setup also installs checksum-verified DXVK 3.1.1.
 
-At runtime, Wine logging is limited to errors, and the repeated
-`NtQueryInformationToken` unsupported token class 33 diagnostic is filtered out.
-Other Wine errors remain visible in the container logs.
+At runtime, all Wine debug channels (including errors) are disabled with
+`WINEDEBUG=-all`. Selkies logs and launcher error messages remain visible.
+Build-time Wine errors are still logged.
 
 ## Important limitations
 

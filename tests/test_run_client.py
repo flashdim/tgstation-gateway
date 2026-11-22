@@ -17,7 +17,6 @@ class RunClientTest(unittest.TestCase):
         wayland=False,
         dimensions="1280x720",
         existing_layout=None,
-        wine_stderr="",
         wine_exit_code=0,
     ):
         with tempfile.TemporaryDirectory() as temporary:
@@ -36,13 +35,12 @@ class RunClientTest(unittest.TestCase):
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
                     'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
                     'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
-                    'test "$WINEDEBUG" = "-all,err+all" || exit 94\n'
+                    'test "$WINEDEBUG" = "-all" || exit 94\n'
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 95\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
                     "fi\n"
-                    'printf "%s" "$MOCK_WINE_STDERR" >&2\n'
                     'if [ "$1" = reg ]; then\n'
                     '  printf "%s\\n" "$@" > "$WINE_LOG"\n'
                     '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
@@ -64,6 +62,7 @@ class RunClientTest(unittest.TestCase):
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
+                "export WINEDEBUG='+all'\n"
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
@@ -80,7 +79,6 @@ class RunClientTest(unittest.TestCase):
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
                 "DISPLAY_DIMENSIONS": dimensions,
-                "MOCK_WINE_STDERR": wine_stderr,
                 "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
             }
             env.pop("BYOND_SERVER", None)
@@ -127,22 +125,10 @@ class RunClientTest(unittest.TestCase):
                 layout.read_text() if layout.exists() else None,
             )
 
-    def test_filters_only_the_repeated_wine_token_diagnostic(self):
-        noise = (
-            "0268:err:ntdll:NtQueryInformationToken Unhandled token information class 33\n"
-            "01c8:err:ntdll:NtQueryInformationToken Unhandled token information class 33\n"
-        )
-        other_errors = (
-            "0240:err:ntdll:NtQueryInformationToken Unhandled token information class 330\n"
-            "0240:err:ntdll:AnotherFunction Important error\n"
-            "0240:err:other:SomethingElse Important error\n"
-        )
-        result, _, _, events, _ = self.run_client(
-            gpu="1", wine_stderr=noise + other_errors, wine_exit_code=23
-        )
+    def test_preserves_wine_exit_status(self):
+        result, _, _, events, _ = self.run_client(wine_exit_code=23)
         self.assertEqual(result.returncode, 23)
         self.assertEqual(events, ["launch"])
-        self.assertEqual(result.stderr, other_errors * 2)
 
     def test_writes_display_sized_layout_over_existing_config(self):
         result, _, _, _, layout = self.run_client(
