@@ -31,7 +31,7 @@ RUN set -eu; \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
-      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
+      libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386 \
       libgstreamer-gl1.0-0:amd64 libgstreamer-gl1.0-0:i386; \
       apt-get autoremove -y; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
