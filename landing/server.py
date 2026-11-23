@@ -9,7 +9,9 @@ import re
 import sys
 
 LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-HOST_PATTERN = re.compile(rf"(?P<name>{LABEL}(?:\.{LABEL})*)(?::(?P<port>[1-9][0-9]{{0,4}}))?")
+HOST_PATTERN = re.compile(
+    rf"(?P<name>{LABEL}(?:\.{LABEL})*)(?::(?P<port>[1-9][0-9]{{0,4}}))?"
+)
 PREFIX_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,24}")
 PATH_PATTERN = re.compile(r"/[A-Za-z0-9._~/{}-]*")
 LOCAL_HOSTS = {"localhost", "127.0.0.1"}
@@ -23,11 +25,7 @@ class ConfigError(ValueError):
 def build_slots(env):
     host = env.get("GATEWAY_PLAY_HOST", "").strip() or "localhost:8080"
     match = HOST_PATTERN.fullmatch(host)
-    if (
-        not match
-        or len(match["name"]) > 253
-        or int(match["port"] or 1) > 65535
-    ):
+    if not match or len(match["name"]) > 253 or int(match["port"] or 1) > 65535:
         raise ConfigError("GATEWAY_PLAY_HOST must be a DNS name with an optional port")
     hostname = match["name"].lower()
 
@@ -44,7 +42,9 @@ def build_slots(env):
 
     prefix = env.get("GATEWAY_ACCOUNT_PREFIX", "").strip() or "LGplayer"
     if not PREFIX_PATTERN.fullmatch(prefix):
-        raise ConfigError("GATEWAY_ACCOUNT_PREFIX must contain only letters, digits, _ or -")
+        raise ConfigError(
+            "GATEWAY_ACCOUNT_PREFIX must contain only letters, digits, _ or -"
+        )
 
     path = env.get("GATEWAY_SLOT_PATH", "").strip() or "/"
     if not PATH_PATTERN.fullmatch(path):
