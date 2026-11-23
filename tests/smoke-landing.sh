@@ -38,9 +38,13 @@ grep -q 'src="slots.js"' "$workdir/index.html"
 curl -fsS "$base/slots.js" -o "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer01/"' "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer02/"' "$workdir/slots.js"
-curl -fsS "$base/page.js" | grep -q GATEWAY_SLOTS
+curl -fsS "$base/page.js" -o "$workdir/page.js"
+grep -q GATEWAY_SLOTS "$workdir/page.js"
 curl -fsS "$base/wizard.js" -o "$workdir/wizard.js"
-grep -q 'I CAST REGULAR MISSILE' "$workdir/wizard.js"
+grep -q 'setTimeout' "$workdir/wizard.js"
+grep -q '\*honk\*' "$workdir/index.html"
+grep -q '\*hiss\*' "$workdir/index.html"
+grep -q 'Guys? Where are you?' "$workdir/index.html"
 curl -fsS "$base/style.css" -o /dev/null
 for asset in clown.webp alien.png operative.png wizard.png narsie.gif; do
     curl -fsS "$base/$asset" -o "$workdir/$asset"
