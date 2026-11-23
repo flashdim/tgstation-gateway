@@ -17,6 +17,13 @@ class LandingPageTest(unittest.TestCase):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
         attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
+        self.assertIn('href="ATTRIBUTION.md"', html)
+        self.assertNotIn("PotatoMasher", html)
+        self.assertNotIn("WJohnston", html)
+        self.assertNotIn("scriptis", html)
+        self.assertNotIn("CC BY-SA 3.0", html)
+        self.assertNotIn("CC BY-NC-SA 4.0", html)
+        self.assertNotIn("GNU AGPL v3.0", html)
         sources = {
             "narsie": "c84eccc9-775b-4f0a-996d-f62a18193f43",
             "alien": "c3955ad9-14d8-4d13-a967-ab7e95af6f03",
