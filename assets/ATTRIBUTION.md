@@ -1,4 +1,4 @@
-# Wallpaper attribution
+# Asset attribution
 
 ## Landing page clown
 

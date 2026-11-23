@@ -23,10 +23,18 @@ body {
   background-size: 137px 131px, 211px 179px;
 }
 
-.clown { position: absolute; width: 70px; image-rendering: pixelated; opacity: .7; }
+.clown { position: absolute; width: 70px; image-rendering: pixelated; opacity: .7; animation: drift 12s ease-in-out infinite alternate; }
 .clown-one { top: 16%; left: 8%; transform: rotate(-28deg); }
-.clown-two { top: 53%; right: 8%; transform: rotate(25deg); }
-.clown-three { bottom: 8%; left: 19%; width: 45px; transform: rotate(125deg); }
+.clown-two { top: 53%; right: 8%; rotate: 53deg; animation-delay: -5s; }
+.clown-three { bottom: 8%; left: 19%; width: 45px; rotate: 153deg; animation-delay: -9s; }
+
+@keyframes drift {
+  from { transform: translate(-10px, 12px) rotate(-28deg); }
+  to { transform: translate(22px, -20px) rotate(-8deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clown { animation: none; }
+}
 
 main { position: relative; max-width: 780px; margin: auto; padding: 64px 24px 32px; }
 header { text-align: center; margin-bottom: 38px; }
