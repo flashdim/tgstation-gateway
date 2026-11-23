@@ -182,7 +182,7 @@ class DesktopSessionTest(unittest.TestCase):
             'wallpaperPlugin = "org.kde.slideshow"',
             '["Wallpaper", "org.kde.slideshow", "General"]',
             'writeConfig("SlidePaths", "/usr/share/tgstation-gateway/wallpapers")',
-            'writeConfig("FillMode", 4)',
+            'writeConfig("FillMode", 6)',
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, layout)
@@ -243,6 +243,8 @@ class DesktopSessionTest(unittest.TestCase):
                 smoke = (ROOT / "tests" / script).read_text()
                 self.assertIn("p.hiding", smoke)
                 self.assertIn("center,fit,dodgewindows,opaque,false,64", smoke)
+                self.assertIn('readConfig("FillMode", -1)', smoke)
+                self.assertIn('wallpaperPlugin !== "org.kde.slideshow"', smoke)
 
 
 if __name__ == "__main__":

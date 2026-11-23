@@ -37,7 +37,12 @@ class SmokeContainerTest(unittest.TestCase):
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
                 'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
-                '      sh) [ "${WRONG_DISPLAY:-0}" = 0 ] ;;\n'
+                '      sh)\n'
+                '        case "$5" in\n'
+                '          *\'readConfig("FillMode", -1)\'*) '
+                '[ "${WRONG_WALLPAPER:-0}" = 0 ] ;;\n'
+                '          *) [ "${WRONG_DISPLAY:-0}" = 0 ] ;;\n'
+                '        esac ;;\n'
                 "      *) exit 1 ;;\n"
                 "    esac ;;\n"
                 "  logs|rm) exit 0 ;;\n"
@@ -105,6 +110,15 @@ class SmokeContainerTest(unittest.TestCase):
     def test_requires_x11_session(self):
         result = self.smoke(WRONG_DISPLAY="1")
         self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
+
+    def test_rejects_wrong_wallpaper_configuration(self):
+        result = self.smoke(WRONG_WALLPAPER="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(
+            "exec test-container s6-svc -d /etc/service/byond",
+            self.log.read_text().splitlines(),
+        )
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
     def test_reports_logs_and_removes_exited_container(self):

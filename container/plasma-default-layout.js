@@ -19,6 +19,6 @@ for (var i = 0; i < desktopsArray.length; i++) {
     desktopsArray[i].wallpaperPlugin = "org.kde.slideshow";
     desktopsArray[i].currentConfigGroup = ["Wallpaper", "org.kde.slideshow", "General"];
     desktopsArray[i].writeConfig("SlidePaths", "/usr/share/tgstation-gateway/wallpapers");
-    desktopsArray[i].writeConfig("FillMode", 4);
+    desktopsArray[i].writeConfig("FillMode", 6); // Qt Quick Image.Pad (Centered)
     desktopsArray[i].writeConfig("Color", "0,0,0");
 }

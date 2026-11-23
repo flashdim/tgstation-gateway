@@ -48,6 +48,11 @@ for _ in {1..120}; do
                 test "$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
                     '"'"'var p = panels()[0]; print([p.alignment,p.lengthMode,p.hiding,p.opacity,p.floating,p.height].join(",").toString());'"'"')" \
                     = "center,fit,dodgewindows,opaque,false,64"'
+            docker exec "$container" sh -ec '
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/selkies-session-bus"
+                result="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+                    '"'"'var ds = desktops(); var ok = ds.length > 0; for (var i = 0; i < ds.length; i++) { var d = ds[i]; d.currentConfigGroup = ["Wallpaper", "org.kde.slideshow", "General"]; if (d.wallpaperPlugin !== "org.kde.slideshow" || Number(d.readConfig("FillMode", -1)) !== 6) ok = false; } print(ok ? "centered" : "wallpaper configuration mismatch");'"'"')"
+                test "$result" = centered || { echo "$result" >&2; exit 1; }'
             docker exec "$container" s6-svc -d /etc/service/byond
             for _ in {1..20}; do
                 if ! docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then

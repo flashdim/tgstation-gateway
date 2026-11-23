@@ -98,7 +98,9 @@ The first-run desktop uses a Plasma slideshow of the images in
 the **Space Station 13** logo by **Wirewraith**. See `assets/ATTRIBUTION.md` for
 sources and licenses (also installed at
 `/usr/share/tgstation-gateway/wallpaper-attribution.md` in the image).
-Plasma's default slide interval is 15 minutes. To add
+Images are centered at their original size against a black background. This
+first-run default applies to fresh containers; existing Plasma settings are not
+overwritten. Plasma's default slide interval is 15 minutes. To add
 images to the built-in collection, place them in `assets/wallpapers/`, record
 their attribution and license, and rebuild the image.
 
