@@ -41,6 +41,8 @@ grep -q '"url": "https://play.example.test/LGplayer02/"' "$workdir/slots.js"
 curl -fsS "$base/page.js" | grep -q GATEWAY_SLOTS
 curl -fsS "$base/style.css" -o /dev/null
 curl -fsS "$base/clown.webp" -o /dev/null
+curl -fsS "$base/layer1.webp" -o "$workdir/layer1.webp"
+file "$workdir/layer1.webp" | grep -q 'Web/P image'
 curl -fsS "$base/ATTRIBUTION.md" | grep -q "CC BY-SA 3.0"
 if curl -fsS "$base/Dockerfile" -o /dev/null 2>/dev/null ||
     curl -fsS "$base/server.py" -o /dev/null 2>/dev/null; then

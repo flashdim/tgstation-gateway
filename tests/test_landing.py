@@ -76,6 +76,11 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("      - ALL\n", service)
         self.assertNotIn("python:3.12-alpine", service)
 
+    def test_smoke_test_fetches_the_tiled_background_asset(self):
+        smoke = (ROOT / "tests/smoke-landing.sh").read_text()
+        self.assertIn('curl -fsS "$base/layer1.webp"', smoke)
+        self.assertIn("Web/P image", smoke)
+
     def test_image_serves_only_page_files_and_attribution(self):
         dockerfile = (LANDING / "Dockerfile").read_text()
         self.assertRegex(
