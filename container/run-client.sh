@@ -13,6 +13,55 @@ unset LD_PRELOAD
 export PATH="/opt/wine-proton/bin:$PATH"
 export WINELOADER="/opt/wine-proton/bin/wine"
 export WINESERVER="/opt/wine-proton/bin/wineserver"
+export WINEDEBUG=-all
+
+# A reset can interrupt this launcher while cleanup is running. Keep the lock
+# inherited by cleanup commands so the next service invocation waits for them.
+exec 9>"$XDG_RUNTIME_DIR/byond-cleanup.lock"
+flock -x 9
+if timeout --kill-after=1s 15s wineserver -k; then
+    :
+else
+    status=$?
+    # Wine returns 1 both when no server exists and when signaling fails.
+    if [ "$status" -ne 1 ]; then
+        echo "Failed to stop the Wine session; refusing to launch BYOND" >&2
+        exit 1
+    fi
+fi
+if ! timeout --kill-after=1s 5s wineserver --wait; then
+    echo "Failed to stop the Wine session; refusing to launch BYOND" >&2
+    exit 1
+fi
+
+client_pattern='(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)'
+if pkill -KILL -i -f -u "$EUID" "$client_pattern"; then
+    :
+else
+    status=$?
+    if [ "$status" -ne 1 ]; then
+        echo "Failed to stop BYOND or WebView2 processes; refusing to launch BYOND" >&2
+        exit 1
+    fi
+fi
+clients_stopped=false
+for attempt in {1..5}; do
+    if pgrep -i -f -u "$EUID" "$client_pattern" >/dev/null; then
+        sleep 1
+    else
+        status=$?
+        if [ "$status" -ne 1 ]; then
+            echo "Failed to check BYOND and WebView2 processes; refusing to launch BYOND" >&2
+            exit 1
+        fi
+        clients_stopped=true
+        break
+    fi
+done
+if [ "$clients_stopped" != true ]; then
+    echo "BYOND or WebView2 processes did not stop; refusing to launch BYOND" >&2
+    exit 1
+fi
 
 display_ready() {
     if [ "${SELKIES_WAYLAND:-false}" = true ]; then
@@ -151,7 +200,9 @@ EOF
 case "${BYOND_WEBVIEW2_GPU:-0}" in
     0 | "") ;;
     1)
-        if ! wine reg add 'HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments' \
+        # Keep the lock in the wrapper, but not in Wine or its server.
+        if ! bash -c 'status=0; timeout --kill-after=1s 30s "$@" 9>&- || status=$?; exit "$status"' \
+            _ wine reg add 'HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments' \
             /v '*' /t REG_SZ \
             /d '--ignore-gpu-blocklist --use-gl=angle --use-angle=d3d11 --disable-direct-composition' /f; then
             echo "Failed to configure WebView2 GPU acceleration" >&2
@@ -173,6 +224,9 @@ case "$max_framerate" in
         ;;
 esac
 export DXVK_CONFIG="dxvk.maxFrameRate=$max_framerate"
+
+flock -u 9
+exec 9>&-
 
 if [ -n "${BYOND_SERVER:-}" ]; then
     server="${BYOND_SERVER#byond://}"

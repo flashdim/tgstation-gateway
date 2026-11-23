@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -18,6 +19,8 @@ class RunClientTest(unittest.TestCase):
         dimensions="1280x720",
         existing_layout=None,
         max_framerate=None,
+        wine_exit_code=0,
+        cleanup_failure=None,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -25,6 +28,29 @@ class RunClientTest(unittest.TestCase):
             commands.mkdir()
             for name, body in {
                 "timeout": 'case "$1" in --kill-after=*) shift;; esac\nshift\nexec "$@"',
+                "wineserver": (
+                    'printf "wineserver %s\\n" "$1" >> "$CLEANUP_LOG"\n'
+                    'if [ "$CLEANUP_FAILURE" = -k ] && [ "$1" = -k ]; '
+                    "then exit 124; fi\n"
+                    'if [ "$CLEANUP_FAILURE" = no_server ] && [ "$1" = -k ]; '
+                    "then exit 1; fi\n"
+                    'test "$CLEANUP_FAILURE" != "$1"'
+                ),
+                "pkill": (
+                    'printf "pkill %s\\n" "$*" >> "$CLEANUP_LOG"\n'
+                    'if [ "$CLEANUP_FAILURE" = pkill ]; then exit 2; fi\n'
+                    'if [ "$CLEANUP_FAILURE" = exiting ]; then exit 0; fi\n'
+                    "exit 1"
+                ),
+                "pgrep": (
+                    'printf "pgrep %s\\n" "$*" >> "$CLEANUP_LOG"\n'
+                    'case "$CLEANUP_FAILURE" in pgrep) exit 2;; '
+                    "survives) exit 0;; exiting) "
+                    'if [ ! -f "$PGREP_SEEN" ]; then touch "$PGREP_SEEN"; '
+                    "exit 0; fi;; esac\n"
+                    "exit 1"
+                ),
+                "sleep": "exit 0",
                 "xdpyinfo": (
                     'test "$1" = "-display" && test "$2" = "$EXPECTED_DISPLAY" && '
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 1\n'
@@ -35,12 +61,16 @@ class RunClientTest(unittest.TestCase):
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
                     'test "$WINELOADER" = /opt/wine-proton/bin/wine && '
                     'test "$WINESERVER" = /opt/wine-proton/bin/wineserver || exit 96\n'
+                    'test "$WINEDEBUG" = "-all" || exit 94\n'
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 95\n'
                     'if [ -n "${LD_PRELOAD:-}" ]; then\n'
                     '  echo "LD_PRELOAD leaked to Wine" >&2\n'
                     "  exit 97\n"
                     "fi\n"
                     'if [ "$1" = reg ]; then\n'
+                    '  test ! -e "/proc/$$/fd/9" || exit 93\n'
+                    '  if flock -n "$XDG_RUNTIME_DIR/byond-cleanup.lock" '
+                    "true; then exit 92; fi\n"
                     '  printf "%s\\n" "$@" > "$WINE_LOG"\n'
                     '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
                     "  exit $?\n"
@@ -50,7 +80,8 @@ class RunClientTest(unittest.TestCase):
                     "  exit 94\n"
                     "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
-                    'printf "%s\\n" "$DISPLAY" "$@"'
+                    'printf "%s\\n" "$DISPLAY" "$@"\n'
+                    'exit "$MOCK_WINE_EXIT_CODE"'
                 ),
             }.items():
                 command = commands / name
@@ -64,6 +95,7 @@ class RunClientTest(unittest.TestCase):
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
+                "export WINEDEBUG='+all'\n"
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
@@ -79,6 +111,9 @@ class RunClientTest(unittest.TestCase):
                 "XDG_RUNTIME_DIR": str(runtime),
                 "WINE_LOG": str(root / "wine-log"),
                 "EVENT_LOG": str(root / "event-log"),
+                "CLEANUP_LOG": str(root / "cleanup-log"),
+                "PGREP_SEEN": str(root / "pgrep-seen"),
+                "CLEANUP_FAILURE": cleanup_failure or "",
                 "EXPECTED_PREFIX": str(prefix),
                 "FAIL_REGISTRY": "1" if fail_registry else "0",
                 "LD_PRELOAD": "libm.so.6",
@@ -86,6 +121,7 @@ class RunClientTest(unittest.TestCase):
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
                 "DISPLAY_DIMENSIONS": dimensions,
                 "EXPECTED_DXVK_CONFIG": (f"dxvk.maxFrameRate={max_framerate or 60}"),
+                "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
@@ -123,16 +159,23 @@ class RunClientTest(unittest.TestCase):
             )
             log = root / "wine-log"
             events = root / "event-log"
+            cleanup = root / "cleanup-log"
             return (
                 result,
                 prefix,
                 log.read_text().splitlines() if log.exists() else [],
                 events.read_text().splitlines() if events.exists() else [],
                 layout.read_text() if layout.exists() else None,
+                cleanup.read_text().splitlines() if cleanup.exists() else [],
             )
 
+    def test_preserves_wine_exit_status(self):
+        result, _, _, events, _, _ = self.run_client(wine_exit_code=23)
+        self.assertEqual(result.returncode, 23)
+        self.assertEqual(events, ["launch"])
+
     def test_writes_display_sized_layout_over_existing_config(self):
-        result, _, _, _, layout = self.run_client(
+        result, _, _, _, layout, _ = self.run_client(
             dimensions="1279x719", existing_layout="outdated layout"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -173,7 +216,7 @@ class RunClientTest(unittest.TestCase):
         self.assertNotIn("outdated layout", layout)
 
     def test_launches_wine_with_authenticated_plasma_display(self):
-        result, prefix, _, _, _ = self.run_client(wayland=True)
+        result, prefix, _, _, _, _ = self.run_client(wayland=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.splitlines(),
@@ -183,7 +226,7 @@ class RunClientTest(unittest.TestCase):
     def test_launches_byond_after_loading_session_environment(self):
         for server in (None, ""):
             with self.subTest(server=server):
-                result, prefix, registry, events, _ = self.run_client(server)
+                result, prefix, registry, events, _, _ = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(registry, [])
                 self.assertEqual(events, ["launch"])
@@ -202,7 +245,7 @@ class RunClientTest(unittest.TestCase):
             ("[::1]:1337", "byond://[::1]:1337"),
         ):
             with self.subTest(server=server):
-                result, prefix, _, events, _ = self.run_client(server)
+                result, prefix, _, events, _, _ = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(
@@ -220,7 +263,7 @@ class RunClientTest(unittest.TestCase):
     def test_configures_dreamseeker_framerate_through_dxvk(self):
         for max_framerate in ("30", "-1"):
             with self.subTest(max_framerate=max_framerate):
-                result, _, _, events, _ = self.run_client(
+                result, _, _, events, _, _ = self.run_client(
                     "example.org:1337", max_framerate=max_framerate
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -229,7 +272,7 @@ class RunClientTest(unittest.TestCase):
     def test_rejects_invalid_dreamseeker_framerate(self):
         for max_framerate in ("0", "01", "1001", "60;dxvk.hud=full"):
             with self.subTest(max_framerate=max_framerate):
-                result, _, _, events, _ = self.run_client(
+                result, _, _, events, _, _ = self.run_client(
                     "example.org:1337", max_framerate=max_framerate
                 )
                 self.assertNotEqual(result.returncode, 0)
@@ -246,13 +289,13 @@ class RunClientTest(unittest.TestCase):
             ":1337",
         ):
             with self.subTest(server=server):
-                result, _, _, _, _ = self.run_client(server)
+                result, _, _, _, _, _ = self.run_client(server)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Invalid BYOND_SERVER", result.stderr)
                 self.assertEqual(result.stdout, "")
 
     def test_configures_webview2_gpu_before_launch(self):
-        result, prefix, registry, events, _ = self.run_client(
+        result, prefix, registry, events, _, _ = self.run_client(
             "example.org:1337", gpu="1"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -283,7 +326,7 @@ class RunClientTest(unittest.TestCase):
         )
 
     def test_fails_without_launch_when_registry_update_fails(self):
-        result, _, registry, events, _ = self.run_client(gpu="1", fail_registry=True)
+        result, _, registry, events, _, _ = self.run_client(gpu="1", fail_registry=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(registry)
         self.assertEqual(events, [])
@@ -291,12 +334,78 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_rejects_invalid_webview2_gpu_setting(self):
-        result, _, registry, events, _ = self.run_client(gpu="yes")
+        result, _, registry, events, _, _ = self.run_client(gpu="yes")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(registry, [])
         self.assertEqual(events, [])
         self.assertIn("Invalid BYOND_WEBVIEW2_GPU", result.stderr)
         self.assertEqual(result.stdout, "")
+
+    def test_cleans_wine_and_webview_before_launch(self):
+        for server in (None, "example.org:1337"):
+            with self.subTest(server=server):
+                result, _, _, events, _, cleanup = self.run_client(server)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(events, ["launch"])
+                self.assertEqual(cleanup[:2], ["wineserver -k", "wineserver --wait"])
+                self.assertEqual(len(cleanup), 4)
+                pattern = (
+                    r"(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)"
+                )
+                self.assertEqual(
+                    cleanup[2], f"pkill -KILL -i -f -u {os.geteuid()} {pattern}"
+                )
+                self.assertEqual(cleanup[3], f"pgrep -i -f -u {os.geteuid()} {pattern}")
+
+    def test_refuses_to_launch_when_cleanup_fails(self):
+        for failure in ("-k", "--wait", "pkill", "pgrep", "survives"):
+            with self.subTest(failure=failure):
+                result, _, _, events, _, _ = self.run_client(cleanup_failure=failure)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(events, [])
+                self.assertIn("refusing to launch BYOND", result.stderr)
+
+    def test_waits_for_signaled_webview_to_exit(self):
+        result, _, _, events, _, cleanup = self.run_client(cleanup_failure="exiting")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["launch"])
+        self.assertEqual(len([line for line in cleanup if line.startswith("pgrep")]), 2)
+
+    def test_launches_when_no_wine_server_exists(self):
+        result, _, _, events, _, cleanup = self.run_client(cleanup_failure="no_server")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(cleanup[:2], ["wineserver -k", "wineserver --wait"])
+        self.assertEqual(events, ["launch"])
+
+    def test_process_match_handles_windows_paths_and_long_names(self):
+        pattern = r"(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)"
+        for executable in (
+            r"C:\Program Files (x86)\Microsoft\EdgeWebView\msedgewebview2.exe",
+            "/path with spaces/dreamseeker.exe",
+            "/path/byond.exe",
+        ):
+            with self.subTest(executable=executable):
+                process = subprocess.Popen(
+                    ["bash", "-c", 'exec -a "$1" sleep 30', "bash", executable]
+                )
+                try:
+                    deadline = time.monotonic() + 5
+                    while True:
+                        first_arg = Path(f"/proc/{process.pid}/cmdline").read_bytes()
+                        if first_arg.split(b"\0", 1)[0] == os.fsencode(executable):
+                            break
+                        self.assertLess(time.monotonic(), deadline)
+                        time.sleep(0.01)
+                    result = subprocess.run(
+                        ["pgrep", "-i", "-f", "-u", str(os.geteuid()), pattern],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    self.assertIn(str(process.pid), result.stdout.splitlines())
+                finally:
+                    process.terminate()
+                    process.wait(timeout=5)
 
 
 if __name__ == "__main__":
