@@ -205,32 +205,61 @@ class DesktopSessionTest(unittest.TestCase):
             "applications:reset-session.desktop",
             'panel.addWidget("org.kde.plasma.systemtray")',
             'panel.addWidget("org.kde.plasma.digitalclock")',
-            "file:///usr/share/tgstation-gateway/wallpaper.jpg",
+            'wallpaperPlugin = "org.kde.slideshow"',
+            '["Wallpaper", "org.kde.slideshow", "General"]',
+            'writeConfig("SlidePaths", "/usr/share/tgstation-gateway/wallpapers")',
+            'writeConfig("FillMode", 6)',
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, layout)
         self.assertIn("--key LookAndFeelPackage org.kde.breezedark.desktop", dockerfile)
         self.assertIn("--key ColorScheme BreezeDark", dockerfile)
         self.assertIn(
-            "assets/glory-to-nanotrasen.jpg /usr/share/tgstation-gateway/wallpaper.jpg",
+            "assets/wallpapers/ /usr/share/tgstation-gateway/wallpapers/",
+            dockerfile,
+        )
+        self.assertIn(
+            "assets/ATTRIBUTION.md /usr/share/tgstation-gateway/wallpaper-attribution.md",
             dockerfile,
         )
         self.assertLess(
             dockerfile.index(
-                "install -d -o root -g root -m 755 /usr/share/tgstation-gateway"
+                "install -d -o root -g root -m 755 /usr/share/tgstation-gateway/wallpapers"
             ),
-            dockerfile.index("COPY --chmod=644 assets/glory-to-nanotrasen.jpg"),
+            dockerfile.index("COPY --chmod=644 assets/wallpapers/"),
+        )
+        smoke = (ROOT / "tests/smoke-container.sh").read_text()
+        self.assertIn(
+            "test -r /usr/share/tgstation-gateway/wallpaper-attribution.md", smoke
         )
 
-    def test_glory_to_nanotrasen_asset_and_attribution_are_in_repository(self):
-        asset = ROOT / "assets/glory-to-nanotrasen.jpg"
+    def test_wallpaper_assets_and_attribution_are_in_repository(self):
+        asset = ROOT / "assets/wallpapers/glory-to-nanotrasen.jpg"
+        logo = ROOT / "assets/wallpapers/space-station-13-logo.svg"
+        nanotrasen = ROOT / "assets/wallpapers/nanotrasen-logo.png"
+        paradise = ROOT / "assets/wallpapers/ss13-paradise-ian-shuttle.png"
         attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
         self.assertTrue(asset.is_file())
         self.assertGreater(asset.stat().st_size, 10_000)
+        self.assertTrue(logo.is_file())
+        self.assertIn("<svg", logo.read_text())
+        self.assertTrue(nanotrasen.is_file())
+        self.assertGreater(nanotrasen.stat().st_size, 1_000)
+        self.assertTrue(paradise.is_file())
+        self.assertGreater(paradise.stat().st_size, 1_000)
         self.assertIn("Glory to Nanotrasen", attribution)
         self.assertIn("partheosis", attribution)
         self.assertIn("CC BY-NC 3.0", attribution)
         self.assertIn("547539107", attribution)
+        self.assertIn("Wirewraith", attribution)
+        self.assertIn("MIT License", attribution)
+        self.assertIn("Copyright (c) 2022 Space Station 13", attribution)
+        self.assertIn("LiamLime", attribution)
+        self.assertIn("Public domain", attribution)
+        self.assertIn("Nanotrasen_Logo.png", attribution)
+        self.assertIn("Wakafanykai123", attribution)
+        self.assertIn("CC BY-SA 4.0", attribution)
+        self.assertIn("SS13-Paradise-IanShuttle.png", attribution)
 
     def test_smoke_tests_expect_configured_panel_hiding_mode(self):
         layout = (ROOT / "container/plasma-default-layout.js").read_text()
@@ -240,6 +269,8 @@ class DesktopSessionTest(unittest.TestCase):
                 smoke = (ROOT / "tests" / script).read_text()
                 self.assertIn("p.hiding", smoke)
                 self.assertIn("center,fit,dodgewindows,opaque,false,64", smoke)
+                self.assertIn('readConfig("FillMode", -1)', smoke)
+                self.assertIn('wallpaperPlugin !== "org.kde.slideshow"', smoke)
 
 
 if __name__ == "__main__":

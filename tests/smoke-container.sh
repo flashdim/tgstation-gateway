@@ -17,10 +17,13 @@ trap cleanup EXIT
 
 docker exec "$container" sh -ec '
     test "$(stat -c "%u:%g %a" /usr/share/tgstation-gateway)" = "0:0 755"
-    test -r /usr/share/tgstation-gateway/wallpaper.jpg
+    test "$(stat -c "%u:%g %a" /usr/share/tgstation-gateway/wallpapers)" = "0:0 755"
+    test -r /usr/share/tgstation-gateway/wallpapers/glory-to-nanotrasen.jpg
+    test -r /usr/share/tgstation-gateway/wallpaper-attribution.md
     for file in /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc \
         /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js \
-        /usr/share/tgstation-gateway/wallpaper.jpg; do
+        /usr/share/tgstation-gateway/wallpaper-attribution.md \
+        /usr/share/tgstation-gateway/wallpapers/*; do
         test "$(stat -c "%u:%g %a" "$file")" = "0:0 644"
     done'
 
@@ -45,6 +48,11 @@ for _ in {1..120}; do
                 test "$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
                     '"'"'var p = panels()[0]; print([p.alignment,p.lengthMode,p.hiding,p.opacity,p.floating,p.height].join(",").toString());'"'"')" \
                     = "center,fit,dodgewindows,opaque,false,64"'
+            docker exec "$container" sh -ec '
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/selkies-session-bus"
+                result="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+                    '"'"'var ds = desktops(); var ok = ds.length > 0; for (var i = 0; i < ds.length; i++) { var d = ds[i]; d.currentConfigGroup = ["Wallpaper", "org.kde.slideshow", "General"]; if (d.wallpaperPlugin !== "org.kde.slideshow" || Number(d.readConfig("FillMode", -1)) !== 6) ok = false; } print(ok ? "centered" : "wallpaper configuration mismatch");'"'"')"
+                test "$result" = centered || { echo "$result" >&2; exit 1; }'
             docker exec "$container" s6-svc -d /etc/service/byond
             for _ in {1..20}; do
                 if ! docker exec "$container" pgrep -f '/byond[.]exe([[:space:]]|$)' >/dev/null; then

@@ -108,29 +108,36 @@ replacement configuration files read-only before starting a fresh container,
 or change the appearance and panel in Plasma. If selecting a different global
 look-and-feel, its own first-run layout may replace the gateway panel layout.
 
-The default wallpaper is [**Glory to Nanotrasen**](https://www.deviantart.com/partheosis/art/Glory-to-Nanotrasen-547539107)
-by **partheosis**, used under [CC BY-NC 3.0](https://creativecommons.org/licenses/by-nc/3.0/),
-as indicated by the source URL. The repository copy and attribution record are
-at `assets/glory-to-nanotrasen.jpg` and `assets/ATTRIBUTION.md`.
+The first-run desktop uses a Plasma slideshow of the images in
+`assets/wallpapers/`, including **Glory to Nanotrasen** by **partheosis** and
+the **Space Station 13** logo by **Wirewraith**. See `assets/ATTRIBUTION.md` for
+sources and licenses (also installed at
+`/usr/share/tgstation-gateway/wallpaper-attribution.md` in the image).
+Images are centered at their original size against a black background. This
+first-run default applies to fresh containers; existing Plasma settings are not
+overwritten. Plasma's default slide interval is 15 minutes. To add
+images to the built-in collection, place them in `assets/wallpapers/`, record
+their attribution and license, and rebuild the image.
 
-To override the wallpaper without rebuilding, bind-mount an operator-supplied
-image read-only at `/usr/share/tgstation-gateway/wallpaper.jpg` before starting
-the container.
+To replace the collection without rebuilding, bind-mount an operator-supplied
+directory of images read-only at `/usr/share/tgstation-gateway/wallpapers`
+before starting a fresh container.
 For example, add this under the Compose player's `volumes`:
 
 ```yaml
-- /absolute/path/to/wallpaper.jpg:/usr/share/tgstation-gateway/wallpaper.jpg:ro
+- /absolute/path/to/wallpapers:/usr/share/tgstation-gateway/wallpapers:ro
 ```
 
 ### Desktop verification
 
 The layout and panel properties were queried in fresh **desktop-only** test
 containers based on the pinned Selkies image, in both X11 and Wayland.
-Screenshots, the requested wallpaper, and the BYOND window's geometry and
+Screenshots, the wallpaper slideshow, and the BYOND window's geometry and
 usability while the panel dodges windows have **not** been manually
 verified in the complete player image. To verify, start a fresh container in
 each display mode, capture the desktop and panel before and while an
-application window overlaps the panel, then connect to a test server and
+application window overlaps the panel, verify that the slideshow changes
+images, then connect to a test server and
 capture the game window with the panel dodging it. Record the image digest,
 display mode, screenshots and any failures separately from startup or health
 checks.
