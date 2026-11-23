@@ -11,8 +11,17 @@
 - Modifications: none to the file; the page scales and rotates it.
 
 The page's star field and placeholder logo are CSS/text, not reference-site
-assets. The clown sprite license does not apply to the wallpapers below,
-which have their own distinct licenses.
+assets. The clown sprite license does not apply to the wiki sprites below or
+the wallpapers, which have their own distinct licenses.
+
+## Landing page character sprites
+
+- **Narsie** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Narsie.gif); [provided image](https://github.com/user-attachments/assets/c84eccc9-775b-4f0a-996d-f62a18193f43)
+- **Xenomorph** — artwork by **WJohnston**; [wiki source](https://wiki.tgstation13.org/File:Alien.png); [provided image](https://github.com/user-attachments/assets/c3955ad9-14d8-4d13-a967-ab7e95af6f03)
+- **Nuclear Operative** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Generic_nukesyndie.png); [provided image](https://github.com/user-attachments/assets/89ee354c-4b68-4661-944b-0c88a11a8411)
+- **Wizard** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Generic_wizard.png); [provided image](https://github.com/user-attachments/assets/fd8813b9-0dac-47b9-ab8f-40c0070f6bbc)
+- License for all four sprites: **CC BY-NC-SA 4.0** — [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/), as stated for the wiki and its content.
+- Modifications: none to the image files; displayed at reduced sizes. The Narsie GIF retains its animation.
 
 ## Glory to Nanotrasen
 

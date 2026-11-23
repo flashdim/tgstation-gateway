@@ -24,6 +24,11 @@ body {
 }
 
 .clown { position: absolute; top: 0; left: 0; width: 70px; image-rendering: pixelated; opacity: .7; animation: drift 48s linear infinite; }
+.space-sprite { position: absolute; width: clamp(52px, 8vw, 100px); height: auto; image-rendering: pixelated; opacity: .8; }
+.alien { left: 4vw; top: 42%; }
+.operative { right: 7vw; top: 64%; }
+.wizard { right: 5vw; top: 20%; }
+.narsie { position: absolute; bottom: -16px; left: 50%; width: min(220px, 42vw); height: auto; transform: translateX(-50%); image-rendering: pixelated; opacity: .9; animation: narsie-float 14s ease-in-out infinite alternate; }
 
 @keyframes drift {
   0% { transform: translate(8vw, 16vh) rotate(0deg); }
@@ -32,8 +37,13 @@ body {
   75% { transform: translate(8vw, 70vh) rotate(540deg); }
   100% { transform: translate(8vw, 16vh) rotate(720deg); }
 }
+@keyframes narsie-float {
+  from { transform: translate(-50%, 0); }
+  to { transform: translate(-50%, -10px); }
+}
 @media (prefers-reduced-motion: reduce) {
   .clown { animation: none; transform: translate(8vw, 16vh); }
+  .narsie { animation: none; }
 }
 
 main { position: relative; max-width: 780px; margin: auto; padding: 64px 24px 32px; }
@@ -75,4 +85,5 @@ footer a { color: #a5e5e3; }
   main { padding: 40px 16px 24px; }
   .slot { padding: 18px; gap: 14px; }
   .clown { opacity: .3; }
+  .space-sprite { opacity: .35; }
 }

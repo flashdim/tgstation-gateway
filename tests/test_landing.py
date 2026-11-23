@@ -13,6 +13,28 @@ import server  # noqa: E402
 
 
 class LandingPageTest(unittest.TestCase):
+    def test_wiki_sprites_are_attributed_and_displayed(self):
+        html = (LANDING / "index.html").read_text()
+        css = (LANDING / "style.css").read_text()
+        attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
+        sources = {
+            "narsie": "c84eccc9-775b-4f0a-996d-f62a18193f43",
+            "alien": "c3955ad9-14d8-4d13-a967-ab7e95af6f03",
+            "operative": "89ee354c-4b68-4661-944b-0c88a11a8411",
+            "wizard": "fd8813b9-0dac-47b9-ab8f-40c0070f6bbc",
+        }
+        for name, asset_id in sources.items():
+            with self.subTest(sprite=name):
+                self.assertRegex(html, rf'class="[^"]*\b{name}\b')
+                self.assertIn(asset_id, html)
+                self.assertIn(asset_id, attribution)
+        self.assertIn("PotatoMasher", attribution)
+        self.assertIn("WJohnston", attribution)
+        self.assertIn("CC BY-NC-SA 4.0", attribution)
+        self.assertIn("Narsie GIF retains its animation", attribution)
+        self.assertIn("animation: narsie-float 14s ease-in-out", css)
+        self.assertIn("bottom: -16px; left: 50%", css)
+
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
