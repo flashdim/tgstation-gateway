@@ -2,19 +2,15 @@ name: tgstation-gateway
 
 services:
   landing:
-    image: python:3.12-alpine
+    image: ${GATEWAY_LANDING_IMAGE:-ghcr.io/flashdim/tgstation-gateway-landing:latest}
     init: true
-    command:
-      - python3
-      - -m
-      - http.server
-      - "8000"
-      - --bind
-      - 0.0.0.0
-      - --directory
-      - /srv/landing
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
-      - "../landing:/srv/landing:ro"
+      - "${GATEWAY_LANDING_SLOTS:-../landing/slots.js}:/srv/landing/slots.js:ro"
     ports:
       - "127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"
   player:

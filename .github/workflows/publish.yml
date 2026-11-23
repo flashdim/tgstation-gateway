@@ -1,4 +1,4 @@
-name: Publish container image
+name: Publish container images
 
 on:
   release:
@@ -27,6 +27,16 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+
+      - name: Generate landing image metadata
+        id: landing-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/${{ github.repository }}-landing
           flavor: latest=false
           tags: |
             type=ref,event=tag
@@ -85,6 +95,19 @@ jobs:
             -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
             tgstation-gateway-player:release /tmp/check-wine-runtime.sh
 
+      - name: Build release landing image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: landing/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: tgstation-gateway-landing:release
+          labels: ${{ steps.landing-meta.outputs.labels }}
+
+      - name: Smoke-test release landing image
+        run: bash tests/smoke-landing.sh tgstation-gateway-landing:release
+
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -104,5 +127,20 @@ jobs:
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
             docker tag tgstation-gateway-player:release "$tag"
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"
+
+      - name: Publish tested landing image
+        env:
+          IMAGE_TAGS: ${{ steps.landing-meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          if [ -z "$IMAGE_TAGS" ]; then
+            echo "No release landing image tags were generated" >&2
+            exit 1
+          fi
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag tgstation-gateway-landing:release "$tag"
             docker push "$tag"
           done <<< "$IMAGE_TAGS"

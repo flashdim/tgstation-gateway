@@ -9,12 +9,60 @@ LANDING = ROOT / "landing"
 
 
 class LandingPageTest(unittest.TestCase):
-    def test_compose_runs_localhost_only_landing_service(self):
+    def test_compose_runs_localhost_only_landing_image(self):
         compose = (ROOT / "examples/compose.yaml").read_text()
-        self.assertIn("  landing:\n", compose)
-        self.assertIn("python:3.12-alpine", compose)
-        self.assertIn("../landing:/srv/landing:ro", compose)
-        self.assertIn('"127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"', compose)
+        service = compose[compose.index("  landing:\n") : compose.index("  player:\n")]
+        self.assertIn(
+            "image: ${GATEWAY_LANDING_IMAGE:-"
+            "ghcr.io/flashdim/tgstation-gateway-landing:latest}",
+            service,
+        )
+        self.assertIn(
+            '"${GATEWAY_LANDING_SLOTS:-../landing/slots.js}:/srv/landing/slots.js:ro"',
+            service,
+        )
+        self.assertIn('"127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"', service)
+        self.assertIn("read_only: true", service)
+        self.assertIn("      - ALL\n", service)
+        self.assertNotIn("python:3.12-alpine", service)
+
+    def test_image_serves_only_page_files_and_attribution(self):
+        dockerfile = (LANDING / "Dockerfile").read_text()
+        self.assertRegex(dockerfile, r"(?m)^FROM python:3\.12-alpine@sha256:[0-9a-f]{64}$")
+        copies = [
+            line.split()[1:]
+            for line in dockerfile.splitlines()
+            if line.startswith("COPY ")
+        ]
+        self.assertEqual(
+            copies,
+            [
+                [
+                    "landing/index.html",
+                    "landing/page.js",
+                    "landing/slots.js",
+                    "landing/style.css",
+                    "landing/clown.webp",
+                    "/srv/landing/",
+                ],
+                ["assets/ATTRIBUTION.md", "/srv/landing/ATTRIBUTION.md"],
+            ],
+        )
+        served = {path.name for path in LANDING.iterdir()} - {"Dockerfile"}
+        self.assertEqual(served, {Path(path).name for path in copies[0][:-1]})
+        self.assertIn("USER 65534:65534", dockerfile)
+        self.assertIn('"--directory", "/srv/landing"', dockerfile)
+        self.assertIn("HEALTHCHECK", dockerfile)
+
+    def test_smoke_test_overrides_slots_and_checks_attribution(self):
+        smoke = (ROOT / "tests/smoke-landing.sh").read_text()
+        self.assertIn(":/srv/landing/slots.js:ro", smoke)
+        self.assertIn("--read-only --cap-drop ALL", smoke)
+        self.assertIn("-p 127.0.0.1::8000", smoke)
+        for path in ("slots.js", "page.js", "clown.webp", "ATTRIBUTION.md"):
+            with self.subTest(path=path):
+                self.assertIn(f'"$base/{path}"', smoke)
+        self.assertNotRegex(smoke.lower(), r"password|secret|token")
 
     def render(self, slots=None, default=False):
         script = """

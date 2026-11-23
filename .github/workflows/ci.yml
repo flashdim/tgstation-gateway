@@ -115,13 +115,37 @@ jobs:
           docker tag tgstation-gateway-player:ci "$IMAGE"
           docker push "$IMAGE"
 
+      - name: Build landing image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: landing/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: tgstation-gateway-landing:ci
+
+      - name: Publish development landing image
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}-landing:${{ github.event_name == 'pull_request' && format('dev-pr{0}', github.event.pull_request.number) || 'dev' }}
+        run: |
+          docker tag tgstation-gateway-landing:ci "$IMAGE"
+          docker push "$IMAGE"
+
       - name: Validate Compose example
         run: |
           docker compose -f examples/compose.yaml config --quiet
           docker compose -f examples/compose.yaml config --format json |
             python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=./seccomp.json"]'
+          docker compose -f examples/compose.yaml config --format json |
+            python3 -c 'import json, sys; ports = json.load(sys.stdin)["services"]["landing"]["ports"]; assert [p["host_ip"] for p in ports] == ["127.0.0.1"]'
           python3 -c 'import json; p=json.load(open("examples/seccomp.json")); assert p["defaultAction"] == "SCMP_ACT_ERRNO" and any(rule["names"] == ["socket"] and rule["action"] == "SCMP_ACT_ALLOW" and rule.get("includes", {}).get("arches") == ["SCMP_ARCH_X86"] for rule in p["syscalls"])'
           DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
+
+      - name: Smoke-test landing image
+        run: bash tests/smoke-landing.sh tgstation-gateway-landing:ci
 
       - name: Smoke-test player image
         id: smoke-x11
