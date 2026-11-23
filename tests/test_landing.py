@@ -121,7 +121,7 @@ process.stdout.write(JSON.stringify({list, error}));
             capture_output=True,
             text=True,
             check=True,
-            timeout=5,
+            timeout=30,
         )
         return json.loads(result.stdout)
 
