@@ -13,6 +13,16 @@ import server  # noqa: E402
 
 
 class LandingPageTest(unittest.TestCase):
+    def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
+        html = (LANDING / "index.html").read_text()
+        css = (LANDING / "style.css").read_text()
+        self.assertEqual(html.count('src="clown.webp"'), 1)
+        self.assertIn('class="space" aria-hidden="true"', html)
+        self.assertIn("@keyframes drift", css)
+        self.assertIn("translate(calc(100vw - 80px), 20vh) rotate(180deg)", css)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", css)
+        self.assertIn(".clown { animation: none;", css)
+
     def test_compose_runs_localhost_only_landing_image(self):
         compose = (ROOT / "examples/compose.yaml").read_text()
         service = compose[compose.index("  landing:\n") : compose.index("  player:\n")]
