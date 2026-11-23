@@ -59,10 +59,34 @@ container uses the host's date, time and timezone. Set `TZ` (for example
 ## Test landing page
 
 The optional static landing page runs as a separate localhost-only Compose
-service. `docker compose -f examples/compose.yaml up` starts it with the player.
-Open [http://localhost:8000](http://localhost:8000), or set
-`GATEWAY_LANDING_PORT` to choose another host port. Edit `landing/slots.js`
-to configure the test slots: each entry has an `account` label, a player
+service. Build the image locally from the repository root:
+
+```sh
+docker build -f landing/Dockerfile -t tgstation-gateway-landing:local .
+```
+
+Compose defaults to `ghcr.io/flashdim/tgstation-gateway-landing:latest`.
+Before the first release, or to try the latest CI build, select the development
+image with `GATEWAY_LANDING_IMAGE=ghcr.io/flashdim/tgstation-gateway-landing:dev`.
+To use the image built locally, set
+`GATEWAY_LANDING_IMAGE=tgstation-gateway-landing:local`. Then
+`docker compose -f examples/compose.yaml up` starts the landing page with the
+player. Open [http://localhost:8000](http://localhost:8000), or set
+`GATEWAY_LANDING_PORT` to choose another host port.
+
+The image includes default test data in `slots.js`. To override it at runtime,
+set `GATEWAY_LANDING_SLOTS` to the absolute path of a JavaScript configuration
+file on the Docker host. Compose mounts that file read-only at `/srv/landing/slots.js`.
+For example:
+
+```sh
+GATEWAY_LANDING_IMAGE=tgstation-gateway-landing:local \
+GATEWAY_LANDING_SLOTS=/etc/tgstation-gateway/slots.js \
+docker compose -f examples/compose.yaml up
+```
+
+Alternatively, edit `landing/slots.js` before running Compose; this is the
+default mounted configuration. Each entry has an `account` label, a player
 `url` (HTTP(S), absolute or relative to the page), and a boolean `active`.
 For example:
 
@@ -89,6 +113,10 @@ and future session-manager work. Protect both the page and player endpoints
 with operator-managed access controls and secure connections; do not expose
 the local test server or player stream directly to the internet. See
 `assets/ATTRIBUTION.md` for artwork sources and licenses.
+The landing image publishes `dev` for main-branch CI builds and `dev-pr<number>`
+for same-repository pull requests. Releases publish a version tag matching the
+release and `latest` for non-prereleases. CI development tags are pushed before
+image validation and may refer to a build that later fails validation.
 
 ## Connect directly to a server
 

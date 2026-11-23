@@ -8,7 +8,23 @@ CI publishes `dev` for main and `dev-pr<number>` for pull requests from this
 repository immediately after the build, before Compose validation, smoke tests,
 and runtime checks. These tags may therefore point to images that fail
 validation.
-`publish.yml` tests and smoke-tests a release image before publishing it.
+The same development tags are published for the separate
+`ghcr.io/<owner>/<repository>-landing` image. `publish.yml` tests and
+smoke-tests the player image and landing image before publishing either release.
+The landing image is smoke-tested by replacing its default `slots.js` with a
+read-only mount and checking that it serves the page files and attribution.
+Release tags match the GitHub release tag; stable releases also update `latest`,
+while prereleases do not. For a local landing build, run
+`docker build -f landing/Dockerfile -t tgstation-gateway-landing:local .` from
+the repository root. Set `GATEWAY_LANDING_IMAGE` to select this local image or
+the published `dev` image in the Compose example. `GATEWAY_LANDING_SLOTS` can
+point to an operator-provided host file, mounted read-only as `/srv/landing/slots.js`.
+
+The landing page uses static test status only; it does not authenticate users,
+create or isolate sessions, or enforce ownership. `#shared` is not an
+authorization boundary. Operators must provide external access controls and
+secure connections; live session status, trusted ownership and credential
+provisioning remain future integration work.
 
 ## Build caches
 
