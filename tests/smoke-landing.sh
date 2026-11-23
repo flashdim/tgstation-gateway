@@ -39,6 +39,8 @@ curl -fsS "$base/slots.js" -o "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer01/"' "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer02/"' "$workdir/slots.js"
 curl -fsS "$base/page.js" | grep -q GATEWAY_SLOTS
+curl -fsS "$base/wizard.js" -o "$workdir/wizard.js"
+grep -q 'I CAST REGULAR MISSILE' "$workdir/wizard.js"
 curl -fsS "$base/style.css" -o /dev/null
 curl -fsS "$base/clown.webp" -o /dev/null
 curl -fsS "$base/layer1.webp" -o "$workdir/layer1.webp"

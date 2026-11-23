@@ -43,7 +43,8 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("animation: drift 96s linear infinite", css)
         self.assertIn(".alien { animation-delay: -24s; }", css)
         self.assertIn(".operative { animation-delay: -48s; }", css)
-        self.assertIn(".wizard { animation-delay: -72s; }", css)
+        self.assertIn("animation: wizard-drift 96s linear -72s infinite", css)
+        self.assertIn("animation: wizard-spin 96s linear -72s infinite", css)
         self.assertIn("animation: narsie-float 14s ease-in-out", css)
         self.assertIn("bottom: -16px; left: 50%", css)
         self.assertIn('background-image: url("layer1.webp")', css)
@@ -104,6 +105,7 @@ class LandingPageTest(unittest.TestCase):
                 [
                     "landing/index.html",
                     "landing/page.js",
+                    "landing/wizard.js",
                     "landing/style.css",
                     "landing/clown.webp",
                     "landing/layer1.webp",
@@ -135,6 +137,7 @@ class LandingPageTest(unittest.TestCase):
         for path in (
             "slots.js",
             "page.js",
+            "wizard.js",
             "clown.webp",
             "layer1.webp",
             "ATTRIBUTION.md",
@@ -142,6 +145,53 @@ class LandingPageTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(f'"$base/{path}"', smoke)
         self.assertNotRegex(smoke.lower(), r"password|secret|token")
+
+    def test_wizard_bubble_restarts_and_expires(self):
+        script = """
+const fs = require("fs");
+const vm = require("vm");
+const assert = require("assert");
+let click;
+let nextTimer = 0;
+const timers = new Map();
+const wizard = { addEventListener: (type, cb) => {
+  assert.strictEqual(type, "click"); click = cb;
+}};
+const bubble = { hidden: true, textContent: "" };
+const context = {
+  document: { getElementById: id => id === "wizard-button" ? wizard : bubble },
+  setTimeout: (callback, delay) => {
+    assert.strictEqual(delay, 4000);
+    timers.set(++nextTimer, callback);
+    return nextTimer;
+  },
+  clearTimeout: id => timers.delete(id),
+};
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
+assert.strictEqual(bubble.hidden, true);
+click();
+assert.strictEqual(bubble.hidden, false);
+assert.strictEqual(bubble.textContent, "I CAST REGULAR MISSILE");
+assert.strictEqual(timers.size, 1);
+click();
+assert.strictEqual(timers.size, 1);
+assert.strictEqual(timers.has(1), false);
+timers.get(2)();
+assert.strictEqual(bubble.hidden, true);
+assert.strictEqual(bubble.textContent, "");
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "wizard.js")],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        html = (LANDING / "index.html").read_text()
+        self.assertIn('type="button" aria-label="Activate wizard"', html)
+        self.assertIn(
+            'id="wizard-bubble" class="wizard-bubble" role="status" hidden', html
+        )
 
     def render(self, slots=None, js=None):
         script = """
