@@ -37,12 +37,12 @@ class SmokeContainerTest(unittest.TestCase):
                 '      s6-svc) touch "$SERVICE_STOPPED" ;;\n'
                 "      /usr/local/bin/healthcheck) "
                 'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
-                '      sh)\n'
+                "      sh)\n"
                 '        case "$5" in\n'
-                '          *\'readConfig("FillMode", -1)\'*) '
+                "          *'readConfig(\"FillMode\", -1)'*) "
                 '[ "${WRONG_WALLPAPER:-0}" = 0 ] ;;\n'
                 '          *) [ "${WRONG_DISPLAY:-0}" = 0 ] ;;\n'
-                '        esac ;;\n'
+                "        esac ;;\n"
                 "      *) exit 1 ;;\n"
                 "    esac ;;\n"
                 "  logs|rm) exit 0 ;;\n"
