@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LazorGator Party</title>
+    <link rel="stylesheet" href="style.css">
+    <script defer src="slots.js"></script>
+    <script defer src="page.js"></script>
+  </head>
+  <body>
+    <div class="space" aria-hidden="true">
+      <img class="clown clown-one" src="clown.webp" alt="">
+      <img class="clown clown-two" src="clown.webp" alt="">
+      <img class="clown clown-three" src="clown.webp" alt="">
+    </div>
+    <main>
+      <header>
+        <div class="logo" aria-label="LazorGator Party">
+          <span aria-hidden="true">✦</span> LAZORGATOR <span>PARTY</span>
+        </div>
+        <p class="eyebrow">YOUR WINDOW TO SPACE STATION 13</p>
+        <h1>Choose a session</h1>
+        <p>Pick an available slot or watch an active session.</p>
+      </header>
+      <section aria-label="Player slots">
+        <div id="slots" class="slots"></div>
+        <p id="config-error" class="notice" hidden></p>
+        <noscript><p class="notice">JavaScript is required to display configured slots.</p></noscript>
+      </section>
+      <footer>
+        <p>Test configuration only. Status is not live and access is not enforced by this page.</p>
+        <p>Clown sprite by tgstation contributors: <a href="https://github.com/tgstation-operations/infrastructure/blob/6963c530f79c25aa04f3d7a55e087b954f119848/website/src/static/sprites/clown.webp">source</a>, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Unmodified sprite, displayed scaled and rotated.</p>
+      </footer>
+    </main>
+  </body>
+</html>

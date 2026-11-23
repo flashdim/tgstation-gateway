@@ -1,5 +1,21 @@
 # Wallpaper attribution
 
+## Landing page clown
+
+- Artwork: **clown** sprite by **tgstation contributors**
+- Source: [tgstation-operations/infrastructure website sprite](https://github.com/tgstation-operations/infrastructure/blob/6963c530f79c25aa04f3d7a55e087b954f119848/website/src/static/sprites/clown.webp),
+  extracted from [tgstation's clown icon](https://github.com/tgstation/tgstation/blob/ef1444885d77a94f38a910ef556554ca2a9fc549/icons/mob/simple/clown_mobs.dmi)
+- License: **CC BY-SA 3.0** — [Creative Commons Attribution-ShareAlike 3.0 Unported](https://creativecommons.org/licenses/by-sa/3.0/),
+  as documented in [sprites.toml](https://github.com/tgstation-operations/infrastructure/blob/6963c530f79c25aa04f3d7a55e087b954f119848/website/sprites/sprites.toml)
+- Repository copy: `../landing/clown.webp`
+- Modifications: none to the file; the page scales and rotates it.
+
+The page's star field and placeholder logo are CSS/text, not reference-site
+assets. The clown sprite license does not apply to the wallpapers below,
+which have their own distinct licenses.
+
+## Glory to Nanotrasen
+
 - Artwork: **Glory to Nanotrasen**
 - Artist: **partheosis**
 - Source: https://www.deviantart.com/partheosis/art/Glory-to-Nanotrasen-547539107

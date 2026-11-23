@@ -53,6 +53,44 @@ container uses the host's date, time and timezone. Set `TZ` (for example
 `TZ=Europe/Berlin`) to override the timezone. On hosts without
 `/etc/localtime`, remove that volume and set `TZ`.
 
+## Test landing page
+
+The optional static landing page is separate from the player image. With the
+player running as above, serve it locally:
+
+```sh
+python3 -m http.server 8000 --bind 127.0.0.1 --directory landing
+```
+
+Open [http://localhost:8000](http://localhost:8000). Edit `landing/slots.js`
+to configure the test slots: each entry has an `account` label, a player
+`url` (HTTP(S), absolute or relative to the page), and a boolean `active`.
+For example:
+
+```js
+window.GATEWAY_SLOTS = [
+  { account: "LGplayer01", url: "http://localhost:8080/", active: false },
+  { account: "LGplayer02", url: "http://localhost:8081/", active: true },
+];
+```
+
+The operator must create BYOND accounts manually. These labels do not sign in
+to BYOND; the login flow and secure credential provisioning are undecided.
+Never put passwords or other secrets in this public configuration or URLs.
+The inactive link opens its configured URL; the active watch link replaces any
+existing fragment with `#shared`, preserving the path and query.
+
+Status is static test data: no containers are created, monitored, or isolated
+by the page. It does not authenticate users or enforce ownership. `#shared` is
+not an authorization boundary, and anyone with access to a player URL may
+attempt to use it directly. Intended watching by authenticated users and
+controller reconnection require trusted identity, ownership and routing
+integration ([#48](https://github.com/flashdim/tgstation-gateway/issues/48))
+and future session-manager work. Protect both the page and player endpoints
+with operator-managed access controls and secure connections; do not expose
+the local test server or player stream directly to the internet. See
+`assets/ATTRIBUTION.md` for artwork sources and licenses.
+
 ## Connect directly to a server
 
 To start the client connected to a server instead of opening the pager, provide its address and port:
