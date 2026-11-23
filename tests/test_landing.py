@@ -39,6 +39,12 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn(".wizard { animation-delay: -72s; }", css)
         self.assertIn("animation: narsie-float 14s ease-in-out", css)
         self.assertIn("bottom: -16px; left: 50%", css)
+        self.assertIn('background-image: url("layer1.webp")', css)
+        self.assertIn("background-repeat: repeat", css)
+        self.assertIn("@keyframes background-drift", css)
+        self.assertIn("animation: background-drift 180s linear infinite", css)
+        self.assertIn("scriptis", attribution)
+        self.assertIn("GNU AGPL v3.0", attribution)
 
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
@@ -88,6 +94,7 @@ class LandingPageTest(unittest.TestCase):
                     "landing/page.js",
                     "landing/style.css",
                     "landing/clown.webp",
+                    "landing/layer1.webp",
                     "/srv/landing/",
                 ],
                 ["assets/ATTRIBUTION.md", "/srv/landing/ATTRIBUTION.md"],
@@ -113,7 +120,13 @@ class LandingPageTest(unittest.TestCase):
         self.assertNotIn("-v ", smoke)
         self.assertIn("--read-only --cap-drop ALL", smoke)
         self.assertIn("-p 127.0.0.1::8000", smoke)
-        for path in ("slots.js", "page.js", "clown.webp", "ATTRIBUTION.md"):
+        for path in (
+            "slots.js",
+            "page.js",
+            "clown.webp",
+            "layer1.webp",
+            "ATTRIBUTION.md",
+        ):
             with self.subTest(path=path):
                 self.assertIn(f'"$base/{path}"', smoke)
         self.assertNotRegex(smoke.lower(), r"password|secret|token")

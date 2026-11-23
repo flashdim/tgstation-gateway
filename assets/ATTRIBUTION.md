@@ -23,6 +23,15 @@ the wallpapers, which have their own distinct licenses.
 - License for all four sprites: **CC BY-NC-SA 4.0** — [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/), as stated for the wiki and its content.
 - Modifications: none to the image files; displayed at reduced sizes. The Narsie GIF retains its animation.
 
+## Landing page space background
+
+- Artwork: **layer1.webp**
+- Artist: **scriptis** ([GitHub profile](https://github.com/scriptis))
+- Source: [user-provided image attachment](https://github.com/user-attachments/assets/6fedf530-522a-4871-91ad-f098d7fe123b)
+- License: **GNU AGPL v3.0** — [GNU Affero General Public License version 3](https://www.gnu.org/licenses/agpl-3.0.html), as specified by the contributor.
+- Repository copy: `../landing/layer1.webp`
+- Modifications: none to the image; tiled and animated diagonally by the page.
+
 ## Glory to Nanotrasen
 
 - Artwork: **Glory to Nanotrasen**

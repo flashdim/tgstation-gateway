@@ -2,7 +2,7 @@
 #   docker build -f landing/Dockerfile -t tgstation-gateway-landing:local .
 FROM python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
 
-COPY landing/index.html landing/page.js landing/style.css landing/clown.webp /srv/landing/
+COPY landing/index.html landing/page.js landing/style.css landing/clown.webp landing/layer1.webp /srv/landing/
 COPY assets/ATTRIBUTION.md /srv/landing/ATTRIBUTION.md
 COPY landing/server.py /opt/landing/server.py
 
