@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 
@@ -60,7 +63,7 @@ class DesktopSessionTest(unittest.TestCase):
         )
         self.assertIn("Exec=/usr/local/bin/configure-plasma", autostart)
 
-    def test_reset_session_shortcut_stops_wine_and_byond_processes(self):
+    def test_reset_session_shortcut_restarts_supervised_client(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         desktop = (ROOT / "container/reset-session.desktop").read_text()
         script = (ROOT / "container/reset-session.sh").read_text()
@@ -70,9 +73,32 @@ class DesktopSessionTest(unittest.TestCase):
         )
         self.assertIn("Name=Reset Session", desktop)
         self.assertIn("Exec=/usr/local/bin/reset-session", desktop)
-        self.assertIn("dreamseeker[.]exe|byond[.]exe|wineserver[.]exe", script)
-        self.assertIn("wineserver -k9", script)
-        self.assertIn("wineserver --wait", script)
+        self.assertIn("exec s6-svc -k /etc/service/byond", script)
+
+    def test_reset_requests_restart_and_propagates_supervisor_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            command = root / "s6-svc"
+            command.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$@" > "$RESET_LOG"\nexit 23\n'
+            )
+            command.chmod(0o755)
+            result = subprocess.run(
+                ["bash", str(ROOT / "container/reset-session.sh")],
+                env={
+                    **os.environ,
+                    "PATH": f"{root}:{os.environ['PATH']}",
+                    "RESET_LOG": str(root / "reset-log"),
+                },
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            self.assertEqual(result.returncode, 23)
+            self.assertEqual(
+                (root / "reset-log").read_text().splitlines(),
+                ["-k", "/etc/service/byond"],
+            )
 
     def test_wayland_is_default_and_configurable_in_compose(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

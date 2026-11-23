@@ -69,7 +69,22 @@ unchanged.
 ## Customize the session
 
 The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
-supervised client can restart. The system tray scales icons with panel height
+supervised client can restart. Each service launch first stops the Wine
+server for its prefix, then terminates and checks for remaining BYOND and
+WebView2 processes owned by the container user. This also covers processes reparented
+after a client exits. Cleanup is serialized, and the launcher refuses to
+start BYOND if it cannot confirm shutdown. Because the process cleanup is
+user-wide rather than prefix-specific, do not run unrelated BYOND or WebView2
+sessions as the same user in the player container.
+
+WebView2 runs multiple browser and renderer processes for BYOND's embedded
+web interfaces; their presence during a session is expected and disabling
+them may break those interfaces. To verify cleanup with a real game, record
+the WebView2 PIDs and memory use, reset repeatedly via the shortcut and
+browser reconnect, and confirm old PIDs disappear while new interfaces work.
+This has not yet been verified in a real gameplay session.
+
+The system tray scales icons with panel height
 and always shows audio volume. Clipboard, Camera Indicator, Disks & Devices,
 Keyboard Layout, Lock Keys Status, Disk Quota, Input Method, Media Player,
 Notifications, Trashcan, and Weather Report are disabled. The digital clock is
