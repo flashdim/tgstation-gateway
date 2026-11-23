@@ -74,28 +74,36 @@ To use the image built locally, set
 player. Open [http://localhost:8000](http://localhost:8000), or set
 `GATEWAY_LANDING_PORT` to choose another host port.
 
-The image includes default test data in `slots.js`. To override it at runtime,
-set `GATEWAY_LANDING_SLOTS` to the absolute path of a JavaScript configuration
-file on the Docker host. Compose mounts that file read-only at `/srv/landing/slots.js`.
-For example:
+The landing server generates `slots.js` from its environment at startup; no
+configuration file is mounted. Compose passes these variables through:
+
+| Variable                 | Default          | Meaning                                                             |
+| ------------------------ | ---------------- | ------------------------------------------------------------------- |
+| `GATEWAY_PLAY_HOST`      | `localhost:8080` | DNS name, with optional port, that serves player sessions           |
+| `GATEWAY_PLAY_SCHEME`    | see below        | `http` or `https`; defaults to `http` for localhost, else `https`   |
+| `GATEWAY_SLOT_COUNT`     | `1`              | Number of slots, 1–99                                               |
+| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`       | Slot accounts are the prefix plus a two-digit number (`LGplayer01`) |
+| `GATEWAY_SLOT_PATH`      | `/`              | URL path per slot; `{account}` and `{number}` are substituted       |
+| `GATEWAY_ACTIVE_SLOTS`   | empty            | Comma-separated accounts shown as active (static test status only)  |
+
+For example, to list two slots at `https://play.lazorgator.party/LGplayer01/`
+and `https://play.lazorgator.party/LGplayer02/`, with the second shown active:
 
 ```sh
-GATEWAY_LANDING_IMAGE=tgstation-gateway-landing:local \
-GATEWAY_LANDING_SLOTS=/etc/tgstation-gateway/slots.js \
+GATEWAY_PLAY_HOST=play.lazorgator.party \
+GATEWAY_SLOT_COUNT=2 \
+GATEWAY_SLOT_PATH='/{account}/' \
+GATEWAY_ACTIVE_SLOTS=LGplayer02 \
 docker compose -f examples/compose.yaml up
 ```
 
-Alternatively, edit `landing/slots.js` before running Compose; this is the
-default mounted configuration. Each entry has an `account` label, a player
-`url` (HTTP(S), absolute or relative to the page), and a boolean `active`.
-For example:
-
-```js
-window.GATEWAY_SLOTS = [
-  { account: "LGplayer01", url: "http://localhost:8080/", active: false },
-  { account: "LGplayer02", url: "http://localhost:8081/", active: true },
-];
-```
+With more than one slot, `GATEWAY_SLOT_PATH` must contain `{account}` or
+`{number}` so each slot has a distinct link. The landing page only builds these
+links; the operator's reverse proxy must route each path (or host) to the
+corresponding player container. The example Compose file runs one player, so
+only a single-slot configuration reaches a working player without additional
+routing. Invalid values stop the landing container at startup with an error
+naming the variable. Startup logs list each generated slot URL.
 
 The operator must create BYOND accounts manually. These labels do not sign in
 to BYOND; the login flow and secure credential provisioning are undecided.

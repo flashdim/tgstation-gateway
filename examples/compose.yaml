@@ -9,8 +9,13 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    volumes:
-      - "${GATEWAY_LANDING_SLOTS:-../landing/slots.js}:/srv/landing/slots.js:ro"
+    environment:
+      GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:-localhost:8080}
+      GATEWAY_PLAY_SCHEME: ${GATEWAY_PLAY_SCHEME:-}
+      GATEWAY_SLOT_COUNT: ${GATEWAY_SLOT_COUNT:-1}
+      GATEWAY_ACCOUNT_PREFIX: ${GATEWAY_ACCOUNT_PREFIX:-LGplayer}
+      GATEWAY_SLOT_PATH: ${GATEWAY_SLOT_PATH:-/}
+      GATEWAY_ACTIVE_SLOTS: ${GATEWAY_ACTIVE_SLOTS:-}
     ports:
       - "127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"
   player:
