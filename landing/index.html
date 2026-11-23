@@ -11,17 +11,32 @@
   </head>
   <body>
     <div class="space" aria-hidden="true">
-      <img class="clown" src="clown.webp" alt="">
-      <img class="space-sprite alien" src="https://github.com/user-attachments/assets/c3955ad9-14d8-4d13-a967-ab7e95af6f03" alt="">
-      <img class="space-sprite operative" src="https://github.com/user-attachments/assets/89ee354c-4b68-4661-944b-0c88a11a8411" alt="">
-      <img class="narsie" src="https://github.com/user-attachments/assets/c84eccc9-775b-4f0a-996d-f62a18193f43" alt="">
+      <img class="narsie" src="narsie.gif" alt="">
     </div>
-    <div class="wizard-layer">
-      <div class="wizard">
-        <button id="wizard-button" type="button" aria-label="Activate wizard">
-          <img src="https://github.com/user-attachments/assets/fd8813b9-0dac-47b9-ab8f-40c0070f6bbc" alt="">
+    <div class="character-layer">
+      <div class="character clown">
+        <button class="character-button" type="button" aria-label="Clown" data-message="*honk*">
+          <img src="clown.webp" alt="">
         </button>
-        <span id="wizard-bubble" class="wizard-bubble" role="status" hidden></span>
+        <span class="speech-bubble" role="status" hidden></span>
+      </div>
+      <div class="character alien">
+        <button class="character-button" type="button" aria-label="Alien" data-message="*hiss*">
+          <img src="alien.png" alt="">
+        </button>
+        <span class="speech-bubble" role="status" hidden></span>
+      </div>
+      <div class="character operative">
+        <button class="character-button" type="button" aria-label="Operator" data-message="Guys? Where are you?">
+          <img src="operative.png" alt="">
+        </button>
+        <span class="speech-bubble" role="status" hidden></span>
+      </div>
+      <div class="character wizard">
+        <button id="wizard-button" class="character-button" type="button" aria-label="Activate wizard" data-message="I CAST REGULAR MISSILE">
+          <img src="wizard.png" alt="">
+        </button>
+        <span id="wizard-bubble" class="speech-bubble" role="status" hidden></span>
       </div>
     </div>
     <main>

@@ -25,21 +25,30 @@ class LandingPageTest(unittest.TestCase):
         self.assertNotIn("CC BY-NC-SA 4.0", html)
         self.assertNotIn("GNU AGPL v3.0", html)
         sources = {
-            "narsie": "c84eccc9-775b-4f0a-996d-f62a18193f43",
-            "alien": "c3955ad9-14d8-4d13-a967-ab7e95af6f03",
-            "operative": "89ee354c-4b68-4661-944b-0c88a11a8411",
-            "wizard": "fd8813b9-0dac-47b9-ab8f-40c0070f6bbc",
+            "narsie": (
+                "narsie.gif",
+                "c84eccc9-775b-4f0a-996d-f62a18193f43",
+            ),
+            "alien": ("alien.png", "c3955ad9-14d8-4d13-a967-ab7e95af6f03"),
+            "operative": (
+                "operative.png",
+                "89ee354c-4b68-4661-944b-0c88a11a8411",
+            ),
+            "wizard": ("wizard.png", "fd8813b9-0dac-47b9-ab8f-40c0070f6bbc"),
         }
-        for name, asset_id in sources.items():
+        for name, (filename, asset_id) in sources.items():
             with self.subTest(sprite=name):
                 self.assertRegex(html, rf'class="[^"]*\b{name}\b')
-                self.assertIn(asset_id, html)
+                self.assertIn(f'src="{filename}"', html)
+                self.assertTrue((LANDING / filename).is_file())
                 self.assertIn(asset_id, attribution)
+        self.assertNotRegex(html, r'src="https://github\.com/user-attachments/')
         self.assertIn("PotatoMasher", attribution)
         self.assertIn("WJohnston", attribution)
         self.assertIn("CC BY-NC-SA 4.0", attribution)
+        self.assertIn("Repository copies:", attribution)
         self.assertIn("Narsie GIF retains its animation", attribution)
-        self.assertIn(".clown, .space-sprite", css)
+        self.assertIn(".character {", css)
         self.assertIn("animation: drift 96s linear infinite", css)
         self.assertIn(".alien { animation-delay: -24s; }", css)
         self.assertIn(".operative { animation-delay: -48s; }", css)
@@ -61,9 +70,9 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn('class="space" aria-hidden="true"', html)
         self.assertIn("@keyframes drift", css)
         self.assertIn("animation: drift 96s linear infinite", css)
-        self.assertIn("translate(calc(100vw - 80px), 20vh) rotate(180deg)", css)
+        self.assertIn("translate(calc(100vw - 80px), 20vh)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
-        self.assertIn(".clown, .space-sprite { animation: none;", css)
+        self.assertIn(".character { animation: none;", css)
 
     def test_compose_runs_localhost_only_landing_image(self):
         compose = (ROOT / "examples/compose.yaml").read_text()
@@ -87,6 +96,7 @@ class LandingPageTest(unittest.TestCase):
     def test_smoke_test_fetches_the_tiled_background_asset(self):
         smoke = (ROOT / "tests/smoke-landing.sh").read_text()
         self.assertIn('curl -fsS "$base/layer1.webp"', smoke)
+        self.assertIn("for asset in clown.webp alien.png operative.png wizard.png narsie.gif;", smoke)
         self.assertIn("Web/P image", smoke)
 
     def test_image_serves_only_page_files_and_attribution(self):
@@ -108,6 +118,10 @@ class LandingPageTest(unittest.TestCase):
                     "landing/wizard.js",
                     "landing/style.css",
                     "landing/clown.webp",
+                    "landing/alien.png",
+                    "landing/operative.png",
+                    "landing/wizard.png",
+                    "landing/narsie.gif",
                     "landing/layer1.webp",
                     "/srv/landing/",
                 ],
@@ -139,6 +153,10 @@ class LandingPageTest(unittest.TestCase):
             "page.js",
             "wizard.js",
             "clown.webp",
+            "alien.png",
+            "operative.png",
+            "wizard.png",
+            "narsie.gif",
             "layer1.webp",
             "ATTRIBUTION.md",
         ):
@@ -146,20 +164,31 @@ class LandingPageTest(unittest.TestCase):
                 self.assertIn(f'"$base/{path}"', smoke)
         self.assertNotRegex(smoke.lower(), r"password|secret|token")
 
-    def test_wizard_bubble_restarts_and_expires(self):
+    def test_character_bubbles_restart_and_expire(self):
         script = """
 const fs = require("fs");
 const vm = require("vm");
 const assert = require("assert");
-let click;
 let nextTimer = 0;
 const timers = new Map();
-const wizard = { addEventListener: (type, cb) => {
-  assert.strictEqual(type, "click"); click = cb;
-}};
-const bubble = { hidden: true, textContent: "" };
+const speakers = ["*honk*", "*hiss*", "Guys? Where are you?", "I CAST REGULAR MISSILE"]
+  .map(message => {
+    const bubble = { hidden: true, textContent: "" };
+    const button = {
+      dataset: { message },
+      nextElementSibling: bubble,
+      addEventListener: (type, callback) => {
+        assert.strictEqual(type, "click");
+        button.click = callback;
+      },
+    };
+    return { button, bubble, message };
+  });
 const context = {
-  document: { getElementById: id => id === "wizard-button" ? wizard : bubble },
+  document: { querySelectorAll: selector => {
+    assert.strictEqual(selector, ".character-button");
+    return speakers.map(speaker => speaker.button);
+  }},
   setTimeout: (callback, delay) => {
     assert.strictEqual(delay, 4000);
     timers.set(++nextTimer, callback);
@@ -168,17 +197,22 @@ const context = {
   clearTimeout: id => timers.delete(id),
 };
 vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
-assert.strictEqual(bubble.hidden, true);
-click();
-assert.strictEqual(bubble.hidden, false);
-assert.strictEqual(bubble.textContent, "I CAST REGULAR MISSILE");
-assert.strictEqual(timers.size, 1);
-click();
-assert.strictEqual(timers.size, 1);
-assert.strictEqual(timers.has(1), false);
-timers.get(2)();
-assert.strictEqual(bubble.hidden, true);
-assert.strictEqual(bubble.textContent, "");
+for (const { button, bubble, message } of speakers) {
+  assert.strictEqual(bubble.hidden, true);
+  button.click();
+  assert.strictEqual(bubble.hidden, false);
+  assert.strictEqual(bubble.textContent, message);
+  assert.strictEqual(timers.size, 1);
+  const firstTimer = nextTimer;
+  button.click();
+  assert.strictEqual(timers.size, 1);
+  assert.strictEqual(timers.has(firstTimer), false);
+  const activeTimer = nextTimer;
+  timers.get(activeTimer)();
+  timers.delete(activeTimer);
+  assert.strictEqual(bubble.hidden, true);
+  assert.strictEqual(bubble.textContent, "");
+}
 """
         subprocess.run(
             ["node", "-e", script, str(LANDING / "wizard.js")],
@@ -189,8 +223,14 @@ assert.strictEqual(bubble.textContent, "");
         )
         html = (LANDING / "index.html").read_text()
         self.assertIn('type="button" aria-label="Activate wizard"', html)
+        self.assertIn('aria-label="Clown" data-message="*honk*"', html)
+        self.assertIn('aria-label="Alien" data-message="*hiss*"', html)
         self.assertIn(
-            'id="wizard-bubble" class="wizard-bubble" role="status" hidden', html
+            'aria-label="Operator" data-message="Guys? Where are you?"', html
+        )
+        self.assertEqual(html.count('class="speech-bubble"'), 3)
+        self.assertIn(
+            'id="wizard-bubble" class="speech-bubble" role="status" hidden', html
         )
 
     def render(self, slots=None, js=None):

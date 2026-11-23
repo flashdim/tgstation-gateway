@@ -21,6 +21,7 @@ the wallpapers, which have their own distinct licenses.
 - **Nuclear Operative** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Generic_nukesyndie.png); [provided image](https://github.com/user-attachments/assets/89ee354c-4b68-4661-944b-0c88a11a8411)
 - **Wizard** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Generic_wizard.png); [provided image](https://github.com/user-attachments/assets/fd8813b9-0dac-47b9-ab8f-40c0070f6bbc)
 - License for all four sprites: **CC BY-NC-SA 4.0** — [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/), as stated for the wiki and its content.
+- Repository copies: `../landing/narsie.gif`, `../landing/alien.png`, `../landing/operative.png`, and `../landing/wizard.png`
 - Modifications: none to the image files; displayed at reduced sizes. The Narsie GIF retains its animation.
 
 ## Landing page space background
