@@ -32,6 +32,11 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("WJohnston", attribution)
         self.assertIn("CC BY-NC-SA 4.0", attribution)
         self.assertIn("Narsie GIF retains its animation", attribution)
+        self.assertIn(".clown, .space-sprite", css)
+        self.assertIn("animation: drift 96s linear infinite", css)
+        self.assertIn(".alien { animation-delay: -24s; }", css)
+        self.assertIn(".operative { animation-delay: -48s; }", css)
+        self.assertIn(".wizard { animation-delay: -72s; }", css)
         self.assertIn("animation: narsie-float 14s ease-in-out", css)
         self.assertIn("bottom: -16px; left: 50%", css)
 
@@ -41,9 +46,10 @@ class LandingPageTest(unittest.TestCase):
         self.assertEqual(html.count('src="clown.webp"'), 1)
         self.assertIn('class="space" aria-hidden="true"', html)
         self.assertIn("@keyframes drift", css)
+        self.assertIn("animation: drift 96s linear infinite", css)
         self.assertIn("translate(calc(100vw - 80px), 20vh) rotate(180deg)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
-        self.assertIn(".clown { animation: none;", css)
+        self.assertIn(".clown, .space-sprite { animation: none;", css)
 
     def test_compose_runs_localhost_only_landing_image(self):
         compose = (ROOT / "examples/compose.yaml").read_text()

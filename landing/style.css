@@ -23,11 +23,12 @@ body {
   background-size: 137px 131px, 211px 179px;
 }
 
-.clown { position: absolute; top: 0; left: 0; width: 70px; image-rendering: pixelated; opacity: .7; animation: drift 48s linear infinite; }
-.space-sprite { position: absolute; width: clamp(52px, 8vw, 100px); height: auto; image-rendering: pixelated; opacity: .8; }
-.alien { left: 4vw; top: 42%; }
-.operative { right: 7vw; top: 64%; }
-.wizard { right: 5vw; top: 20%; }
+.clown, .space-sprite { position: absolute; top: 0; left: 0; image-rendering: pixelated; animation: drift 96s linear infinite; }
+.clown { width: 70px; opacity: .7; }
+.space-sprite { width: clamp(52px, 8vw, 100px); height: auto; opacity: .8; }
+.alien { animation-delay: -24s; }
+.operative { animation-delay: -48s; }
+.wizard { animation-delay: -72s; }
 .narsie { position: absolute; bottom: -16px; left: 50%; width: min(220px, 42vw); height: auto; transform: translateX(-50%); image-rendering: pixelated; opacity: .9; animation: narsie-float 14s ease-in-out infinite alternate; }
 
 @keyframes drift {
@@ -42,7 +43,7 @@ body {
   to { transform: translate(-50%, -10px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .clown { animation: none; transform: translate(8vw, 16vh); }
+  .clown, .space-sprite { animation: none; transform: translate(8vw, 16vh); }
   .narsie { animation: none; }
 }
 
