@@ -23,7 +23,10 @@ docker compose -f examples/compose.yaml pull
 docker compose -f examples/compose.yaml up
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The default setup opens the BYOND pager; sign in and choose a server. If the image is not available from GHCR yet, build it locally as described below.
+Open [http://localhost:8080](http://localhost:8080) for the player or
+[http://localhost:8000](http://localhost:8000) for the test session landing page.
+The player default setup opens the BYOND pager; sign in and choose a server.
+If the image is not available from GHCR yet, build it locally as described below.
 
 The image uses Selkies' EGL KDE Plasma desktop with KWin on Wayland by
 default. Set `SELKIES_WAYLAND=false` when running Compose to compare with
@@ -55,14 +58,10 @@ container uses the host's date, time and timezone. Set `TZ` (for example
 
 ## Test landing page
 
-The optional static landing page is separate from the player image. With the
-player running as above, serve it locally:
-
-```sh
-python3 -m http.server 8000 --bind 127.0.0.1 --directory landing
-```
-
-Open [http://localhost:8000](http://localhost:8000). Edit `landing/slots.js`
+The optional static landing page runs as a separate localhost-only Compose
+service. `docker compose -f examples/compose.yaml up` starts it with the player.
+Open [http://localhost:8000](http://localhost:8000), or set
+`GATEWAY_LANDING_PORT` to choose another host port. Edit `landing/slots.js`
 to configure the test slots: each entry has an `account` label, a player
 `url` (HTTP(S), absolute or relative to the page), and a boolean `active`.
 For example:

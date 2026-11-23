@@ -9,6 +9,15 @@ LANDING = ROOT / "landing"
 
 
 class LandingPageTest(unittest.TestCase):
+    def test_compose_runs_localhost_only_landing_service(self):
+        compose = (ROOT / "examples/compose.yaml").read_text()
+        self.assertIn("  landing:\n", compose)
+        self.assertIn("python:3.12-alpine", compose)
+        self.assertIn("../landing:/srv/landing:ro", compose)
+        self.assertIn(
+            '"127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"', compose
+        )
+
     def render(self, slots=None, default=False):
         script = """
 const fs = require("fs");
