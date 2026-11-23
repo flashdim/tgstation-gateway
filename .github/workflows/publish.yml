@@ -9,9 +9,9 @@ permissions:
   packages: write
 
 jobs:
-  publish:
+  unit-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - name: Check out release tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -22,21 +22,22 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
 
+  player-image:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+          persist-credentials: false
+
       - name: Generate image metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository }}
-          flavor: latest=false
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
-
-      - name: Generate landing image metadata
-        id: landing-meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ghcr.io/${{ github.repository }}-landing
           flavor: latest=false
           tags: |
             type=ref,event=tag
@@ -95,19 +96,6 @@ jobs:
             -v "$PWD/tests/check-wine-runtime.sh:/tmp/check-wine-runtime.sh:ro" \
             tgstation-gateway-player:release /tmp/check-wine-runtime.sh
 
-      - name: Build release landing image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: landing/Dockerfile
-          platforms: linux/amd64
-          load: true
-          tags: tgstation-gateway-landing:release
-          labels: ${{ steps.landing-meta.outputs.labels }}
-
-      - name: Smoke-test release landing image
-        run: bash tests/smoke-landing.sh tgstation-gateway-landing:release
-
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -129,6 +117,50 @@ jobs:
             docker tag tgstation-gateway-player:release "$tag"
             docker push "$tag"
           done <<< "$IMAGE_TAGS"
+
+  landing-image:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Generate landing image metadata
+        id: landing-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/${{ github.repository }}-landing
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build release landing image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: landing/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: tgstation-gateway-landing:release
+          labels: ${{ steps.landing-meta.outputs.labels }}
+
+      - name: Smoke-test release landing image
+        run: bash tests/smoke-landing.sh tgstation-gateway-landing:release
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish tested landing image
         env:

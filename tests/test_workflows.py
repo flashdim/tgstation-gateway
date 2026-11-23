@@ -10,6 +10,14 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def workflow_jobs(filename):
+    workflow = (ROOT / ".github/workflows" / filename).read_text()
+    workflow = workflow[workflow.index("\njobs:\n") :]
+    return dict(
+        re.findall(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:|\Z)", workflow, re.M | re.S)
+    )
+
+
 class WorkflowTest(unittest.TestCase):
     def test_ci_and_release_build_local_player_images(self):
         for filename, tag in (("ci.yml", "ci"), ("publish.yml", "release")):
@@ -34,11 +42,8 @@ class WorkflowTest(unittest.TestCase):
                     )
 
     def test_ci_unit_tests_and_image_run_independently_after_formatting(self):
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        jobs = dict(
-            re.findall(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:|\Z)", workflow, re.M | re.S)
-        )
-        for job in ("unit-tests", "image"):
+        jobs = workflow_jobs("ci.yml")
+        for job in ("unit-tests", "image", "landing-image"):
             with self.subTest(job=job):
                 self.assertEqual(
                     re.findall(r"^    needs: (.+)$", jobs[job], re.M), ["formatting"]
@@ -46,6 +51,29 @@ class WorkflowTest(unittest.TestCase):
         command = "python3 -m unittest discover -s tests -v"
         self.assertIn(command, jobs["unit-tests"])
         self.assertNotIn(command, jobs["image"])
+        self.assertNotIn(command, jobs["landing-image"])
+
+    def test_landing_and_player_images_build_in_separate_jobs(self):
+        for filename, player, tag in (
+            ("ci.yml", "image", "ci"),
+            ("publish.yml", "player-image", "release"),
+        ):
+            jobs = workflow_jobs(filename)
+            with self.subTest(workflow=filename):
+                landing = jobs["landing-image"]
+                self.assertIn("landing/Dockerfile", landing)
+                self.assertIn(
+                    f"tests/smoke-landing.sh tgstation-gateway-landing:{tag}", landing
+                )
+                self.assertNotIn("landing/Dockerfile", jobs[player])
+                self.assertNotIn("tgstation-gateway-landing", jobs[player])
+                self.assertNotIn("wine", landing.lower())
+                self.assertNotIn("tgstation-gateway-player", landing)
+                self.assertIn(f"tgstation-gateway-player:{tag}", jobs[player])
+                needs = re.findall(r"^    needs: (.+)$", landing, re.M)
+                self.assertEqual(
+                    needs, re.findall(r"^    needs: (.+)$", jobs[player], re.M)
+                )
 
     def test_ci_publishes_dev_image_before_container_validation(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
@@ -100,7 +128,18 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn('docker tag tgstation-gateway-landing:ci "$IMAGE"', publish_step)
 
     def test_release_smoke_tests_landing_image_before_publishing(self):
-        workflow = (ROOT / ".github/workflows/publish.yml").read_text()
+        jobs = workflow_jobs("publish.yml")
+        self.assertEqual(set(jobs), {"unit-tests", "player-image", "landing-image"})
+        self.assertIn("python3 -m unittest discover -s tests -v", jobs["unit-tests"])
+        for job in ("player-image", "landing-image"):
+            with self.subTest(job=job):
+                self.assertIn(
+                    "ref: refs/tags/${{ github.event.release.tag_name }}", jobs[job]
+                )
+                self.assertEqual(
+                    re.findall(r"^    needs: (.+)$", jobs[job], re.M), ["unit-tests"]
+                )
+        workflow = jobs["landing-image"]
         self.assertIn("images: ghcr.io/${{ github.repository }}-landing", workflow)
         self.assertIn("tags: tgstation-gateway-landing:release", workflow)
         self.assertIn("labels: ${{ steps.landing-meta.outputs.labels }}", workflow)
@@ -113,10 +152,6 @@ class WorkflowTest(unittest.TestCase):
         self.assertLess(smoke, login)
         self.assertLess(
             login, workflow.index("docker tag tgstation-gateway-landing:release")
-        )
-        self.assertLess(
-            workflow.index("docker tag tgstation-gateway-player:release"),
-            workflow.index("docker tag tgstation-gateway-landing:release"),
         )
 
     def test_cached_prefix_requires_selected_runtime(self):

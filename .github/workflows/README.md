@@ -8,9 +8,17 @@ CI publishes `dev` for main and `dev-pr<number>` for pull requests from this
 repository immediately after the build, before Compose validation, smoke tests,
 and runtime checks. These tags may therefore point to images that fail
 validation.
-The same development tags are published for the separate
-`ghcr.io/<owner>/<repository>-landing` image. `publish.yml` tests and
-smoke-tests the player image and landing image before publishing either release.
+The player image (`image` job) and the landing image (`landing-image` job) are
+built, published and tested in separate jobs that run in parallel after
+formatting; a failure in one does not cancel the other. Compose validation runs
+in the player job. The same development tags are published for the separate
+`ghcr.io/<owner>/<repository>-landing` image.
+`publish.yml` runs unit tests first, then builds, smoke-tests and publishes the
+player image (`player-image`) and landing image (`landing-image`) in parallel
+jobs. Each image is published only after its own checks pass, but neither job
+waits for the other: if one fails, the other image may already be published for
+that release. Re-run the failed job for transient failures; otherwise fix the
+cause in a new release.
 The landing image is smoke-tested by generating slots from `GATEWAY_PLAY_HOST`
 and related environment variables, checking the generated links, rejecting an
 invalid host, and checking that it serves the page files and attribution.
