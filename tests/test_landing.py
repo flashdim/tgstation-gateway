@@ -28,7 +28,9 @@ class LandingPageTest(unittest.TestCase):
 
     def test_image_serves_only_page_files_and_attribution(self):
         dockerfile = (LANDING / "Dockerfile").read_text()
-        self.assertRegex(dockerfile, r"(?m)^FROM python:3\.12-alpine@sha256:[0-9a-f]{64}$")
+        self.assertRegex(
+            dockerfile, r"(?m)^FROM python:3\.12-alpine@sha256:[0-9a-f]{64}$"
+        )
         copies = [
             line.split()[1:]
             for line in dockerfile.splitlines()
