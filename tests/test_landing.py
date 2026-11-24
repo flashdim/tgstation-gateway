@@ -6,8 +6,7 @@ import sys
 import threading
 import unittest
 from unittest import mock
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +17,9 @@ import server  # noqa: E402
 
 
 class LandingPageTest(unittest.TestCase):
-    def test_static_page_and_slots_work_without_status_endpoints(self):
+    def test_static_page_and_slots_include_unavailable_status_without_configuration(
+        self,
+    ):
         slots = server.render_slots(
             server.build_slots(
                 {
@@ -38,21 +39,18 @@ class LandingPageTest(unittest.TestCase):
             thread.start()
             base = f"http://127.0.0.1:{httpd.server_port}"
             try:
-                for path in ("status.json", "status.json?refresh=1", "status.js"):
-                    for method in ("GET", "HEAD"):
-                        with self.subTest(path=path, method=method):
-                            with self.assertRaises(HTTPError) as error:
-                                urlopen(
-                                    Request(f"{base}/{path}", method=method), timeout=5
-                                )
-                            self.assertEqual(error.exception.code, 404)
-                            error.exception.close()
+                with urlopen(f"{base}/status.json", timeout=5) as response:
+                    self.assertEqual(json.loads(response.read()), {"online": None})
+                    self.assertEqual(response.headers["Cache-Control"], "no-store")
+                with urlopen(f"{base}/status.js", timeout=5) as response:
+                    self.assertIn(b"status.json", response.read())
                 with urlopen(f"{base}/slots.js", timeout=5) as response:
                     self.assertEqual(response.read(), slots)
                     self.assertEqual(response.headers["Cache-Control"], "no-store")
                 for path in (
                     "index.html",
                     "page.js",
+                    "status.js",
                     "wizard.js",
                     "narsie.js",
                     "style.css",
@@ -69,8 +67,8 @@ class LandingPageTest(unittest.TestCase):
                 httpd.shutdown()
                 thread.join(timeout=5)
         html = (LANDING / "index.html").read_text()
-        self.assertNotIn("status.js", html)
-        self.assertNotIn("server-status", html)
+        self.assertIn('src="status.js"', html)
+        self.assertIn('class="server-status"', html)
 
     def test_wiki_sprites_are_attributed_and_displayed(self):
         html = (LANDING / "index.html").read_text()
@@ -213,6 +211,98 @@ class LandingPageTest(unittest.TestCase):
         )
         self.assertIn("Web/P image", smoke)
 
+    def test_query_configuration_is_separate_from_play_host(self):
+        self.assertIsNone(server.query_config({}))
+        self.assertEqual(
+            server.query_config(
+                {
+                    "GATEWAY_QUERY_HOST": "game.example.test",
+                    "GATEWAY_QUERY_PORT": "1337",
+                    "GATEWAY_PLAY_HOST": "play.example.test",
+                }
+            ),
+            ("game.example.test", 1337),
+        )
+        for env in (
+            {"GATEWAY_QUERY_HOST": "game.example"},
+            {"GATEWAY_QUERY_PORT": "1337"},
+            {"GATEWAY_QUERY_HOST": "game.example:1337", "GATEWAY_QUERY_PORT": "1"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "0"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "65536"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "-1"},
+        ):
+            with self.subTest(env=env), self.assertRaises(server.ConfigError):
+                server.query_config(env)
+
+    def test_game_status_maps_only_public_fields(self):
+        response = {
+            "map_name": "MetaStation",
+            "players": 12,
+            "round_duration": 3661,
+            "gamestate": 3,
+            "popcap": 100,
+            "host": "private",
+        }
+        with mock.patch.object(
+            server.subprocess,
+            "run",
+            return_value=mock.Mock(stdout=json.dumps(response).encode()),
+        ) as run:
+            self.assertEqual(
+                server.fetch_status("game.example", 1337),
+                {
+                    "online": True,
+                    "map": "MetaStation",
+                    "round_seconds": 3661,
+                    "players": 12,
+                    "popcap": 100,
+                },
+            )
+        run.assert_called_once_with(
+            ["byond-wire", "game.example", "1337", "?status&format=json"],
+            capture_output=True,
+            check=True,
+            timeout=7,
+        )
+
+    def test_game_status_rejects_invalid_values_and_maps_lobby(self):
+        response = {
+            "map_name": "Loading...",
+            "players": 0,
+            "round_duration": 0,
+            "gamestate": 1,
+        }
+        with mock.patch.object(server.subprocess, "run") as run:
+            run.return_value.stdout = json.dumps(response).encode()
+            status = server.fetch_status("game.example", 1337)
+            self.assertIsNone(status["round_seconds"])
+            self.assertIsNone(status["popcap"])
+            for value in (
+                {**response, "players": -1},
+                {**response, "players": True},
+                {**response, "gamestate": True},
+                {**response, "round_duration": -1},
+                {**response, "popcap": True},
+            ):
+                with self.subTest(value=value):
+                    run.return_value.stdout = json.dumps(value).encode()
+                    with self.assertRaises(ValueError):
+                        server.fetch_status("game.example", 1337)
+            for invalid in (b"3", b"{broken", b"[]"):
+                with self.subTest(invalid=invalid):
+                    run.return_value.stdout = invalid
+                    with self.assertRaises((ValueError, json.JSONDecodeError)):
+                        server.fetch_status("game.example", 1337)
+
+    def test_status_monitor_never_serves_stale_data(self):
+        monitor = server.StatusMonitor(("example", 1337))
+        monitor.value = {"online": True}
+        with mock.patch.object(server.time, "monotonic", return_value=100):
+            monitor.updated = 99
+            self.assertEqual(monitor.snapshot(), {"online": True})
+            monitor.updated = 1
+            self.assertEqual(monitor.snapshot(), {"online": None})
+
     def test_image_serves_only_page_files_and_attribution(self):
         dockerfile = (LANDING / "Dockerfile").read_text()
         self.assertRegex(
@@ -226,9 +316,11 @@ class LandingPageTest(unittest.TestCase):
         self.assertEqual(
             copies,
             [
+                ["landing/requirements.txt", "/opt/landing/requirements.txt"],
                 [
                     "landing/index.html",
                     "landing/page.js",
+                    "landing/status.js",
                     "landing/wizard.js",
                     "landing/narsie.js",
                     "landing/style.css",
@@ -250,10 +342,11 @@ class LandingPageTest(unittest.TestCase):
         served = {path.name for path in LANDING.iterdir() if path.suffix != ".pyc"} - {
             "Dockerfile",
             "server.py",
+            "requirements.txt",
             "__pycache__",
             "assets",
         }
-        self.assertEqual(served, {Path(path).name for path in copies[0][:-1]})
+        self.assertEqual(served, {Path(path).name for path in copies[1][:-1]})
         self.assertEqual(
             {path.name for path in (LANDING / "assets/sprites").iterdir()},
             {

@@ -76,14 +76,35 @@ page with the player; without `--profile landing` it is not started. Open [http:
 The landing server generates `slots.js` from its environment at startup; no
 configuration file is mounted. Compose passes these variables through:
 
-| Variable                 | Default                           | Meaning                                                             |
-| ------------------------ | --------------------------------- | ------------------------------------------------------------------- |
-| `GATEWAY_PLAY_HOST`      | `localhost:${GATEWAY_PORT:-8080}` | DNS name, with optional port, that serves player sessions           |
-| `GATEWAY_PLAY_SCHEME`    | see below                         | `http` or `https`; defaults to `http` for localhost, else `https`   |
-| `GATEWAY_SLOT_COUNT`     | `1`                               | Number of slots, 1–99                                               |
-| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`                        | Slot accounts are the prefix plus a two-digit number (`LGplayer01`) |
-| `GATEWAY_SLOT_PATH`      | `/`                               | URL path per slot; `{account}` and `{number}` are substituted       |
-| `GATEWAY_ACTIVE_SLOTS`   | empty                             | Comma-separated accounts shown as active (static test status only)  |
+| Variable                 | Default                           | Meaning                                                                |
+| ------------------------ | --------------------------------- | ---------------------------------------------------------------------- |
+| `GATEWAY_PLAY_HOST`      | `localhost:${GATEWAY_PORT:-8080}` | DNS name, with optional port, that serves player sessions              |
+| `GATEWAY_PLAY_SCHEME`    | see below                         | `http` or `https`; defaults to `http` for localhost, else `https`      |
+| `GATEWAY_SLOT_COUNT`     | `1`                               | Number of slots, 1–99                                                  |
+| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`                        | Slot accounts are the prefix plus a two-digit number (`LGplayer01`)    |
+| `GATEWAY_SLOT_PATH`      | `/`                               | URL path per slot; `{account}` and `{number}` are substituted          |
+| `GATEWAY_ACTIVE_SLOTS`   | empty                             | Comma-separated accounts shown as active (static test status only)     |
+| `GATEWAY_QUERY_HOST`     | empty                             | Game server DNS name or IPv4 address, as seen by the landing container |
+| `GATEWAY_QUERY_PORT`     | empty                             | Game server BYOND port, 1–65535                                        |
+
+Set both query variables to enable the game status panel. These identify the
+DreamDaemon game server, not the player-streaming host in `GATEWAY_PLAY_HOST`
+or the TGS API. For example, set `GATEWAY_QUERY_HOST=game.example.org` and
+`GATEWAY_QUERY_PORT=1337` in the Compose environment. The landing container
+must be able to reach that host and TCP port. `localhost` refers to the landing
+container itself, not the Docker host. Leave both empty to disable querying.
+
+The panel polls the tgstation `?status` World Topic using the MIT-licensed
+`byond-wire` 0.1.2 client, whose wheel and hash are pinned. The query
+does not need BYOND or TGS credentials. A valid response shows the map,
+connected clients, round time, and the reported `popcap` (∞ if zero, `?` if
+absent).
+The cap is tgstation's maximum of its configured soft, hard, and extreme
+thresholds, not necessarily a strict connection limit. Time is unavailable
+before the round starts. Errors, invalid replies and stale data show
+**unavailable**, not offline. A successful response proves only that the
+status query answered, not that joining or gameplay works. Compatibility with
+the operator's actual game build remains to be verified.
 
 For example, to list two slots at `https://play.lazorgator.party/LGplayer01/`
 and `https://play.lazorgator.party/LGplayer02/`, with the second shown active:

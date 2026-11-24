@@ -36,9 +36,11 @@ for _ in $(seq 1 30); do
 done
 
 grep -q 'src="slots.js"' "$workdir/index.html"
-for path in status.json status.js; do
-    test "$(curl -sS -o /dev/null -w '%{http_code}' "$base/$path")" = 404
-done
+curl -fsS "$base/status.json" -o "$workdir/status.json"
+grep -q '"online": null' "$workdir/status.json"
+curl -fsS "$base/status.js" -o "$workdir/status.js"
+grep -q 'status.json' "$workdir/status.js"
+grep -q 'server-status' "$workdir/index.html"
 curl -fsS "$base/slots.js" -o "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer01/"' "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer02/"' "$workdir/slots.js"

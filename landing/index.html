@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script defer src="slots.js"></script>
     <script defer src="page.js"></script>
+    <script defer src="status.js"></script>
     <script defer src="wizard.js"></script>
     <script defer src="narsie.js"></script>
   </head>
@@ -49,6 +50,14 @@
     <main>
       <header>
         <img class="landing-banner" src="assets/banners/alert.svg" alt="LazorGator Party 13">
+        <section class="server-status" aria-label="Game server status">
+          <div class="status-heading">SERVER STATUS <span id="server-online" data-state="unavailable" role="status" aria-live="polite" aria-atomic="true">UNAVAILABLE</span></div>
+          <dl>
+            <div><dt>MAP</dt><dd id="server-map">--</dd></div>
+            <div><dt>ROUND</dt><dd id="server-round">--:--:--</dd></div>
+            <div><dt>PLAYERS / CAP</dt><dd id="server-players">-- / --</dd></div>
+          </dl>
+        </section>
         <h1>Choose a session</h1>
         <p>Pick an available slot or watch an active session.</p>
       </header>
