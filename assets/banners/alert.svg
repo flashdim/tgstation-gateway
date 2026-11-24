@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title description">
+  <title id="title">LazorGator Party 13 — Station Alert</title>
+  <desc id="description">A yellow and coral warning console with a ridged gator firing red eye lasers.</desc>
+  <defs>
+    <pattern id="stripes" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-35)">
+      <rect width="40" height="40" fill="#eeb754"/>
+      <rect width="18" height="40" fill="#1c2432"/>
+    </pattern>
+    <linearGradient id="panel" x2="1" y2="1">
+      <stop stop-color="#292e3b"/>
+      <stop offset="1" stop-color="#101622"/>
+    </linearGradient>
+    <filter id="laser-glow" x="-10%" y="-100%" width="120%" height="300%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+  </defs>
+  <path d="M32 6H1168L1194 32V268L1168 294H32L6 268V32Z" fill="url(#panel)" stroke="#d99d48" stroke-width="6"/>
+  <path d="M34 14H1166L1184 32V48H16V32Z" fill="url(#stripes)"/>
+  <path d="M16 252H1184V268L1166 286H34L16 268Z" fill="url(#stripes)"/>
+  <path d="M42 77H248L267 96V207L248 225H42Z" fill="#131b27" stroke="#e8b65c" stroke-width="3"/>
+  <circle cx="146" cy="151" r="66" fill="#273c3b" stroke="#8cc8a8" stroke-width="4"/>
+  <path d="M163 130 1180 103M180 130 1180 156" fill="none" stroke="#ff263e" stroke-width="13" opacity=".8" filter="url(#laser-glow)"/>
+  <path d="M163 130 1180 103M180 130 1180 156" fill="none" stroke="#ff3445" stroke-width="3"/>
+  <path d="M163 130 1180 103M180 130 1180 156" fill="none" stroke="#ffe0dc" stroke-width="1"/>
+  <path d="M91 166 105 156 112 143 122 140 122 128Q122 119 132 119H158L169 126H196Q208 126 215 136L233 143 222 151H208L202 163 190 169H119L109 175H98Z" fill="#91d29d" stroke="#b6e8aa" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M123 127 127 117 133 124 138 114 144 123 150 114 156 124 162 118 166 128Z" fill="#67b986" stroke="#b6e8aa" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M130 143H215L224 148 213 153H130Z" fill="#203b38"/>
+  <path d="M139 143v6l5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6" fill="none" stroke="#f8f2d5" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M140 153l5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6" fill="none" stroke="#f8f2d5" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="163" cy="130" r="5" fill="#fff1d2" stroke="#375847" stroke-width="2"/>
+  <circle cx="180" cy="130" r="5" fill="#fff1d2" stroke="#375847" stroke-width="2"/>
+  <circle cx="163" cy="130" r="2.5" fill="#ff263e"/>
+  <circle cx="180" cy="130" r="2.5" fill="#ff263e"/>
+  <path d="M103 153 94 151M110 158 97 160M207 120 213 115M217 127 225 121" fill="none" stroke="#91d29d" stroke-width="3" stroke-linecap="round"/>
+  <text x="305" y="96" fill="#f1bc64" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="6">STATIONWIDE ANNOUNCEMENT</text>
+  <text x="300" y="163" fill="#fff3d3" font-family="Arial, sans-serif" font-size="63" font-weight="900" letter-spacing="1">LAZORGATOR</text>
+  <text x="304" y="217" fill="#ff8678" font-family="Arial, sans-serif" font-size="47" font-weight="900" letter-spacing="10">PARTY 13</text>
+  <g fill="#f7bf62"><circle cx="1091" cy="90" r="7"/><circle cx="1120" cy="90" r="7"/><circle cx="1149" cy="90" r="7"/></g>
+  <path d="M1056 194h96M1056 207h96M1056 220h61" stroke="#ad6b57" stroke-width="5" stroke-linecap="round"/>
+</svg>

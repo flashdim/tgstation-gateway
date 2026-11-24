@@ -23,7 +23,9 @@ docker compose -f examples/compose.yaml pull
 docker compose -f examples/compose.yaml up
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The default setup opens the BYOND pager; sign in and choose a server. If the image is not available from GHCR yet, build it locally as described below.
+Open [http://localhost:8080](http://localhost:8080) for the player.
+The default setup opens the BYOND pager; sign in and choose a server.
+If the image is not available from GHCR yet, build it locally as described below.
 
 The image uses Selkies' EGL KDE Plasma desktop with KWin on Wayland by
 default. Set `SELKIES_WAYLAND=false` when running Compose to compare with
@@ -52,6 +54,76 @@ The Compose example mounts the host's `/etc/localtime` read-only so the
 container uses the host's date, time and timezone. Set `TZ` (for example
 `TZ=Europe/Berlin`) to override the timezone. On hosts without
 `/etc/localtime`, remove that volume and set `TZ`.
+
+## Test landing page
+
+The optional static landing page runs as a separate localhost-only Compose
+service. Build the image locally from the repository root:
+
+```sh
+docker build -f landing/Dockerfile -t tgstation-gateway-landing:local .
+```
+
+Compose defaults to `ghcr.io/flashdim/tgstation-gateway-landing:latest`.
+Before the first release, or to try the latest CI build, select the development
+image with `GATEWAY_LANDING_IMAGE=ghcr.io/flashdim/tgstation-gateway-landing:dev`.
+To use the image built locally, set
+`GATEWAY_LANDING_IMAGE=tgstation-gateway-landing:local`. Then
+`docker compose -f examples/compose.yaml --profile landing up` starts the landing
+page with the player; without `--profile landing` it is not started. Open [http://localhost:8000](http://localhost:8000), or set
+`GATEWAY_LANDING_PORT` to choose another host port.
+
+The landing server generates `slots.js` from its environment at startup; no
+configuration file is mounted. Compose passes these variables through:
+
+| Variable                 | Default                           | Meaning                                                             |
+| ------------------------ | --------------------------------- | ------------------------------------------------------------------- |
+| `GATEWAY_PLAY_HOST`      | `localhost:${GATEWAY_PORT:-8080}` | DNS name, with optional port, that serves player sessions           |
+| `GATEWAY_PLAY_SCHEME`    | see below                         | `http` or `https`; defaults to `http` for localhost, else `https`   |
+| `GATEWAY_SLOT_COUNT`     | `1`                               | Number of slots, 1–99                                               |
+| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`                        | Slot accounts are the prefix plus a two-digit number (`LGplayer01`) |
+| `GATEWAY_SLOT_PATH`      | `/`                               | URL path per slot; `{account}` and `{number}` are substituted       |
+| `GATEWAY_ACTIVE_SLOTS`   | empty                             | Comma-separated accounts shown as active (static test status only)  |
+
+For example, to list two slots at `https://play.lazorgator.party/LGplayer01/`
+and `https://play.lazorgator.party/LGplayer02/`, with the second shown active:
+
+```sh
+GATEWAY_PLAY_HOST=play.lazorgator.party \
+GATEWAY_SLOT_COUNT=2 \
+GATEWAY_SLOT_PATH='/{account}/' \
+GATEWAY_ACTIVE_SLOTS=LGplayer02 \
+docker compose -f examples/compose.yaml --profile landing up
+```
+
+With more than one slot, `GATEWAY_SLOT_PATH` must contain `{account}` or
+`{number}` so each slot has a distinct link; `.` and `..` path segments are rejected. The landing page only builds these
+links; the operator's reverse proxy must route each path (or host) to the
+corresponding player container. The example Compose file runs one player, so
+only a single-slot configuration reaches a working player without additional
+routing. Invalid values stop the landing container at startup with an error
+naming the variable. Startup logs list each generated slot URL.
+
+The operator must create BYOND accounts manually. These labels do not sign in
+to BYOND; the login flow and secure credential provisioning are undecided.
+Never put passwords or other secrets in this public configuration or URLs.
+The inactive link opens its configured URL; the active watch link replaces any
+existing fragment with `#shared`, preserving the path and query.
+
+Status is static test data: no containers are created, monitored, or isolated
+by the page. It does not authenticate users or enforce ownership. `#shared` is
+not an authorization boundary, and anyone with access to a player URL may
+attempt to use it directly. Intended watching by authenticated users and
+controller reconnection require trusted identity, ownership and routing
+integration ([#48](https://github.com/flashdim/tgstation-gateway/issues/48))
+and future session-manager work. Protect both the page and player endpoints
+with operator-managed access controls and secure connections; do not expose
+the local test server or player stream directly to the internet. See
+`assets/ATTRIBUTION.md` for artwork sources and licenses.
+The landing image publishes `dev` for main-branch CI builds and `dev-pr<number>`
+for same-repository pull requests. Releases publish a version tag matching the
+release and `latest` for non-prereleases. CI development tags are pushed before
+image validation and may refer to a build that later fails validation.
 
 ## Connect directly to a server
 

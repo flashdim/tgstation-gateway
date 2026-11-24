@@ -8,7 +8,32 @@ CI publishes `dev` for main and `dev-pr<number>` for pull requests from this
 repository immediately after the build, before Compose validation, smoke tests,
 and runtime checks. These tags may therefore point to images that fail
 validation.
-`publish.yml` tests and smoke-tests a release image before publishing it.
+The player image (`image` job) and the landing image (`landing-image` job) are
+built, published and tested in separate jobs that run in parallel after
+formatting; a failure in one does not cancel the other. Compose validation runs
+in the player job. The same development tags are published for the separate
+`ghcr.io/<owner>/<repository>-landing` image.
+`publish.yml` runs unit tests first, then builds, smoke-tests and publishes the
+player image (`player-image`) and landing image (`landing-image`) in parallel
+jobs. Each image is published only after its own checks pass, but neither job
+waits for the other: if one fails, the other image may already be published for
+that release. Re-run the failed job for transient failures; otherwise fix the
+cause in a new release.
+The landing image is smoke-tested by generating slots from `GATEWAY_PLAY_HOST`
+and related environment variables, checking the generated links, rejecting an
+invalid host, and checking that it serves the page files and attribution.
+Release tags match the GitHub release tag; stable releases also update `latest`,
+while prereleases do not. For a local landing build, run
+`docker build -f landing/Dockerfile -t tgstation-gateway-landing:local .` from
+the repository root. Set `GATEWAY_LANDING_IMAGE` to select this local image or
+the published `dev` image in the Compose example. See the main README for the
+landing environment variables.
+
+The landing page uses static test status only; it does not authenticate users,
+create or isolate sessions, or enforce ownership. `#shared` is not an
+authorization boundary. Operators must provide external access controls and
+secure connections; live session status, trusted ownership and credential
+provisioning remain future integration work.
 
 ## Build caches
 

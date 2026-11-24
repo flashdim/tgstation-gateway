@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LazorGator Party</title>
+    <link rel="stylesheet" href="style.css">
+    <script defer src="slots.js"></script>
+    <script defer src="page.js"></script>
+    <script defer src="wizard.js"></script>
+  </head>
+  <body>
+    <div class="space" aria-hidden="true">
+      <img class="narsie" src="narsie.gif" alt="">
+    </div>
+    <div class="character-layer">
+      <div class="character clown">
+        <button class="character-button" type="button" aria-label="Clown" data-message="*honk*">
+          <img src="clown.webp" alt="">
+        </button>
+        <span class="speech-bubble" role="status" hidden></span>
+      </div>
+      <div class="character alien">
+        <button class="character-button" type="button" aria-label="Alien" data-message="*hiss*">
+          <img src="alien.png" alt="">
+        </button>
+        <span class="speech-bubble" role="status" hidden></span>
+      </div>
+      <div class="character operative">
+        <button class="character-button" type="button" aria-label="Operator" data-message="Guys? Where are you?">
+          <img src="operative.png" alt="">
+        </button>
+        <span class="speech-bubble" role="status" hidden></span>
+      </div>
+      <div class="character wizard">
+        <button id="wizard-button" class="character-button" type="button" aria-label="Activate wizard" data-message="I CAST REGULAR MISSILE">
+          <img src="wizard.png" alt="">
+        </button>
+        <span id="wizard-bubble" class="speech-bubble" role="status" hidden></span>
+      </div>
+    </div>
+    <main>
+      <header>
+        <img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">
+        <h1>Choose a session</h1>
+        <p>Pick an available slot or watch an active session.</p>
+      </header>
+      <section aria-label="Player slots">
+        <div id="slots" class="slots"></div>
+        <p id="config-error" class="notice" hidden></p>
+        <noscript><p class="notice">JavaScript is required to display configured slots.</p></noscript>
+      </section>
+      <footer>
+        <p>Test configuration only. Status is not live and access is not enforced by this page.</p>
+        <p><a href="ATTRIBUTION.md">Artwork attributions and licenses</a>.</p>
+      </footer>
+    </main>
+  </body>
+</html>

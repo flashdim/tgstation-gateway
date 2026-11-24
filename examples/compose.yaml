@@ -1,6 +1,25 @@
 name: tgstation-gateway
 
 services:
+  landing:
+    profiles:
+      - landing
+    image: ${GATEWAY_LANDING_IMAGE:-ghcr.io/flashdim/tgstation-gateway-landing:latest}
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:-localhost:${GATEWAY_PORT:-8080}}
+      GATEWAY_PLAY_SCHEME: ${GATEWAY_PLAY_SCHEME:-}
+      GATEWAY_SLOT_COUNT: ${GATEWAY_SLOT_COUNT:-1}
+      GATEWAY_ACCOUNT_PREFIX: ${GATEWAY_ACCOUNT_PREFIX:-LGplayer}
+      GATEWAY_SLOT_PATH: ${GATEWAY_SLOT_PATH:-/}
+      GATEWAY_ACTIVE_SLOTS: ${GATEWAY_ACTIVE_SLOTS:-}
+    ports:
+      - "127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"
   player:
     image: ${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}
     platform: linux/amd64

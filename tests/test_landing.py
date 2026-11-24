@@ -1,0 +1,436 @@
+import json
+from pathlib import Path
+import subprocess
+import sys
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+LANDING = ROOT / "landing"
+sys.path.insert(0, str(LANDING))
+
+import server  # noqa: E402
+
+
+class LandingPageTest(unittest.TestCase):
+    def test_wiki_sprites_are_attributed_and_displayed(self):
+        html = (LANDING / "index.html").read_text()
+        css = (LANDING / "style.css").read_text()
+        attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
+        self.assertIn('href="ATTRIBUTION.md"', html)
+        self.assertNotIn("PotatoMasher", html)
+        self.assertNotIn("WJohnston", html)
+        self.assertNotIn("scriptis", html)
+        self.assertNotIn("CC BY-SA 3.0", html)
+        self.assertNotIn("CC BY-NC-SA 4.0", html)
+        self.assertNotIn("GNU AGPL v3.0", html)
+        sources = {
+            "narsie": (
+                "narsie.gif",
+                "c84eccc9-775b-4f0a-996d-f62a18193f43",
+            ),
+            "alien": ("alien.png", "c3955ad9-14d8-4d13-a967-ab7e95af6f03"),
+            "operative": (
+                "operative.png",
+                "89ee354c-4b68-4661-944b-0c88a11a8411",
+            ),
+            "wizard": ("wizard.png", "fd8813b9-0dac-47b9-ab8f-40c0070f6bbc"),
+        }
+        for name, (filename, asset_id) in sources.items():
+            with self.subTest(sprite=name):
+                self.assertRegex(html, rf'class="[^"]*\b{name}\b')
+                self.assertIn(f'src="{filename}"', html)
+                self.assertTrue((LANDING / filename).is_file())
+                self.assertIn(asset_id, attribution)
+        self.assertNotRegex(html, r'src="https://github\.com/user-attachments/')
+        self.assertIn("PotatoMasher", attribution)
+        self.assertIn("WJohnston", attribution)
+        self.assertIn("CC BY-NC-SA 4.0", attribution)
+        self.assertIn("Repository copies:", attribution)
+        self.assertIn("Narsie GIF retains its animation", attribution)
+        self.assertIn(".character {", css)
+        self.assertIn("animation: drift 96s linear infinite", css)
+        self.assertIn(".alien { animation-delay: -24s; }", css)
+        self.assertIn(".operative { animation-delay: -48s; }", css)
+        self.assertIn("animation: wizard-drift 96s linear -72s infinite", css)
+        self.assertIn("animation: wizard-spin 96s linear -72s infinite", css)
+        self.assertIn("animation: narsie-float 14s ease-in-out", css)
+        self.assertIn("bottom: -16px; left: 50%", css)
+        self.assertIn('background-image: url("layer1.webp")', css)
+        self.assertIn("background-repeat: repeat", css)
+        self.assertIn("@keyframes background-drift", css)
+        self.assertIn("animation: background-drift 180s linear infinite", css)
+        self.assertIn("scriptis", attribution)
+        self.assertIn("GNU AGPL v3.0", attribution)
+
+    def test_station_alert_banner_is_used_and_has_gator_features(self):
+        html = (LANDING / "index.html").read_text()
+        banner = (ROOT / "assets/banners/alert.svg").read_text()
+        self.assertIn(
+            '<img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">',
+            html,
+        )
+        self.assertIn(
+            ".landing-banner { position: relative; z-index: 2;",
+            (LANDING / "style.css").read_text(),
+        )
+        self.assertIn("red eye lasers", banner)
+        self.assertIn('filter id="laser-glow"', banner)
+        self.assertIn('stroke="#f8f2d5"', banner)
+        self.assertIn('fill="#ff263e"', banner)
+
+    def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
+        html = (LANDING / "index.html").read_text()
+        css = (LANDING / "style.css").read_text()
+        self.assertEqual(html.count('src="clown.webp"'), 1)
+        self.assertIn('class="space" aria-hidden="true"', html)
+        self.assertIn("@keyframes drift", css)
+        self.assertIn("animation: drift 96s linear infinite", css)
+        self.assertIn("translate(calc(100vw - 80px), 20vh)", css)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", css)
+        self.assertIn(".character { animation: none;", css)
+
+    def test_compose_runs_localhost_only_landing_image(self):
+        compose = (ROOT / "examples/compose.yaml").read_text()
+        service = compose[compose.index("  landing:\n") : compose.index("  player:\n")]
+        self.assertIn(
+            "image: ${GATEWAY_LANDING_IMAGE:-"
+            "ghcr.io/flashdim/tgstation-gateway-landing:latest}",
+            service,
+        )
+        self.assertIn(
+            "GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:-localhost:${GATEWAY_PORT:-8080}}",
+            service,
+        )
+        self.assertIn("profiles:\n      - landing\n", service)
+        self.assertIn("GATEWAY_SLOT_PATH: ${GATEWAY_SLOT_PATH:-/}", service)
+        self.assertNotIn("volumes:", service)
+        self.assertNotIn("slots.js", service)
+        self.assertIn('"127.0.0.1:${GATEWAY_LANDING_PORT:-8000}:8000"', service)
+        self.assertIn("read_only: true", service)
+        self.assertIn("      - ALL\n", service)
+        self.assertNotIn("python:3.12-alpine", service)
+
+    def test_smoke_test_fetches_the_tiled_background_asset(self):
+        smoke = (ROOT / "tests/smoke-landing.sh").read_text()
+        self.assertIn('curl -fsS "$base/layer1.webp"', smoke)
+        self.assertIn(
+            "for asset in clown.webp alien.png operative.png wizard.png narsie.gif;",
+            smoke,
+        )
+        self.assertIn("Web/P image", smoke)
+
+    def test_image_serves_only_page_files_and_attribution(self):
+        dockerfile = (LANDING / "Dockerfile").read_text()
+        self.assertRegex(
+            dockerfile, r"(?m)^FROM python:3\.12-alpine@sha256:[0-9a-f]{64}$"
+        )
+        copies = [
+            line.split()[1:]
+            for line in dockerfile.splitlines()
+            if line.startswith("COPY ")
+        ]
+        self.assertEqual(
+            copies,
+            [
+                [
+                    "landing/index.html",
+                    "landing/page.js",
+                    "landing/wizard.js",
+                    "landing/style.css",
+                    "landing/clown.webp",
+                    "landing/alien.png",
+                    "landing/operative.png",
+                    "landing/wizard.png",
+                    "landing/narsie.gif",
+                    "landing/layer1.webp",
+                    "/srv/landing/",
+                ],
+                ["assets/banners/alert.svg", "/srv/landing/station-alert.svg"],
+                ["assets/ATTRIBUTION.md", "/srv/landing/ATTRIBUTION.md"],
+                ["landing/server.py", "/opt/landing/server.py"],
+            ],
+        )
+        served = {path.name for path in LANDING.iterdir() if path.suffix != ".pyc"} - {
+            "Dockerfile",
+            "server.py",
+            "__pycache__",
+        }
+        self.assertEqual(served, {Path(path).name for path in copies[0][:-1]})
+        self.assertIn("USER 65534:65534", dockerfile)
+        self.assertIn('CMD ["python3", "/opt/landing/server.py"]', dockerfile)
+        self.assertEqual(server.PAGE_ROOT, "/srv/landing")
+        self.assertIn("HEALTHCHECK", dockerfile)
+
+    def test_smoke_test_configures_slots_and_checks_attribution(self):
+        smoke = (ROOT / "tests/smoke-landing.sh").read_text()
+        self.assertIn("-e GATEWAY_PLAY_HOST=play.example.test", smoke)
+        self.assertIn("https://play.example.test/LGplayer02/", smoke)
+        self.assertIn("GATEWAY_PLAY_HOST='bad host'", smoke)
+        self.assertNotIn("-v ", smoke)
+        self.assertIn("--read-only --cap-drop ALL", smoke)
+        self.assertIn("-p 127.0.0.1::8000", smoke)
+        for path in (
+            "slots.js",
+            "page.js",
+            "wizard.js",
+            "clown.webp",
+            "alien.png",
+            "operative.png",
+            "wizard.png",
+            "narsie.gif",
+            "layer1.webp",
+            "ATTRIBUTION.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, smoke)
+        self.assertNotRegex(smoke.lower(), r"password|secret|token")
+
+    def test_character_bubbles_restart_and_expire(self):
+        script = """
+const fs = require("fs");
+const vm = require("vm");
+const assert = require("assert");
+let nextTimer = 0;
+const timers = new Map();
+const speakers = ["*honk*", "*hiss*", "Guys? Where are you?", "I CAST REGULAR MISSILE"]
+  .map(message => {
+    const bubble = { hidden: true, textContent: "" };
+    const button = {
+      dataset: { message },
+      nextElementSibling: bubble,
+      addEventListener: (type, callback) => {
+        assert.strictEqual(type, "click");
+        button.click = callback;
+      },
+    };
+    return { button, bubble, message };
+  });
+const context = {
+  document: { querySelectorAll: selector => {
+    assert.strictEqual(selector, ".character-button");
+    return speakers.map(speaker => speaker.button);
+  }},
+  setTimeout: (callback, delay) => {
+    assert.strictEqual(delay, 4000);
+    timers.set(++nextTimer, callback);
+    return nextTimer;
+  },
+  clearTimeout: id => timers.delete(id),
+};
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
+for (const { button, bubble, message } of speakers) {
+  assert.strictEqual(bubble.hidden, true);
+  button.click();
+  assert.strictEqual(bubble.hidden, false);
+  assert.strictEqual(bubble.textContent, message);
+  assert.strictEqual(timers.size, 1);
+  const firstTimer = nextTimer;
+  button.click();
+  assert.strictEqual(timers.size, 1);
+  assert.strictEqual(timers.has(firstTimer), false);
+  const activeTimer = nextTimer;
+  timers.get(activeTimer)();
+  timers.delete(activeTimer);
+  assert.strictEqual(bubble.hidden, true);
+  assert.strictEqual(bubble.textContent, "");
+}
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "wizard.js")],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        html = (LANDING / "index.html").read_text()
+        self.assertIn('type="button" aria-label="Activate wizard"', html)
+        self.assertIn('aria-label="Clown" data-message="*honk*"', html)
+        self.assertIn('aria-label="Alien" data-message="*hiss*"', html)
+        self.assertIn('aria-label="Operator" data-message="Guys? Where are you?"', html)
+        self.assertEqual(html.count('class="speech-bubble"'), 4)
+        self.assertIn(
+            'id="wizard-bubble" class="speech-bubble" role="status" hidden', html
+        )
+
+    def render(self, slots=None, js=None):
+        script = """
+const fs = require("fs");
+const vm = require("vm");
+class Element {
+  constructor(tag) { this.tag = tag; this.children = []; this.hidden = true; }
+  append(...children) { this.children.push(...children); }
+  setAttribute(name, value) { this[name] = value; }
+}
+const list = new Element("div");
+const error = new Element("p");
+const context = {
+  URL,
+  window: {},
+  document: {
+    baseURI: "https://gateway.example/landing/",
+    getElementById: id => id === "slots" ? list : error,
+    createElement: tag => new Element(tag),
+  },
+};
+vm.createContext(context);
+if (process.argv[2] === "js") {
+  vm.runInContext(process.argv[3], context);
+} else {
+  context.window.GATEWAY_SLOTS = JSON.parse(process.argv[3]);
+}
+vm.runInContext(fs.readFileSync(process.argv[1] + "/page.js", "utf8"), context);
+process.stdout.write(JSON.stringify({list, error}));
+"""
+        result = subprocess.run(
+            [
+                "node",
+                "-e",
+                script,
+                str(LANDING),
+                "js" if js is not None else "-",
+                js if js is not None else json.dumps(slots),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        return json.loads(result.stdout)
+
+    def test_default_slot(self):
+        js = server.render_slots(server.build_slots({})).decode()
+        result = self.render(js=js)
+        card = result["list"]["children"][0]
+        self.assertEqual(card["href"], "http://localhost:8080/")
+        self.assertEqual(
+            card["children"][1]["children"][1]["textContent"], "LGplayer01"
+        )
+        self.assertTrue(result["error"]["hidden"])
+
+    def test_play_host_generates_slot_links(self):
+        slots = server.build_slots(
+            {
+                "GATEWAY_PLAY_HOST": "play.lazorgator.party",
+                "GATEWAY_SLOT_COUNT": "2",
+                "GATEWAY_SLOT_PATH": "/{account}/",
+                "GATEWAY_ACTIVE_SLOTS": "LGplayer02",
+            }
+        )
+        self.assertEqual(
+            slots,
+            [
+                {
+                    "account": "LGplayer01",
+                    "url": "https://play.lazorgator.party/LGplayer01/",
+                    "active": False,
+                },
+                {
+                    "account": "LGplayer02",
+                    "url": "https://play.lazorgator.party/LGplayer02/",
+                    "active": True,
+                },
+            ],
+        )
+        result = self.render(js=server.render_slots(slots).decode())
+        hrefs = [card["href"] for card in result["list"]["children"]]
+        self.assertEqual(
+            hrefs,
+            [
+                "https://play.lazorgator.party/LGplayer01/",
+                "https://play.lazorgator.party/LGplayer02/#shared",
+            ],
+        )
+
+    def test_play_host_options(self):
+        slots = server.build_slots(
+            {
+                "GATEWAY_PLAY_HOST": "play.example.test:8443",
+                "GATEWAY_PLAY_SCHEME": "http",
+                "GATEWAY_ACCOUNT_PREFIX": "Test",
+                "GATEWAY_SLOT_COUNT": "3",
+                "GATEWAY_SLOT_PATH": "/slot/{number}/",
+            }
+        )
+        self.assertEqual(slots[2]["account"], "Test03")
+        self.assertEqual(slots[2]["url"], "http://play.example.test:8443/slot/03/")
+
+    def test_invalid_environment_is_rejected(self):
+        for env in (
+            {"GATEWAY_PLAY_HOST": "bad host"},
+            {"GATEWAY_PLAY_HOST": "user@play.example"},
+            {"GATEWAY_PLAY_HOST": "play.example/path"},
+            {"GATEWAY_PLAY_HOST": "play.example:70000"},
+            {"GATEWAY_PLAY_SCHEME": "javascript"},
+            {"GATEWAY_SLOT_COUNT": "0"},
+            {"GATEWAY_SLOT_COUNT": "100"},
+            {"GATEWAY_SLOT_COUNT": "2"},
+            {"GATEWAY_SLOT_PATH": "relative"},
+            {"GATEWAY_SLOT_PATH": "/{password}/"},
+            {"GATEWAY_SLOT_PATH": "/?x=1"},
+            {"GATEWAY_SLOT_COUNT": "2", "GATEWAY_SLOT_PATH": "/{account}/../"},
+            {"GATEWAY_SLOT_PATH": "/./{account}/"},
+            {"GATEWAY_ACCOUNT_PREFIX": "bad prefix"},
+            {"GATEWAY_ACTIVE_SLOTS": "LGplayer09"},
+        ):
+            with self.subTest(env=env):
+                with self.assertRaises(server.ConfigError):
+                    server.build_slots(env)
+
+    def test_generated_script_escapes_markup(self):
+        js = server.render_slots(
+            [{"account": "</script>", "url": "https://x/", "active": False}]
+        ).decode()
+        self.assertNotIn("</script>", js)
+
+    def test_statuses_and_urls(self):
+        result = self.render(
+            [
+                {"account": "LGplayer01", "url": "/player/1?x=1", "active": False},
+                {
+                    "account": "LGplayer02",
+                    "url": "https://player.example/2?x=1#old",
+                    "active": True,
+                },
+            ]
+        )
+        available, active = result["list"]["children"]
+        self.assertEqual(available["href"], "https://gateway.example/player/1?x=1")
+        self.assertEqual(active["href"], "https://player.example/2?x=1#shared")
+        self.assertEqual(
+            available["children"][1]["children"][0]["textContent"], "AVAILABLE SLOT"
+        )
+        self.assertEqual(
+            active["children"][1]["children"][0]["textContent"], "ACTIVE SESSION"
+        )
+        self.assertEqual(
+            active["children"][1]["children"][2]["textContent"], "Watch session"
+        )
+        self.assertTrue(result["error"]["hidden"])
+
+    def test_invalid_configuration_is_not_linked(self):
+        result = self.render(
+            [
+                {"account": "invalid", "url": "javascript:alert(1)", "active": False},
+                {
+                    "account": "invalid",
+                    "url": "https://user@example.com/",
+                    "active": True,
+                },
+                {"account": "invalid", "url": "/", "active": "false"},
+                {"account": "<img src=x>", "url": "/", "active": False},
+            ]
+        )
+        self.assertFalse(result["error"]["hidden"])
+        self.assertEqual(len(result["list"]["children"]), 1)
+        self.assertEqual(
+            result["list"]["children"][0]["children"][1]["children"][1]["textContent"],
+            "<img src=x>",
+        )
+        for slots in ([], None):
+            with self.subTest(slots=slots):
+                self.assertFalse(self.render(slots)["error"]["hidden"])
+
+
+if __name__ == "__main__":
+    unittest.main()
