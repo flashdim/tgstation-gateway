@@ -5,6 +5,7 @@ never expose this module's operations to players without a trusted ownership
 check in front of them.
 """
 
+from concurrent.futures import Future
 from dataclasses import dataclass, field, replace
 import http.client
 import json
@@ -236,6 +237,7 @@ class Session:
     container_id: str | None = None
     error: str | None = None
     cleanup_pending: bool = False
+    create_indeterminate: bool = False
 
 
 class SessionManager:
@@ -270,6 +272,8 @@ class SessionManager:
         self._host_lock = threading.Lock()
         self._meta_lock = threading.Lock()
         self._sessions = {}
+        self._attempt_lock = threading.Lock()
+        self._attempts = {}
 
     def _slot(self, account):
         try:
@@ -287,76 +291,106 @@ class SessionManager:
 
     def _drop(self, account):
         with self._meta_lock:
+            self.registry.release(account)
             self._sessions.pop(account, None)
+
+    def _publish(self, session, state):
+        with self._meta_lock:
+            self.registry.transition(session.account, state)
+            self._sessions[session.account] = session
 
     def status(self):
         """Operator status; session IDs are omitted."""
         with self._meta_lock:
-            sessions = dict(self._sessions)
-        result = []
-        for slot in self.config.slots:
-            state = self.registry.state(slot.account)
-            session = sessions.get(slot.account)
-            result.append(
-                {
-                    "account": slot.account,
-                    "state": state.value if state else None,
-                    "error": session.error if session else None,
-                    "cleanup_pending": bool(session and session.cleanup_pending),
-                }
-            )
-        return result
+            result = []
+            for slot in self.config.slots:
+                state = self.registry.state(slot.account)
+                session = self._sessions.get(slot.account)
+                result.append(
+                    {
+                        "account": slot.account,
+                        "state": state.value if state else None,
+                        "error": session.error if session else None,
+                        "cleanup_pending": bool(session and session.cleanup_pending),
+                    }
+                )
+            return result
 
     def start(self, account):
         """Return the slot's active session, creating exactly one if needed."""
         slot = self._slot(account)
+        with self._attempt_lock:
+            attempt = self._attempts.get(account)
+            leader = attempt is None
+            if leader:
+                attempt = self._attempts[account] = Future()
+        if not leader:
+            return attempt.result()
         with self._slot_locks[account]:
-            state = self.registry.state(account)
-            session = self._get(account)
-            if state in ACTIVE:
-                if self._running(session):
-                    return session
-                self._fail(session, "container_stopped")
-                state = SessionState.FAILED
-            if state is SessionState.FAILED:
-                self._teardown(account)
-            elif state is not None:
-                raise SlotBusy("Slot is busy")
-            session = self._reserve(slot)
             try:
-                container_id = self.docker.create(
-                    self._container_name(session),
-                    self.spec.container_body(
-                        self.config.container_labels(account, session.session_id)
-                    ),
-                )
-                session = replace(session, container_id=container_id)
-                self._put(session)
-                self.docker.start(container_id)
-                self._wait_ready(container_id)
-            except Exception as error:
-                if isinstance(error, SessionError):
-                    failure = error
-                elif isinstance(error, DockerError):
-                    failure = StartupFailed("Docker API failure during startup")
-                else:
-                    failure = StartupFailed("Unexpected startup failure")
-                session = self._fail(self._get(account), failure.code)
-                try:
-                    self._cleanup(session)
-                except DockerError as cleanup_error:
-                    self._put(replace(session, error=CleanupFailed.code))
-                    raise CleanupFailed(
-                        "Startup failed and cleanup did not complete"
-                    ) from cleanup_error
-                self._put(replace(session, container_id=None, cleanup_pending=False))
-                if failure is error:
-                    raise
-                raise failure from error
-            session = replace(session, cleanup_pending=False)
+                result = self._start(slot)
+            except BaseException as error:
+                with self._attempt_lock:
+                    attempt.set_exception(error)
+                    del self._attempts[account]
+                raise
+            with self._attempt_lock:
+                attempt.set_result(result)
+                del self._attempts[account]
+        return result
+
+    def _start(self, slot):
+        account = slot.account
+        state = self.registry.state(account)
+        session = self._get(account)
+        if state in ACTIVE:
+            if self._running(session):
+                return session
+            self._fail(session, "container_stopped")
+            state = SessionState.FAILED
+        if state is SessionState.FAILED:
+            self._teardown(account)
+        elif state is not None:
+            raise SlotBusy("Slot is busy")
+        session = self._reserve(slot)
+        creating = False
+        try:
+            name = self._container_name(session)
+            body = self.spec.container_body(
+                self.config.container_labels(account, session.session_id)
+            )
+            creating = True
+            container_id = self.docker.create(name, body)
+            creating = False
+            session = replace(session, container_id=container_id)
             self._put(session)
-            self.registry.transition(account, SessionState.READY)
-            return session
+            self.docker.start(container_id)
+            self._wait_ready(container_id)
+        except Exception as error:
+            if isinstance(error, SessionError):
+                failure = error
+            elif isinstance(error, DockerError):
+                failure = StartupFailed("Docker API failure during startup")
+            else:
+                failure = StartupFailed("Unexpected startup failure")
+            session = self._get(account)
+            if creating:
+                session = replace(session, create_indeterminate=True)
+            session = self._fail(session, failure.code)
+            try:
+                self._cleanup(session)
+            except DockerError as cleanup_error:
+                self._put(replace(session, error=CleanupFailed.code))
+                raise CleanupFailed(
+                    "Startup failed and cleanup did not complete"
+                ) from cleanup_error
+            self._put(replace(session, container_id=None, cleanup_pending=False))
+            if failure is error:
+                raise
+            raise failure from error
+        session = replace(session, cleanup_pending=False)
+        self._publish(session, SessionState.READY)
+        return session
 
     def terminate(self, account, session_id):
         """Remove only the selected session's project-owned container."""
@@ -394,27 +428,26 @@ class SessionManager:
             except DockerError as error:
                 raise DockerUnavailable("Docker API unavailable") from error
             with self._meta_lock:
-                sessions = dict(self._sessions)
-            present = {
-                container["labels"].get(SESSION_LABEL) for container in containers
-            }
-            used = len(containers)
-            for other in self.config.slots:
-                state = self.registry.state(other.account)
-                if state is None:
-                    continue
-                session = sessions.get(other.account)
-                if session and session.session_id in present:
-                    continue
-                if state is not SessionState.FAILED or (
-                    session and session.cleanup_pending
-                ):
-                    used += 1
-            if used >= self.capacity:
-                raise CapacityExhausted("All player slots are in use")
-            session = Session(slot.account, str(uuid4()), cleanup_pending=True)
-            self._put(session)
-            self.registry.transition(slot.account, SessionState.STARTING)
+                present = {
+                    container["labels"].get(SESSION_LABEL) for container in containers
+                }
+                used = len(containers)
+                for other in self.config.slots:
+                    state = self.registry.state(other.account)
+                    if state is None:
+                        continue
+                    session = self._sessions.get(other.account)
+                    if session and session.session_id in present:
+                        continue
+                    if state is not SessionState.FAILED or (
+                        session and session.cleanup_pending
+                    ):
+                        used += 1
+                if used >= self.capacity:
+                    raise CapacityExhausted("All player slots are in use")
+                session = Session(slot.account, str(uuid4()), cleanup_pending=True)
+                self.registry.transition(slot.account, SessionState.STARTING)
+                self._sessions[slot.account] = session
             return session
 
     def _container_name(self, session):
@@ -459,22 +492,24 @@ class SessionManager:
 
     def _fail(self, session, error):
         session = replace(session, error=error, cleanup_pending=True)
-        self._put(session)
-        if self.registry.state(session.account) is not SessionState.FAILED:
-            self.registry.transition(session.account, SessionState.FAILED)
+        with self._meta_lock:
+            if self.registry.state(session.account) is not SessionState.FAILED:
+                self.registry.transition(session.account, SessionState.FAILED)
+            self._sessions[session.account] = session
         return session
 
     def _teardown(self, account):
         session = self._get(account)
-        self.registry.transition(account, SessionState.STOPPING)
+        self._publish(session, SessionState.STOPPING)
         try:
             self._cleanup(session)
         except DockerError as error:
-            self._put(replace(session, error=CleanupFailed.code, cleanup_pending=True))
-            self.registry.transition(account, SessionState.FAILED)
+            self._publish(
+                replace(session, error=CleanupFailed.code, cleanup_pending=True),
+                SessionState.FAILED,
+            )
             raise CleanupFailed("Session cleanup did not complete") from error
         self._drop(account)
-        self.registry.release(account)
 
     def _cleanup(self, session):
         """Remove the session's owned containers by label, then confirm removal."""
@@ -493,3 +528,5 @@ class SessionManager:
             self.docker.remove(container["id"])
         if owned():
             raise DockerError("Session containers remain after removal")
+        if session.create_indeterminate:
+            raise DockerError("Container creation outcome is indeterminate")

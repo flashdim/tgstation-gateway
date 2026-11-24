@@ -156,8 +156,8 @@ reconciliation and ownership checks are separate, unfinished work. Do not
 mount the Docker socket into the landing container.
 
 - Startup and teardown of each slot are serialized. Concurrent first requests
-  for a slot wait for the same startup and receive the same session; exactly
-  one container is created.
+  for a slot share the same startup result or error; exactly one container is
+  created. Later requests may retry a failed startup.
 - The capacity check and slot reservation run atomically under a host-wide
   lock. Capacity is `GATEWAY_SLOT_COUNT` containers: every container matching
   this deployment's project/deployment/role labels (including untracked ones,
@@ -172,14 +172,23 @@ mount the Docker socket into the landing container.
   a healthcheck fails. The default
   readiness timeout is 180 seconds; Docker API requests time out after 30
   seconds. A timeout, Docker API error, container exit or unhealthy container
-  marks the slot `failed`, records the error code and removes the partial
-  container.
+  marks the slot `failed` and attempts to remove the partial container.
 - Cleanup lists containers by this session's labels, removes only those that
   pass the ownership predicate for the slot, deployment and session UUID
   (forced, with anonymous volumes so the writable layer and session data are
   discarded), and confirms that none remain. If cleanup fails, the slot stays
   `failed` with `cleanup_pending`, keeps counting toward capacity, and is
   retried by the next start or reaper pass.
+- If a create call fails without a usable result (including an API error
+  response), Docker might still create the container later. The manager
+  conservatively retains its session and capacity reservation
+  indefinitely, even after an empty cleanup listing; retries and reaping remove
+  observed owned containers but cannot release that reservation. This reports
+  `cleanup_failed`. To recover, stop the manager, ensure the daemon is no
+  longer processing the create (for example by restarting the daemon), and
+  manually remove any containers with the affected deployment and slot labels
+  after verifying ownership before starting a manager again. A manager restart
+  alone loses the reservation and is not safe reconciliation.
 - Explicit termination requires the slot's current session UUID; stale or
   unknown UUIDs fail without touching any container. Teardown is visible as
   `stopping`. A periodic `reap()` pass cleans up crashed (stopped or missing)

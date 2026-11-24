@@ -1,4 +1,5 @@
 from http.server import BaseHTTPRequestHandler
+from concurrent.futures import Future
 import json
 from pathlib import Path
 import socketserver
@@ -8,6 +9,7 @@ import threading
 import time
 import unittest
 from urllib.parse import parse_qs, urlsplit
+from unittest.mock import patch
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -207,6 +209,86 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(len(self.docker.containers), 1)
         self.assertEqual(len({session.session_id for session in results}), 1)
         self.assertEqual(self.state(), SessionState.READY)
+        self.assertFalse(results[0].cleanup_pending)
+        self.assertFalse(self.manager.status()[0]["cleanup_pending"])
+
+    def test_concurrent_waiters_share_failure_and_later_request_retries(self):
+        entered = threading.Event()
+        release = threading.Event()
+        waiters = threading.Barrier(4)
+
+        class ObservedFuture(Future):
+            def result(self, timeout=None):
+                waiters.wait(timeout=5)
+                return super().result(timeout)
+
+        def block_start():
+            entered.set()
+            self.assertTrue(release.wait(5))
+
+        self.docker.hooks["start"] = block_start
+        self.docker.health = "starting"
+        results = []
+
+        def start():
+            try:
+                results.append(self.manager.start(self.account))
+            except Exception as error:
+                results.append(error)
+
+        with patch("manager.Future", ObservedFuture):
+            leader = threading.Thread(target=start)
+            leader.start()
+            self.assertTrue(entered.wait(5))
+            followers = [threading.Thread(target=start) for _ in range(3)]
+            for thread in followers:
+                thread.start()
+            waiters.wait(timeout=5)
+            release.set()
+            for thread in [leader, *followers]:
+                thread.join(5)
+                self.assertFalse(thread.is_alive())
+        self.assertEqual(len(results), 4)
+        self.assertTrue(all(isinstance(result, StartupTimeout) for result in results))
+        self.assertEqual(len(self.docker.removed), 1)
+        del self.docker.hooks["start"]
+        self.docker.health = "healthy"
+        self.manager.start(self.account)
+        self.assertEqual(self.state(), SessionState.READY)
+
+    def test_start_result_is_published_before_termination(self):
+        entered = threading.Event()
+        release = threading.Event()
+
+        class BlockingFuture(Future):
+            def set_result(self, result):
+                entered.set()
+                if not release.wait(5):
+                    raise RuntimeError("test timed out")
+                super().set_result(result)
+
+        results = []
+        with patch("manager.Future", BlockingFuture):
+            starter = threading.Thread(
+                target=lambda: results.append(self.manager.start(self.account))
+            )
+            starter.start()
+            self.assertTrue(entered.wait(5))
+            session = self.manager._get(self.account)
+            terminator = threading.Thread(
+                target=self.manager.terminate, args=(self.account, session.session_id)
+            )
+            terminator.start()
+            terminator.join(0.1)
+            self.assertTrue(terminator.is_alive())
+            release.set()
+            starter.join(5)
+            terminator.join(5)
+            self.assertFalse(starter.is_alive())
+            self.assertFalse(terminator.is_alive())
+        self.assertEqual(results, [session])
+        replacement = self.manager.start(self.account)
+        self.assertNotEqual(replacement.session_id, session.session_id)
 
     def test_all_slots_start_concurrently_within_capacity(self):
         manager = make_manager(count=4)
@@ -287,6 +369,26 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(self.state(), SessionState.READY)
         self.assertIsNone(self.manager.status()[0]["error"])
 
+    def test_readiness_rejects_late_healthy_result_and_does_not_poll_after_deadline(
+        self,
+    ):
+        for late in (True, False):
+            with self.subTest(late=late):
+                manager = make_manager(start_timeout=1)
+                calls = []
+
+                def inspect():
+                    calls.append(None)
+                    if late:
+                        manager.clock.sleep(1)
+
+                manager.docker.hooks["inspect"] = inspect
+                if not late:
+                    manager.docker.health = "starting"
+                with self.assertRaises(StartupTimeout):
+                    manager.start(self.account)
+                self.assertEqual(len(calls), 1)
+
     def test_docker_api_unavailable_does_not_reserve_slot(self):
         self.docker.fail["list"] = DockerError("down")
         with self.assertRaises(DockerUnavailable) as context:
@@ -296,7 +398,6 @@ class SessionManagerTest(unittest.TestCase):
 
     def test_docker_and_container_failures_clean_partial_starts(self):
         cases = {
-            "create": lambda d: d.fail.__setitem__("create", DockerError("x", 500)),
             "start": lambda d: d.fail.__setitem__("start", DockerError("x", 500)),
             "inspect": lambda d: d.fail.__setitem__("inspect", DockerError("x")),
             "exited": lambda d: setattr(d, "running_after_start", False),
@@ -312,6 +413,62 @@ class SessionManagerTest(unittest.TestCase):
                 self.assertEqual(manager.docker.containers, {})
                 self.assertEqual(manager.registry.state(self.account), "failed")
                 self.assertEqual(manager.status()[0]["error"], "startup_failed")
+
+    def test_indeterminate_create_retains_reservation_even_after_late_container(self):
+        manager = make_manager(count=2)
+        docker = manager.docker
+        pending = {}
+
+        def timed_out_create(name, body):
+            pending.update(body)
+            raise DockerError("create response lost")
+
+        docker.create = timed_out_create
+        with self.assertRaises(CleanupFailed):
+            manager.start("LGplayer01")
+        original = manager._get("LGplayer01")
+        self.assertTrue(original.create_indeterminate)
+        self.assertTrue(manager.status()[0]["cleanup_pending"])
+        manager.reap()
+        with self.assertRaises(CleanupFailed):
+            manager.start("LGplayer01")
+        with self.assertRaises(CleanupFailed):
+            manager.terminate("LGplayer01", original.session_id)
+        self.assertEqual(manager._get("LGplayer01").session_id, original.session_id)
+
+        late = docker.add(pending["Labels"], running=False)
+        manager.reap()
+        self.assertNotIn(late, docker.containers)
+        self.assertTrue(manager.status()[0]["cleanup_pending"])
+        docker.create = FakeDocker.create.__get__(docker)
+        manager.start("LGplayer02")
+        with self.assertRaises(CleanupFailed):
+            manager.start("LGplayer01")
+        self.assertEqual(len(docker.containers), 1)
+        self.assertLessEqual(docker.peak, 2)
+
+    def test_indeterminate_create_counts_against_other_slots(self):
+        manager = make_manager(count=2)
+        manager.docker.fail["create_before"] = DockerError("response lost")
+        with self.assertRaises(CleanupFailed):
+            manager.start("LGplayer01")
+        del manager.docker.fail["create_before"]
+        manager.docker.add(manager.config.container_labels("LGplayer02", str(uuid4())))
+        with self.assertRaises(CapacityExhausted):
+            manager.start("LGplayer02")
+
+    def test_create_error_after_container_creation_removes_but_retains_reservation(
+        self,
+    ):
+        manager = make_manager(count=1)
+        manager.docker.fail["create"] = DockerError("response lost")
+        with self.assertRaises(CleanupFailed):
+            manager.start(self.account)
+        self.assertEqual(manager.docker.containers, {})
+        self.assertEqual(len(manager.docker.removed), 1)
+        self.assertTrue(manager.status()[0]["cleanup_pending"])
+        manager.reap()
+        self.assertEqual(manager.registry.state(self.account), SessionState.FAILED)
 
     def test_cleanup_failure_is_observable_and_keeps_capacity(self):
         manager = make_manager(count=1)
@@ -438,6 +595,83 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(result["session"].session_id, session_id)
         self.assertIsNone(self.state())
         self.assertEqual(self.docker.containers, {})
+
+    def test_status_snapshots_state_and_metadata_together(self):
+        entered = threading.Event()
+        release = threading.Event()
+        transition = self.manager.registry.transition
+
+        def block_transition(account, state):
+            transition(account, state)
+            if state is SessionState.FAILED:
+                entered.set()
+                self.assertTrue(release.wait(5))
+
+        self.manager.registry.transition = block_transition
+        self.docker.health = "starting"
+        results = []
+
+        def start():
+            try:
+                self.manager.start(self.account)
+            except StartupTimeout:
+                pass
+
+        starter = threading.Thread(target=start)
+        starter.start()
+        self.assertTrue(entered.wait(5))
+        reader = threading.Thread(
+            target=lambda: results.append(self.manager.status()[0])
+        )
+        reader.start()
+        reader.join(0.1)
+        self.assertTrue(reader.is_alive())
+        release.set()
+        starter.join(5)
+        reader.join(5)
+        self.assertFalse(starter.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(results[0]["state"], "failed")
+        self.assertEqual(results[0]["error"], "startup_timeout")
+
+    def test_status_waits_for_atomic_release(self):
+        session = self.manager.start(self.account)
+        entered = threading.Event()
+        release = threading.Event()
+        original_release = self.manager.registry.release
+
+        def block_release(account):
+            original_release(account)
+            entered.set()
+            self.assertTrue(release.wait(5))
+
+        self.manager.registry.release = block_release
+        terminator = threading.Thread(
+            target=self.manager.terminate, args=(self.account, session.session_id)
+        )
+        terminator.start()
+        self.assertTrue(entered.wait(5))
+        results = []
+        reader = threading.Thread(
+            target=lambda: results.append(self.manager.status()[0])
+        )
+        reader.start()
+        reader.join(0.1)
+        self.assertTrue(reader.is_alive())
+        release.set()
+        terminator.join(5)
+        reader.join(5)
+        self.assertFalse(terminator.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(
+            results[0],
+            {
+                "account": self.account,
+                "state": None,
+                "error": None,
+                "cleanup_pending": False,
+            },
+        )
 
     def test_start_and_terminate_race_never_leaks_containers(self):
         session = self.manager.start(self.account)
