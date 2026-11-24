@@ -11,7 +11,8 @@ tgstation-server separate; neither is managed by this project.
 The current repository provides a single-player BYOND image and an optional
 landing-page prototype with validated slot configuration, an in-memory lifecycle
 model, deployment-scoped container ownership labels and an unconnected,
-unit-tested slot lifecycle manager. Orchestration is not connected: it does
+slot lifecycle manager with per-account file mounts and disposable volumes.
+Orchestration is not connected: it does
 not create or manage player sessions, and a complete authenticated gameplay
 session remains unverified.
 

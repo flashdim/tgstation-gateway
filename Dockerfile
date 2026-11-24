@@ -157,6 +157,7 @@ RUN xvfb-run -a /usr/local/bin/install-graphics
 
 USER root
 RUN install -d -o 1000 -g 1000 /etc/service/byond && \
+    install -d -o 1000 -g 1000 /home/ubuntu/.local/share && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
