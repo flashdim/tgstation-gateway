@@ -12,7 +12,11 @@
       data.players >= 0 && (data.popcap === null ||
       (Number.isSafeInteger(data.popcap) && data.popcap >= 0));
     const availability = available ? "ONLINE" : "UNAVAILABLE";
-    if (online.textContent !== availability) online.textContent = availability;
+    const state = available ? "online" : "unavailable";
+    if (online.dataset.state !== state) {
+      online.dataset.state = state;
+      online.textContent = availability;
+    }
     map.textContent = available ? data.map : "--";
     const cap = data?.popcap === null ? "?" : (data?.popcap || "∞");
     players.textContent = available ? `${data.players} / ${cap}` : "-- / --";

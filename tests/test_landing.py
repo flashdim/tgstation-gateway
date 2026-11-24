@@ -90,6 +90,24 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("translate(calc(100vw - 80px), 20vh)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".character { animation: none;", css)
+        self.assertIn("#server-online::before { animation: none; }", css)
+
+    def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
+        css = (LANDING / "style.css").read_text()
+        html = (LANDING / "index.html").read_text()
+        self.assertIn(
+            '#server-online[data-state="online"]::before { background: #54ed91;',
+            css,
+        )
+        self.assertIn(
+            '#server-online[data-state="unavailable"]::before { background: #ff5261;',
+            css,
+        )
+        self.assertIn("@keyframes status-pulse", css)
+        self.assertIn(
+            'id="server-online" data-state="unavailable" role="status"', html
+        )
+        self.assertIn("#server-online::before { animation: none; }", css)
 
     def test_compose_runs_localhost_only_landing_image(self):
         compose = (ROOT / "examples/compose.yaml").read_text()
@@ -504,6 +522,7 @@ const fs = require("fs");
 const vm = require("vm");
 const assert = require("assert");
 const elements = Object.fromEntries(["server-online", "server-map", "server-round", "server-players"].map(id => [id, {}]));
+elements["server-online"].dataset = {state: "unavailable"};
 elements["server-online"].textContent = "UNAVAILABLE";
 let availabilityUpdates = 0;
 Object.defineProperty(elements["server-online"], "textContent", {
@@ -526,6 +545,7 @@ const context = {
 vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
 setImmediate(async () => {
   assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-online"].dataset.state, "online");
   assert.strictEqual(availabilityUpdates, 1);
   assert.strictEqual(elements["server-map"].textContent, "<script>");
   assert.strictEqual(elements["server-round"].textContent, "25:01:01");
@@ -535,12 +555,14 @@ setImmediate(async () => {
   failed = true;
   await callbacks.shift()();
   assert.strictEqual(elements["server-online"].textContent, "UNAVAILABLE");
+  assert.strictEqual(elements["server-online"].dataset.state, "unavailable");
   assert.strictEqual(availabilityUpdates, 2);
   assert.strictEqual(elements["server-map"].textContent, "--");
   failed = false;
   result = {online: true, map: "Station", players: 1, popcap: null, round_seconds: null};
   await callbacks.shift()();
   assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-online"].dataset.state, "online");
   assert.strictEqual(availabilityUpdates, 3);
   assert.strictEqual(elements["server-round"].textContent, "--:--:--");
   assert.strictEqual(elements["server-players"].textContent, "1 / ?");
