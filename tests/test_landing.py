@@ -63,6 +63,18 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("scriptis", attribution)
         self.assertIn("GNU AGPL v3.0", attribution)
 
+    def test_station_alert_banner_is_used_and_has_gator_features(self):
+        html = (LANDING / "index.html").read_text()
+        banner = (ROOT / "assets/banners/alert.svg").read_text()
+        self.assertIn(
+            '<img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">',
+            html,
+        )
+        self.assertIn("red eye lasers", banner)
+        self.assertIn('filter id="laser-glow"', banner)
+        self.assertIn('stroke="#f8f2d5"', banner)
+        self.assertIn('fill="#ff263e"', banner)
+
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
@@ -128,6 +140,7 @@ class LandingPageTest(unittest.TestCase):
                     "landing/layer1.webp",
                     "/srv/landing/",
                 ],
+                ["assets/banners/alert.svg", "/srv/landing/station-alert.svg"],
                 ["assets/ATTRIBUTION.md", "/srv/landing/ATTRIBUTION.md"],
                 ["landing/server.py", "/opt/landing/server.py"],
             ],

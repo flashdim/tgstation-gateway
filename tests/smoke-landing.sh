@@ -46,6 +46,9 @@ grep -q '\*honk\*' "$workdir/index.html"
 grep -q '\*hiss\*' "$workdir/index.html"
 grep -q 'Guys? Where are you?' "$workdir/index.html"
 curl -fsS "$base/style.css" -o /dev/null
+curl -fsS "$base/station-alert.svg" -o "$workdir/station-alert.svg"
+grep -q 'LazorGator Party 13' "$workdir/station-alert.svg"
+grep -q 'laser-glow' "$workdir/station-alert.svg"
 for asset in clown.webp alien.png operative.png wizard.png narsie.gif; do
     curl -fsS "$base/$asset" -o "$workdir/$asset"
 done
