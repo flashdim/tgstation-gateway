@@ -57,7 +57,7 @@ container uses the host's date, time and timezone. Set `TZ` (for example
 
 ## Test landing page
 
-The optional static landing page runs as a separate localhost-only Compose
+The optional landing-page prototype runs as a separate localhost-only Compose
 service. Build the image locally from the repository root:
 
 ```sh
@@ -73,19 +73,20 @@ To use the image built locally, set
 page with the player; without `--profile landing` it is not started. Open [http://localhost:8000](http://localhost:8000), or set
 `GATEWAY_LANDING_PORT` to choose another host port.
 
-The landing server generates `slots.js` from its environment at startup; no
+The landing server validates slot configuration at startup and generates
+`slots.js` from an in-memory lifecycle snapshot on each request; no
 configuration file is mounted. Compose passes these variables through:
 
-| Variable                 | Default                           | Meaning                                                                |
-| ------------------------ | --------------------------------- | ---------------------------------------------------------------------- |
-| `GATEWAY_PLAY_HOST`      | `localhost:${GATEWAY_PORT:-8080}` | DNS name, with optional port, that serves player sessions              |
-| `GATEWAY_PLAY_SCHEME`    | see below                         | `http` or `https`; defaults to `http` for localhost, else `https`      |
-| `GATEWAY_SLOT_COUNT`     | `1`                               | Number of slots, 1–99                                                  |
-| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`                        | Slot accounts are the prefix plus a two-digit number (`LGplayer01`)    |
-| `GATEWAY_SLOT_PATH`      | `/`                               | URL path per slot; `{account}` and `{number}` are substituted          |
-| `GATEWAY_ACTIVE_SLOTS`   | empty                             | Comma-separated accounts shown as active (static test status only)     |
-| `GATEWAY_QUERY_HOST`     | empty                             | Game server DNS name or IPv4 address, as seen by the landing container |
-| `GATEWAY_QUERY_PORT`     | empty                             | Game server BYOND port, 1–65535                                        |
+| Variable                 | Default                           | Meaning                                                                        |
+| ------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| `GATEWAY_PLAY_HOST`      | `localhost:${GATEWAY_PORT:-8080}` | DNS name, with optional port, that serves player sessions                      |
+| `GATEWAY_PLAY_SCHEME`    | see below                         | `http` or `https`; defaults to `http` for localhost, else `https`              |
+| `GATEWAY_SLOT_COUNT`     | `1`                               | Number of slots, 1–99                                                          |
+| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`                        | Slot accounts are the prefix plus a two-digit number (`LGplayer01`)            |
+| `GATEWAY_SLOT_PATH`      | `/`                               | URL path per slot; `{account}` and `{number}` are substituted                  |
+| `GATEWAY_DEPLOYMENT_ID`  | `local`                           | Stable deployment identity; use a unique value per deployment on a Docker host |
+| `GATEWAY_QUERY_HOST`     | empty                             | Game server DNS name or IPv4 address, as seen by the landing container         |
+| `GATEWAY_QUERY_PORT`     | empty                             | Game server BYOND port, 1–65535                                                |
 
 Set both query variables to enable the game status panel. These identify the
 DreamDaemon game server, not the player-streaming host in `GATEWAY_PLAY_HOST`
@@ -107,23 +108,69 @@ status query answered, not that joining or gameplay works. Compatibility with
 the operator's actual game build remains to be verified.
 
 For example, to list two slots at `https://play.lazorgator.party/LGplayer01/`
-and `https://play.lazorgator.party/LGplayer02/`, with the second shown active:
+and `https://play.lazorgator.party/LGplayer02/`:
 
 ```sh
 GATEWAY_PLAY_HOST=play.lazorgator.party \
 GATEWAY_SLOT_COUNT=2 \
 GATEWAY_SLOT_PATH='/{account}/' \
-GATEWAY_ACTIVE_SLOTS=LGplayer02 \
+GATEWAY_DEPLOYMENT_ID=my-gateway \
 docker compose -f examples/compose.yaml --profile landing up
 ```
 
 With more than one slot, `GATEWAY_SLOT_PATH` must contain `{account}` or
-`{number}` so each slot has a distinct link; `.` and `..` path segments are rejected. The landing page only builds these
+`{number}` so each slot has a distinct link. Prefixes contain 1–24 ASCII letters,
+digits, `_` or `-`. Paths permit ASCII letters, digits, `.`, `_`, `~`, `/`, `-`
+and the two placeholders; `.` and `..` segments, repeated slashes, percent
+encoding, query strings and fragments are rejected. The routing model accepts
+only exact generated paths/accounts, rejecting unknown or out-of-range slots.
+No client-provided destination or arbitrary upstream is accepted.
+The landing page only builds these
 links; the operator's reverse proxy must route each path (or host) to the
 corresponding player container. The example Compose file runs one player, so
 only a single-slot configuration reaches a working player without additional
 routing. Invalid values stop the landing container at startup with an error
 naming the variable. Startup logs list each generated slot URL.
+
+### Session state and container ownership foundation
+
+`GATEWAY_ACTIVE_SLOTS` is removed, including empty values; remove it from old
+deployment configuration. Unallocated slots have `state: null`. The internal
+registry reserves a slot as `starting`, then permits `ready`, `reconnect_grace`,
+`stopping` and `failed`. Ready sessions can enter reconnect grace and return
+to ready. Starting, ready and grace sessions may stop or fail; failed sessions
+may enter stopping for cleanup, and stopping may fail. A slot is released only
+from stopping or failed, after the future manager confirms container and
+session-data cleanup. Snapshots and transitions are serialized within a process.
+There are no timers, persistence, readiness probes or orchestration yet: the
+standalone landing starts with all slots unallocated, and a restart clears state.
+
+`GATEWAY_DEPLOYMENT_ID` contains 1–64 ASCII letters, digits, `_`, `.` or `-`,
+starting with a letter or digit. Keep it stable across manager restarts, unique
+on the host, and do not run two managers with the same ID. `local` is only a
+single-deployment prototype default. The model defines Docker container labels:
+
+- `io.tgstation-gateway.project=tgstation-gateway`
+- `io.tgstation-gateway.deployment=<deployment ID>`
+- `io.tgstation-gateway.role=player`
+- `io.tgstation-gateway.slot=<two-digit slot number>`
+- `io.tgstation-gateway.account=<derived account>`
+- `io.tgstation-gateway.session=<canonical UUID>`
+
+The discovery filter uses project, deployment and role. Before any future
+adoption, reconciliation or deletion, the ownership predicate additionally
+requires a configured account, its matching slot number, and a valid session
+UUID. Missing/mismatched labels, other deployments and unknown slots fail
+closed. Container names and image names alone never establish ownership.
+These are privileged-daemon ownership labels, not player authorization.
+This change does not label or manage the standalone Compose player or connect
+to Docker. Keep Docker access private to the future manager; labels must never
+include keys, credentials or player data.
+
+Exact route lookup is an allowlist, not an authentication boundary. A future
+manager must verify trusted session ownership before looking up/routing a slot;
+client headers, account names, paths or session UUIDs alone must not grant access.
+The external identity/secure-connection integration remains undecided.
 
 The operator must create BYOND accounts manually. For a pager key file obtained
 by logging in to the matching account, mount the complete file read-only at
@@ -135,11 +182,12 @@ fresh prefix has not yet been verified. Do not put the key or a password in
 environment variables, command-line arguments, public configuration, URLs,
 images or caches. Rotate the operator-managed source file when the account
 key is revoked.
-The inactive link opens its configured URL; the active watch link replaces any
+The unallocated link opens its configured URL; ready/grace watch links replace any
 existing fragment with `#shared`, preserving the path and query.
 
-Slot status is static test data: no containers are created, monitored, or isolated
-by the page. It does not authenticate users or enforce ownership. `#shared` is
+Starting, stopping and failed slots are shown without links. The page reads
+server-side lifecycle state, but no containers are created, monitored or isolated
+because orchestration is not connected. It does not authenticate users or enforce ownership. `#shared` is
 not an authorization boundary, and anyone with access to a player URL may
 attempt to use it directly. Intended watching by authenticated users and
 controller reconnection require trusted identity, ownership and routing

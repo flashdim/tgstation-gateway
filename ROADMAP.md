@@ -9,8 +9,9 @@ disposable player container on demand for each player. Keep the game server and
 tgstation-server separate; neither is managed by this project.
 
 The current repository provides a single-player BYOND image and an optional
-landing-page prototype that generates static slot links with operator-configured
-active labels. It does not create or manage player sessions, and a complete
+landing-page prototype with validated slot configuration, an in-memory lifecycle
+model and deployment-scoped container ownership labels. Orchestration is not
+connected: it does not create or manage player sessions, and a complete
 authenticated gameplay session remains unverified.
 
 This is a private, self-hosted solution. Access control and connection security

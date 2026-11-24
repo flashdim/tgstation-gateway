@@ -8,14 +8,14 @@ COPY landing/index.html landing/page.js landing/status.js landing/wizard.js land
 COPY landing/assets/sprites/ /srv/landing/assets/sprites/
 COPY landing/assets/ATTRIBUTION.md landing/assets/layer1.webp /srv/landing/assets/
 COPY landing/assets/banners/alert.svg /srv/landing/assets/banners/alert.svg
-COPY landing/server.py /opt/landing/server.py
+COPY landing/server.py landing/sessions.py /opt/landing/
 
 ENV GATEWAY_PLAY_HOST=localhost:8080 \
     GATEWAY_PLAY_SCHEME= \
     GATEWAY_SLOT_COUNT=1 \
     GATEWAY_ACCOUNT_PREFIX=LGplayer \
     GATEWAY_SLOT_PATH=/ \
-    GATEWAY_ACTIVE_SLOTS=
+    GATEWAY_DEPLOYMENT_ID=local
 
 USER 65534:65534
 EXPOSE 8000
