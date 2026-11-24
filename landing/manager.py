@@ -353,6 +353,8 @@ class SessionManager:
                 if failure is error:
                     raise
                 raise failure from error
+            session = replace(session, cleanup_pending=False)
+            self._put(session)
             self.registry.transition(account, SessionState.READY)
             return session
 
@@ -436,7 +438,11 @@ class SessionManager:
     def _wait_ready(self, container_id):
         deadline = self.clock() + self.start_timeout
         while True:
+            if self.clock() >= deadline:
+                raise StartupTimeout("Player container did not become ready")
             state = self.docker.inspect(container_id).get("State") or {}
+            if self.clock() >= deadline:
+                raise StartupTimeout("Player container did not become ready")
             if state.get("Running") is not True:
                 raise StartupFailed("Player container exited during startup")
             health = (state.get("Health") or {}).get("Status")
