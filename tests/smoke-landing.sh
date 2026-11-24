@@ -98,25 +98,28 @@ curl -fsS "$base/page.js" -o "$workdir/page.js"
 grep -q GATEWAY_SLOTS "$workdir/page.js"
 curl -fsS "$base/wizard.js" -o "$workdir/wizard.js"
 grep -q 'setTimeout' "$workdir/wizard.js"
+curl -fsS "$base/narsie.js" -o /dev/null
 grep -q '\*honk\*' "$workdir/index.html"
 grep -q '\*hiss\*' "$workdir/index.html"
 grep -q 'Guys? Where are you?' "$workdir/index.html"
 curl -fsS "$base/style.css" -o /dev/null
-curl -fsS "$base/station-alert.svg" -o "$workdir/station-alert.svg"
+curl -fsS "$base/assets/banners/alert.svg" -o "$workdir/station-alert.svg"
 grep -q 'LazorGator Party 13' "$workdir/station-alert.svg"
 grep -q 'laser-glow' "$workdir/station-alert.svg"
-for asset in clown.webp alien.png operative.png wizard.png narsie.gif; do
-    curl -fsS "$base/$asset" -o "$workdir/$asset"
+for asset in clown.webp alien.png operative.png wizard.png narsie.gif singularity.gif; do
+    curl -fsS "$base/sprites/$asset" -o "$workdir/$asset"
 done
 file "$workdir/alien.png" | grep -q 'PNG image data'
 file "$workdir/operative.png" | grep -q 'PNG image data'
 file "$workdir/wizard.png" | grep -q 'PNG image data'
 file "$workdir/narsie.gif" | grep -q 'GIF image data'
-curl -fsS "$base/layer1.webp" -o "$workdir/layer1.webp"
+file "$workdir/singularity.gif" | grep -q 'GIF image data'
+curl -fsS "$base/assets/layer1.webp" -o "$workdir/layer1.webp"
 file "$workdir/layer1.webp" | grep -q 'Web/P image'
-curl -fsS "$base/ATTRIBUTION.md" | grep -q "CC BY-SA 3.0"
+curl -fsS "$base/assets/ATTRIBUTION.md" | grep -q "CC BY-SA 3.0"
 if curl -fsS "$base/Dockerfile" -o /dev/null 2>/dev/null ||
-    curl -fsS "$base/server.py" -o /dev/null 2>/dev/null; then
+    curl -fsS "$base/server.py" -o /dev/null 2>/dev/null ||
+    curl -fsS "$base/assets/wallpapers/" -o /dev/null 2>/dev/null; then
     echo "Landing image serves files outside the page" >&2
     exit 1
 fi

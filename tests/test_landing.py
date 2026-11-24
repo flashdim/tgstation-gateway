@@ -17,8 +17,8 @@ class LandingPageTest(unittest.TestCase):
     def test_wiki_sprites_are_attributed_and_displayed(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
-        attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
-        self.assertIn('href="ATTRIBUTION.md"', html)
+        attribution = (LANDING / "assets/ATTRIBUTION.md").read_text()
+        self.assertIn('href="assets/ATTRIBUTION.md"', html)
         self.assertNotIn("PotatoMasher", html)
         self.assertNotIn("WJohnston", html)
         self.assertNotIn("scriptis", html)
@@ -36,16 +36,21 @@ class LandingPageTest(unittest.TestCase):
                 "89ee354c-4b68-4661-944b-0c88a11a8411",
             ),
             "wizard": ("wizard.png", "fd8813b9-0dac-47b9-ab8f-40c0070f6bbc"),
+            "singularity": (
+                "singularity.gif",
+                "3858a45e-ce06-463f-a429-f5ad967531d0",
+            ),
         }
         for name, (filename, asset_id) in sources.items():
             with self.subTest(sprite=name):
                 self.assertRegex(html, rf'class="[^"]*\b{name}\b')
-                self.assertIn(f'src="{filename}"', html)
-                self.assertTrue((LANDING / filename).is_file())
+                self.assertIn(f'src="sprites/{filename}"', html)
+                self.assertTrue((LANDING / "sprites" / filename).is_file())
                 self.assertIn(asset_id, attribution)
         self.assertNotRegex(html, r'src="https://github\.com/user-attachments/')
         self.assertIn("PotatoMasher", attribution)
         self.assertIn("WJohnston", attribution)
+        self.assertIn("https://wiki.tgstation13.org/User:Kingfish", attribution)
         self.assertIn("CC BY-NC-SA 4.0", attribution)
         self.assertIn("Repository copies:", attribution)
         self.assertIn("Narsie GIF retains its animation", attribution)
@@ -55,9 +60,9 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn(".operative { animation-delay: -48s; }", css)
         self.assertIn("animation: wizard-drift 96s linear -72s infinite", css)
         self.assertIn("animation: wizard-spin 96s linear -72s infinite", css)
-        self.assertIn("animation: narsie-float 14s ease-in-out", css)
-        self.assertIn("bottom: -16px; left: 50%", css)
-        self.assertIn('background-image: url("layer1.webp")', css)
+        self.assertIn(".narsie-anchor { position: fixed; bottom: 0; left: 50%", css)
+        self.assertIn(".singularity { position: absolute; top: 50%; left: 50%", css)
+        self.assertIn('background-image: url("assets/layer1.webp")', css)
         self.assertIn("background-repeat: repeat", css)
         self.assertIn("@keyframes background-drift", css)
         self.assertIn("animation: background-drift 180s linear infinite", css)
@@ -66,9 +71,9 @@ class LandingPageTest(unittest.TestCase):
 
     def test_station_alert_banner_is_used_and_has_gator_features(self):
         html = (LANDING / "index.html").read_text()
-        banner = (ROOT / "assets/banners/alert.svg").read_text()
+        banner = (LANDING / "assets/banners/alert.svg").read_text()
         self.assertIn(
-            '<img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">',
+            '<img class="landing-banner" src="assets/banners/alert.svg" alt="LazorGator Party 13">',
             html,
         )
         self.assertIn(
@@ -83,13 +88,20 @@ class LandingPageTest(unittest.TestCase):
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
-        self.assertEqual(html.count('src="clown.webp"'), 1)
+        self.assertEqual(html.count('src="sprites/clown.webp"'), 1)
         self.assertIn('class="space" aria-hidden="true"', html)
         self.assertIn("@keyframes drift", css)
         self.assertIn("animation: drift 96s linear infinite", css)
         self.assertIn("translate(calc(100vw - 80px), 20vh)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".character { animation: none;", css)
+
+    def test_floating_sprites_share_a_height_and_preserve_aspect_ratio(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"\.character-button img \{[^}]*height: clamp\([^;]+\); width: auto;",
+        )
 
     def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
         css = (LANDING / "style.css").read_text()
@@ -129,9 +141,9 @@ class LandingPageTest(unittest.TestCase):
 
     def test_smoke_test_fetches_the_tiled_background_asset(self):
         smoke = (ROOT / "tests/smoke-landing.sh").read_text()
-        self.assertIn('curl -fsS "$base/layer1.webp"', smoke)
+        self.assertIn('curl -fsS "$base/assets/layer1.webp"', smoke)
         self.assertIn(
-            "for asset in clown.webp alien.png operative.png wizard.png narsie.gif;",
+            "for asset in clown.webp alien.png operative.png wizard.png narsie.gif singularity.gif;",
             smoke,
         )
         self.assertIn("Web/P image", smoke)
@@ -155,17 +167,20 @@ class LandingPageTest(unittest.TestCase):
                     "landing/page.js",
                     "landing/status.js",
                     "landing/wizard.js",
+                    "landing/narsie.js",
                     "landing/style.css",
-                    "landing/clown.webp",
-                    "landing/alien.png",
-                    "landing/operative.png",
-                    "landing/wizard.png",
-                    "landing/narsie.gif",
-                    "landing/layer1.webp",
                     "/srv/landing/",
                 ],
-                ["assets/banners/alert.svg", "/srv/landing/station-alert.svg"],
-                ["assets/ATTRIBUTION.md", "/srv/landing/ATTRIBUTION.md"],
+                ["landing/sprites/", "/srv/landing/sprites/"],
+                [
+                    "landing/assets/ATTRIBUTION.md",
+                    "landing/assets/layer1.webp",
+                    "/srv/landing/assets/",
+                ],
+                [
+                    "landing/assets/banners/alert.svg",
+                    "/srv/landing/assets/banners/alert.svg",
+                ],
                 ["landing/server.py", "/opt/landing/server.py"],
             ],
         )
@@ -174,8 +189,21 @@ class LandingPageTest(unittest.TestCase):
             "server.py",
             "requirements.txt",
             "__pycache__",
+            "assets",
+            "sprites",
         }
         self.assertEqual(served, {Path(path).name for path in copies[1][:-1]})
+        self.assertEqual(
+            {path.name for path in (LANDING / "sprites").iterdir()},
+            {
+                "clown.webp",
+                "alien.png",
+                "operative.png",
+                "wizard.png",
+                "narsie.gif",
+                "singularity.gif",
+            },
+        )
         self.assertIn("USER 65534:65534", dockerfile)
         self.assertIn('CMD ["python3", "/opt/landing/server.py"]', dockerfile)
         self.assertEqual(server.PAGE_ROOT, "/srv/landing")
@@ -193,13 +221,16 @@ class LandingPageTest(unittest.TestCase):
             "slots.js",
             "page.js",
             "wizard.js",
+            "narsie.js",
             "clown.webp",
             "alien.png",
             "operative.png",
             "wizard.png",
             "narsie.gif",
-            "layer1.webp",
-            "ATTRIBUTION.md",
+            "singularity.gif",
+            "$base/sprites/$asset",
+            "assets/layer1.webp",
+            "assets/ATTRIBUTION.md",
         ):
             with self.subTest(path=path):
                 self.assertIn(path, smoke)
@@ -270,6 +301,106 @@ for (const { button, bubble, message } of speakers) {
         self.assertEqual(html.count('class="speech-bubble"'), 4)
         self.assertIn(
             'id="wizard-bubble" class="speech-bubble" role="status" hidden', html
+        )
+
+    def test_narsie_summons_a_singularity_then_restores_the_orbits(self):
+        html = (LANDING / "index.html").read_text()
+        self.assertIn('<script defer src="narsie.js"></script>', html)
+        self.assertIn('<button class="narsie" type="button" aria-label=', html)
+        self.assertIn('class="singularity" aria-hidden="true" hidden', html)
+        script = """
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+const style = () => ({removeProperty(key) { delete this[key]; }});
+const attributes = new Map();
+const button = {
+  getBoundingClientRect: () => ({left: 300, top: 400, width: 200, height: 200}),
+  getAttribute: name => attributes.get(name),
+  setAttribute: (name, value) => attributes.set(name, value),
+  removeAttribute: name => attributes.delete(name),
+  addEventListener: (event, callback) => { button[event] = callback; },
+};
+const singularity = {hidden: true, style: style()};
+const image = {style: style()};
+const sprite = {
+  style: style(),
+  getBoundingClientRect: () => ({left: 130, top: 130, width: 40, height: 40}),
+  querySelector: () => image,
+};
+const layer = {
+  clientWidth: 800, clientHeight: 600, querySelectorAll: () => [sprite],
+  classList: new Set(),
+};
+layer.classList.remove = name => layer.classList.delete(name);
+const motion = {matches: false};
+const callbacks = [];
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), {
+  document: {querySelector: name => ({
+    ".narsie": button, ".singularity": singularity, ".character-layer": layer,
+  })[name]},
+  matchMedia: () => motion,
+  requestAnimationFrame: callback => callbacks.push(callback),
+});
+const tick = now => callbacks.shift()(now);
+const center = () => sprite.style.translate.split(" ").map(value => 150 + parseFloat(value));
+
+button.click();
+button.click();
+assert.equal(callbacks.length, 1);
+assert.ok(layer.classList.has("in-vortex"));
+tick(0);
+assert.equal(singularity.hidden, false);
+assert.equal(singularity.style.opacity, 0);
+assert.ok(Math.hypot(center()[0] - 150, center()[1] - 150) < 0.001);
+tick(600);
+assert.equal(singularity.style.opacity, 1);
+tick(2900);
+assert.ok(Math.hypot(center()[0] - 400, center()[1] - 500) < 25);
+assert.ok(parseFloat(image.style.rotate) > 10);
+tick(3000);
+const ejectionY = center()[1];
+tick(3050);
+assert.ok(ejectionY - center()[1] > 25);
+tick(3400);
+assert.ok(singularity.style.opacity > 0 && singularity.style.opacity < 1);
+let prevX = center()[0];
+let bounced = false;
+for (let time = 3450; time <= 8000; time += 50) {
+  tick(time);
+  const [x, y] = center();
+  assert.ok(x >= 20 && x <= 780 && y >= 20 && y <= 580);
+  bounced ||= x > prevX;
+  prevX = x;
+}
+assert.ok(bounced);
+assert.equal(singularity.hidden, true);
+assert.equal(singularity.style.opacity, 0);
+assert.ok(layer.classList.has("in-vortex"));
+tick(9990);
+assert.ok(Math.hypot(center()[0] - 150, center()[1] - 150) < 1);
+tick(10000);
+assert.equal(callbacks.length, 0);
+assert.equal(singularity.hidden, true);
+assert.equal(attributes.has("aria-disabled"), false);
+assert.equal(layer.classList.size, 0);
+assert.equal(sprite.style.translate, undefined);
+assert.equal(image.style.rotate, undefined);
+
+motion.matches = true;
+button.click();
+tick(11000);
+assert.equal(singularity.hidden, false);
+assert.equal(singularity.style.opacity, 1);
+assert.equal(layer.classList.size, 0);
+assert.equal(sprite.style.translate, undefined);
+tick(14000);
+assert.equal(singularity.hidden, true);
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "narsie.js")],
+            check=True,
+            timeout=30,
         )
 
     def render(self, slots=None, js=None):

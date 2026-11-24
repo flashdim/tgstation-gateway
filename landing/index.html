@@ -9,40 +9,47 @@
     <script defer src="page.js"></script>
     <script defer src="status.js"></script>
     <script defer src="wizard.js"></script>
+    <script defer src="narsie.js"></script>
   </head>
   <body>
-    <div class="space" aria-hidden="true">
-      <img class="narsie" src="narsie.gif" alt="">
+    <div class="space" aria-hidden="true"></div>
+    <div class="narsie-anchor">
+      <button class="narsie" type="button" aria-label="Summon a singularity with Nar’sie">
+        <img src="sprites/narsie.gif" width="504" height="532" alt="">
+      </button>
+      <div class="singularity" aria-hidden="true" hidden>
+        <img src="sprites/singularity.gif" alt="">
+      </div>
     </div>
     <div class="character-layer">
       <div class="character clown">
         <button class="character-button" type="button" aria-label="Clown" data-message="*honk*">
-          <img src="clown.webp" alt="">
+          <img src="sprites/clown.webp" alt="">
         </button>
         <span class="speech-bubble" role="status" hidden></span>
       </div>
       <div class="character alien">
         <button class="character-button" type="button" aria-label="Alien" data-message="*hiss*">
-          <img src="alien.png" alt="">
+          <img src="sprites/alien.png" alt="">
         </button>
         <span class="speech-bubble" role="status" hidden></span>
       </div>
       <div class="character operative">
         <button class="character-button" type="button" aria-label="Operator" data-message="Guys? Where are you?">
-          <img src="operative.png" alt="">
+          <img src="sprites/operative.png" alt="">
         </button>
         <span class="speech-bubble" role="status" hidden></span>
       </div>
       <div class="character wizard">
         <button id="wizard-button" class="character-button" type="button" aria-label="Activate wizard" data-message="I CAST REGULAR MISSILE">
-          <img src="wizard.png" alt="">
+          <img src="sprites/wizard.png" alt="">
         </button>
         <span id="wizard-bubble" class="speech-bubble" role="status" hidden></span>
       </div>
     </div>
     <main>
       <header>
-        <img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">
+        <img class="landing-banner" src="assets/banners/alert.svg" alt="LazorGator Party 13">
         <section class="server-status" aria-label="Game server status">
           <div class="status-heading">SERVER STATUS <span id="server-online" data-state="unavailable" role="status" aria-live="polite" aria-atomic="true">UNAVAILABLE</span></div>
           <dl>
@@ -59,10 +66,10 @@
         <p id="config-error" class="notice" hidden></p>
         <noscript><p class="notice">JavaScript is required to display configured slots.</p></noscript>
       </section>
-      <footer>
-        <p>Slot status is static test data; access is not enforced by this page.</p>
-        <p><a href="ATTRIBUTION.md">Artwork attributions and licenses</a>.</p>
-      </footer>
     </main>
+    <footer>
+      <p>Slot status is static test data; access is not enforced by this page.</p>
+      <p><a href="assets/ATTRIBUTION.md">Artwork attributions and licenses</a>.</p>
+    </footer>
   </body>
 </html>

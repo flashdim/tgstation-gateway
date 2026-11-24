@@ -7,7 +7,7 @@
   extracted from [tgstation's clown icon](https://github.com/tgstation/tgstation/blob/ef1444885d77a94f38a910ef556554ca2a9fc549/icons/mob/simple/clown_mobs.dmi)
 - License: **CC BY-SA 3.0** — [Creative Commons Attribution-ShareAlike 3.0 Unported](https://creativecommons.org/licenses/by-sa/3.0/),
   as documented in [sprites.toml](https://github.com/tgstation-operations/infrastructure/blob/6963c530f79c25aa04f3d7a55e087b954f119848/website/sprites/sprites.toml)
-- Repository copy: `../landing/clown.webp`
+- Repository copy: `../sprites/clown.webp`
 - Modifications: none to the file; the page scales and rotates it.
 
 The page's star field and placeholder logo are CSS/text, not reference-site
@@ -21,7 +21,7 @@ the wallpapers, which have their own distinct licenses.
 - **Nuclear Operative** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Generic_nukesyndie.png); [provided image](https://github.com/user-attachments/assets/89ee354c-4b68-4661-944b-0c88a11a8411)
 - **Wizard** — artwork by **PotatoMasher**; [wiki source](https://wiki.tgstation13.org/File:Generic_wizard.png); [provided image](https://github.com/user-attachments/assets/fd8813b9-0dac-47b9-ab8f-40c0070f6bbc)
 - License for all four sprites: **CC BY-NC-SA 4.0** — [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/), as stated for the wiki and its content.
-- Repository copies: `../landing/narsie.gif`, `../landing/alien.png`, `../landing/operative.png`, and `../landing/wizard.png`
+- Repository copies: `../sprites/narsie.gif`, `../sprites/alien.png`, `../sprites/operative.png`, and `../sprites/wizard.png`
 - Modifications: none to the image files; displayed at reduced sizes. The Narsie GIF retains its animation.
 
 ## Landing page space background
@@ -30,8 +30,16 @@ the wallpapers, which have their own distinct licenses.
 - Artist: **scriptis** ([GitHub profile](https://github.com/scriptis))
 - Source: [user-provided image attachment](https://github.com/user-attachments/assets/6fedf530-522a-4871-91ad-f098d7fe123b)
 - License: **GNU AGPL v3.0** — [GNU Affero General Public License version 3](https://www.gnu.org/licenses/agpl-3.0.html), as specified by the contributor.
-- Repository copy: `../landing/layer1.webp`
+- Repository copy: `layer1.webp`
 - Modifications: none to the image; tiled and animated diagonally by the page.
+
+## Landing page singularity
+
+- Artist: **Kingfish** ([tgstation wiki profile](https://wiki.tgstation13.org/User:Kingfish))
+- Source: [user-provided GIF](https://github.com/user-attachments/assets/3858a45e-ce06-463f-a429-f5ad967531d0)
+- License: **CC BY-NC-SA 4.0** — [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+- Repository copy: `../sprites/singularity.gif`
+- Modifications: none to the GIF; scaled and faded by the page.
 
 ## Glory to Nanotrasen
 
