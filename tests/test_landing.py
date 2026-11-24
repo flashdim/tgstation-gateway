@@ -141,6 +141,16 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn('stroke="#f8f2d5"', banner)
         self.assertIn('fill="#ff263e"', banner)
 
+    def test_banner_starts_one_tenth_of_the_viewport_below_the_top(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"main \{[^}]*margin: 0 auto auto; padding: 10vh 24px 32px;",
+        )
+        self.assertRegex(
+            css, r"@media \(max-width: 480px\) \{\s*main \{ padding: 10vh 16px 24px;"
+        )
+
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
