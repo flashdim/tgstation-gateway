@@ -157,10 +157,7 @@ class RunClientTest(unittest.TestCase):
                 timeout=5,
             )
             if key_content is not None:
-                key = (
-                    prefix
-                    / "drive_c/users/steamuser/Documents/BYOND/key.txt"
-                )
+                key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
                 self.assertEqual(
                     key.read_text(),
                     f"BEGIN KEY {username}\n{key_content}\nEND KEY\n",
@@ -186,7 +183,7 @@ class RunClientTest(unittest.TestCase):
     def test_seeds_key_and_starts_pager_before_direct_server(self):
         result, _, _, events, _, _ = self.run_client(
             server="example.org:1337",
-            key_content='CzFHCV-E)<#49=#*"/CQA%\'R-G0&1\'9I=\'>I]3>',
+            key_content="CzFHCV-E)<#49=#*\"/CQA%'R-G0&1'9I='>I]3>",
             username="LGplayer01",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
