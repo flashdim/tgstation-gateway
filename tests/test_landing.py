@@ -141,6 +141,16 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn('stroke="#f8f2d5"', banner)
         self.assertIn('fill="#ff263e"', banner)
 
+    def test_banner_starts_one_tenth_of_the_viewport_below_the_top(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"main \{[^}]*margin: 0 auto auto; padding: 10vh 24px 32px;",
+        )
+        self.assertRegex(
+            css, r"@media \(max-width: 480px\) \{\s*main \{ padding: 10vh 16px 24px;"
+        )
+
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
@@ -173,6 +183,33 @@ class LandingPageTest(unittest.TestCase):
             css,
             r"\.character-button img \{[^}]*height: clamp\([^;]+\); width: auto;",
         )
+
+    def test_floating_sprites_have_a_halo_but_narsie_does_not(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"\.character-button img \{[^}]*"
+            r"filter: drop-shadow\(0 0 3px rgba\(255, 255, 255, \.65\)\);",
+        )
+        self.assertNotRegex(css, r"\.narsie img \{[^}]*filter:")
+
+    def test_slots_use_a_compact_scrollable_responsive_grid(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"\.slots \{[^}]*grid-template-columns: repeat\(auto-fit, "
+            r"minmax\(min\(100%, 130px\), 1fr\)\);[^}]*"
+            r"max-height: 50vh; overflow-y: auto;",
+        )
+        self.assertRegex(css, r"\.slot-details \{[^}]*overflow-wrap: anywhere;")
+        self.assertNotIn("min-height: 132px", css)
+
+    def test_sprites_are_above_page_content_during_normal_and_vortex_states(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(css, r"\.character-layer \{[^}]*z-index: 6;")
+        self.assertRegex(css, r"\.narsie-anchor \{[^}]*z-index: 5;")
+        self.assertNotRegex(css, r"\.character-layer\.in-vortex \{[^}]*z-index:")
+        self.assertRegex(css, r"footer \{[^}]*z-index: 4;")
 
     def test_clown_alien_operative_and_wizard_sprites_share_dimensions(self):
         sprites = LANDING / "assets/sprites"
