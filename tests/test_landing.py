@@ -20,18 +20,18 @@ class LandingPageTest(unittest.TestCase):
     def test_static_page_and_slots_include_unavailable_status_without_configuration(
         self,
     ):
-        slots = server.render_slots(
-            server.build_slots(
+        registry = server.SlotRegistry(
+            server.SessionConfig.from_env(
                 {
                     "GATEWAY_SLOT_COUNT": "2",
                     "GATEWAY_SLOT_PATH": "/{account}/",
-                    "GATEWAY_ACTIVE_SLOTS": "LGplayer02",
                 }
             )
         )
+        slots = server.render_slots(registry.snapshot())
         handler = partial(server.LandingHandler, directory=str(LANDING))
         with (
-            mock.patch.object(server.LandingHandler, "slots_js", slots),
+            mock.patch.object(server.LandingHandler, "slot_registry", registry),
             mock.patch.object(server.LandingHandler, "log_message"),
             server.ThreadingHTTPServer(("127.0.0.1", 0), handler) as httpd,
         ):
@@ -475,12 +475,13 @@ setImmediate(async () => {
                     "landing/assets/banners/alert.svg",
                     "/srv/landing/assets/banners/alert.svg",
                 ],
-                ["landing/server.py", "/opt/landing/server.py"],
+                ["landing/server.py", "landing/sessions.py", "/opt/landing/"],
             ],
         )
         served = {path.name for path in LANDING.iterdir() if path.suffix != ".pyc"} - {
             "Dockerfile",
             "server.py",
+            "sessions.py",
             "requirements.txt",
             "__pycache__",
             "assets",
@@ -757,7 +758,6 @@ process.stdout.write(JSON.stringify({list, error}));
                 "GATEWAY_PLAY_HOST": "play.lazorgator.party",
                 "GATEWAY_SLOT_COUNT": "2",
                 "GATEWAY_SLOT_PATH": "/{account}/",
-                "GATEWAY_ACTIVE_SLOTS": "LGplayer02",
             }
         )
         self.assertEqual(
@@ -766,12 +766,12 @@ process.stdout.write(JSON.stringify({list, error}));
                 {
                     "account": "LGplayer01",
                     "url": "https://play.lazorgator.party/LGplayer01/",
-                    "active": False,
+                    "state": None,
                 },
                 {
                     "account": "LGplayer02",
                     "url": "https://play.lazorgator.party/LGplayer02/",
-                    "active": True,
+                    "state": None,
                 },
             ],
         )
@@ -781,7 +781,7 @@ process.stdout.write(JSON.stringify({list, error}));
             hrefs,
             [
                 "https://play.lazorgator.party/LGplayer01/",
-                "https://play.lazorgator.party/LGplayer02/#shared",
+                "https://play.lazorgator.party/LGplayer02/",
             ],
         )
 
@@ -822,18 +822,18 @@ process.stdout.write(JSON.stringify({list, error}));
 
     def test_generated_script_escapes_markup(self):
         js = server.render_slots(
-            [{"account": "</script>", "url": "https://x/", "active": False}]
+            [{"account": "</script>", "url": "https://x/", "state": None}]
         ).decode()
         self.assertNotIn("</script>", js)
 
     def test_statuses_and_urls(self):
         result = self.render(
             [
-                {"account": "LGplayer01", "url": "/player/1?x=1", "active": False},
+                {"account": "LGplayer01", "url": "/player/1?x=1", "state": None},
                 {
                     "account": "LGplayer02",
                     "url": "https://player.example/2?x=1#old",
-                    "active": True,
+                    "state": "ready",
                 },
             ]
         )
@@ -843,25 +843,43 @@ process.stdout.write(JSON.stringify({list, error}));
         self.assertEqual(
             available["children"][1]["children"][0]["textContent"], "AVAILABLE SLOT"
         )
-        self.assertEqual(
-            active["children"][1]["children"][0]["textContent"], "ACTIVE SESSION"
-        )
+        self.assertEqual(active["children"][1]["children"][0]["textContent"], "READY")
         self.assertEqual(
             active["children"][1]["children"][2]["textContent"], "Watch session"
         )
         self.assertTrue(result["error"]["hidden"])
 
+    def test_lifecycle_states_are_rendered_without_unavailable_links(self):
+        for state in ("starting", "stopping", "failed", "reconnect_grace"):
+            with self.subTest(state=state):
+                result = self.render(
+                    [{"account": "LGplayer01", "url": "/player/01/", "state": state}]
+                )
+                card = result["list"]["children"][0]
+                self.assertEqual(
+                    card["children"][1]["children"][0]["textContent"],
+                    state.replace("_", " ").upper(),
+                )
+                if state == "reconnect_grace":
+                    self.assertEqual(
+                        card["href"], "https://gateway.example/player/01/#shared"
+                    )
+                else:
+                    self.assertNotIn("href", card)
+                    self.assertEqual(card["tag"], "div")
+                self.assertTrue(result["error"]["hidden"])
+
     def test_invalid_configuration_is_not_linked(self):
         result = self.render(
             [
-                {"account": "invalid", "url": "javascript:alert(1)", "active": False},
+                {"account": "invalid", "url": "javascript:alert(1)", "state": None},
                 {
                     "account": "invalid",
                     "url": "https://user@example.com/",
-                    "active": True,
+                    "state": "ready",
                 },
-                {"account": "invalid", "url": "/", "active": "false"},
-                {"account": "<img src=x>", "url": "/", "active": False},
+                {"account": "invalid", "url": "/", "state": "unknown"},
+                {"account": "<img src=x>", "url": "/", "state": None},
             ]
         )
         self.assertFalse(result["error"]["hidden"])

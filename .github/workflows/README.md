@@ -29,7 +29,8 @@ the repository root. Set `GATEWAY_LANDING_IMAGE` to select this local image or
 the published `dev` image in the Compose example. See the main README for the
 landing environment variables.
 
-The landing page's slot status is static test data; the game-server status
+The landing page's slot status comes from an in-memory lifecycle model, initially
+unallocated with no orchestration connected; the game-server status
 panel is a separate read-only `?status` query and does not authenticate users,
 create or isolate sessions, or enforce ownership. `#shared` is not an
 authorization boundary. Operators must provide external access controls and

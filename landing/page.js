@@ -10,7 +10,7 @@
       try {
         if (!slot || typeof slot.account !== "string" || !slot.account.trim() ||
             typeof slot.url !== "string" || !slot.url.trim() ||
-            typeof slot.active !== "boolean") {
+            ![null, "starting", "ready", "reconnect_grace", "stopping", "failed"].includes(slot.state)) {
           throw new Error("Invalid slot");
         }
         url = new URL(slot.url, document.baseURI);
@@ -22,27 +22,29 @@
         continue;
       }
 
-      if (slot.active) url.hash = "shared";
+      const active = ["ready", "reconnect_grace"].includes(slot.state);
+      const available = slot.state === null;
+      if (active) url.hash = "shared";
 
-      const card = document.createElement("a");
-      card.className = `slot ${slot.active ? "active" : "available"}`;
-      card.href = url.href;
+      const card = document.createElement(available || active ? "a" : "div");
+      card.className = `slot ${available ? "available" : "active"}`;
+      if (available || active) card.href = url.href;
 
       const icon = document.createElement("span");
       icon.className = "slot-icon";
       icon.setAttribute("aria-hidden", "true");
-      icon.textContent = slot.active ? "▶" : "+";
+      icon.textContent = active ? "▶" : available ? "+" : "…";
 
       const details = document.createElement("span");
       details.className = "slot-details";
       const status = document.createElement("span");
       status.className = "slot-status";
-      status.textContent = slot.active ? "ACTIVE SESSION" : "AVAILABLE SLOT";
+      status.textContent = available ? "AVAILABLE SLOT" : slot.state.replaceAll("_", " ").toUpperCase();
       const account = document.createElement("strong");
       account.textContent = slot.account;
       const action = document.createElement("span");
       action.className = "slot-action";
-      action.textContent = slot.active ? "Watch session" : "Open player";
+      action.textContent = active ? "Watch session" : available ? "Open player" : "Session unavailable";
       details.append(status, account, action);
 
       const arrow = document.createElement("span");

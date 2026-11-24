@@ -35,8 +35,7 @@ container="$(docker run -d --read-only --cap-drop ALL \
     -p 127.0.0.1::8000 \
     -e GATEWAY_PLAY_HOST=play.example.test \
     -e GATEWAY_SLOT_COUNT=2 \
-    -e GATEWAY_SLOT_PATH='/{account}/' \
-    -e GATEWAY_ACTIVE_SLOTS=LGplayer02 "$image")"
+    -e GATEWAY_SLOT_PATH='/{account}/' "$image")"
 port="$(docker port "$container" 8000/tcp | head -n 1 | sed 's/.*://')"
 base="http://127.0.0.1:$port"
 
@@ -82,7 +81,6 @@ configured_container="$(docker run -d --read-only --cap-drop ALL \
     -e GATEWAY_PLAY_HOST=play.example.test \
     -e GATEWAY_SLOT_COUNT=2 \
     -e GATEWAY_SLOT_PATH='/{account}/' \
-    -e GATEWAY_ACTIVE_SLOTS=LGplayer02 \
     -e GATEWAY_QUERY_HOST=game -e GATEWAY_QUERY_PORT=1337 "$image")"
 configured_port="$(docker port "$configured_container" 8000/tcp | head -n 1 | sed 's/.*://')"
 configured_base="http://127.0.0.1:$configured_port"
@@ -121,8 +119,7 @@ grep -q 'server-status' "$workdir/index.html"
 curl -fsS "$base/slots.js" -o "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer01/"' "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer02/"' "$workdir/slots.js"
-grep -q '"active": true' "$workdir/slots.js"
-grep -q '"active": false' "$workdir/slots.js"
+grep -q '"state": null' "$workdir/slots.js"
 curl -fsS "$base/page.js" -o "$workdir/page.js"
 grep -q GATEWAY_SLOTS "$workdir/page.js"
 curl -fsS "$base/wizard.js" -o "$workdir/wizard.js"
