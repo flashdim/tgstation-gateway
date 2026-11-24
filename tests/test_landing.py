@@ -70,6 +70,10 @@ class LandingPageTest(unittest.TestCase):
             '<img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">',
             html,
         )
+        self.assertIn(
+            ".landing-banner { position: relative; z-index: 2;",
+            (LANDING / "style.css").read_text(),
+        )
         self.assertIn("red eye lasers", banner)
         self.assertIn('filter id="laser-glow"', banner)
         self.assertIn('stroke="#f8f2d5"', banner)
