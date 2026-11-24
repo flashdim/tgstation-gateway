@@ -215,18 +215,18 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn("--key LookAndFeelPackage org.kde.breezedark.desktop", dockerfile)
         self.assertIn("--key ColorScheme BreezeDark", dockerfile)
         self.assertIn(
-            "assets/wallpapers/ /usr/share/tgstation-gateway/wallpapers/",
+            "landing/assets/wallpapers/ /usr/share/tgstation-gateway/wallpapers/",
             dockerfile,
         )
         self.assertIn(
-            "assets/ATTRIBUTION.md /usr/share/tgstation-gateway/wallpaper-attribution.md",
+            "landing/assets/ATTRIBUTION.md /usr/share/tgstation-gateway/wallpaper-attribution.md",
             dockerfile,
         )
         self.assertLess(
             dockerfile.index(
                 "install -d -o root -g root -m 755 /usr/share/tgstation-gateway/wallpapers"
             ),
-            dockerfile.index("COPY --chmod=644 assets/wallpapers/"),
+            dockerfile.index("COPY --chmod=644 landing/assets/wallpapers/"),
         )
         smoke = (ROOT / "tests/smoke-container.sh").read_text()
         self.assertIn(
@@ -234,11 +234,12 @@ class DesktopSessionTest(unittest.TestCase):
         )
 
     def test_wallpaper_assets_and_attribution_are_in_repository(self):
-        asset = ROOT / "assets/wallpapers/glory-to-nanotrasen.jpg"
-        logo = ROOT / "assets/wallpapers/space-station-13-logo.svg"
-        nanotrasen = ROOT / "assets/wallpapers/nanotrasen-logo.png"
-        paradise = ROOT / "assets/wallpapers/ss13-paradise-ian-shuttle.png"
-        attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
+        assets = ROOT / "landing/assets"
+        asset = assets / "wallpapers/glory-to-nanotrasen.jpg"
+        logo = assets / "wallpapers/space-station-13-logo.svg"
+        nanotrasen = assets / "wallpapers/nanotrasen-logo.png"
+        paradise = assets / "wallpapers/ss13-paradise-ian-shuttle.png"
+        attribution = (assets / "ATTRIBUTION.md").read_text()
         self.assertTrue(asset.is_file())
         self.assertGreater(asset.stat().st_size, 10_000)
         self.assertTrue(logo.is_file())

@@ -6,8 +6,8 @@
   <img src="https://img.shields.io/badge/Gameplay-risky-orange?style=flat-square" alt="Gameplay: risky">
   <img src="https://img.shields.io/badge/Copilot-Robusted-blueviolet?style=flat-square" alt="Copilot: Robusted"><br>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker"></a>
-  <a href="https://github.com/selkies-project/selkies"><img src="assets/selkies-logo.png" alt="Selkies" height="24"></a>
-  <a href="https://www.byond.com/"><img src="assets/byond-logo.png" alt="BYOND" height="24"></a>
+  <a href="https://github.com/selkies-project/selkies"><img src="landing/assets/selkies-logo.png" alt="Selkies" height="24"></a>
+  <a href="https://www.byond.com/"><img src="landing/assets/byond-logo.png" alt="BYOND" height="24"></a>
   <a href="https://github.com/Kron4ek/Wine-Builds"><img src="https://img.shields.io/badge/Proton%20Wine-10.0--4-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Proton Wine 10.0-4"></a>
 </p>
 
@@ -140,7 +140,7 @@ integration ([#48](https://github.com/flashdim/tgstation-gateway/issues/48))
 and future session-manager work. Protect both the page and player endpoints
 with operator-managed access controls and secure connections; do not expose
 the local test server or player stream directly to the internet. See
-`assets/ATTRIBUTION.md` for artwork sources and licenses.
+`landing/assets/ATTRIBUTION.md` for artwork sources and licenses.
 The landing image publishes `dev` for main-branch CI builds and `dev-pr<number>`
 for same-repository pull requests. Releases publish a version tag matching the
 release and `latest` for non-prereleases. CI development tags are pushed before
@@ -202,14 +202,14 @@ or change the appearance and panel in Plasma. If selecting a different global
 look-and-feel, its own first-run layout may replace the gateway panel layout.
 
 The first-run desktop uses a Plasma slideshow of the images in
-`assets/wallpapers/`, including **Glory to Nanotrasen** by **partheosis** and
-the **Space Station 13** logo by **Wirewraith**. See `assets/ATTRIBUTION.md` for
+`landing/assets/wallpapers/`, including **Glory to Nanotrasen** by **partheosis** and
+the **Space Station 13** logo by **Wirewraith**. See `landing/assets/ATTRIBUTION.md` for
 sources and licenses (also installed at
 `/usr/share/tgstation-gateway/wallpaper-attribution.md` in the image).
 Images are centered at their original size against a black background. This
 first-run default applies to fresh containers; existing Plasma settings are not
 overwritten. Plasma's default slide interval is 15 minutes. To add
-images to the built-in collection, place them in `assets/wallpapers/`, record
+images to the built-in collection, place them in `landing/assets/wallpapers/`, record
 their attribution and license, and rebuild the image.
 
 To replace the collection without rebuilding, bind-mount an operator-supplied

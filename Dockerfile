@@ -176,8 +176,8 @@ RUN set -eu; \
     chown root:root /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
     chmod 644 /etc/xdg/kdeglobals /etc/xdg/plasmarc /etc/xdg/kcminputrc; \
     install -d -o root -g root -m 755 /usr/share/tgstation-gateway/wallpapers
-COPY --chmod=644 assets/wallpapers/ /usr/share/tgstation-gateway/wallpapers/
-COPY --chmod=644 assets/ATTRIBUTION.md /usr/share/tgstation-gateway/wallpaper-attribution.md
+COPY --chmod=644 landing/assets/wallpapers/ /usr/share/tgstation-gateway/wallpapers/
+COPY --chmod=644 landing/assets/ATTRIBUTION.md /usr/share/tgstation-gateway/wallpaper-attribution.md
 COPY --chmod=755 container/healthcheck.sh /usr/local/bin/healthcheck
 USER 1000
 

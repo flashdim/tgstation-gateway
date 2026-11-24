@@ -17,8 +17,8 @@ class LandingPageTest(unittest.TestCase):
     def test_wiki_sprites_are_attributed_and_displayed(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
-        attribution = (ROOT / "assets/ATTRIBUTION.md").read_text()
-        self.assertIn('href="ATTRIBUTION.md"', html)
+        attribution = (LANDING / "assets/ATTRIBUTION.md").read_text()
+        self.assertIn('href="assets/ATTRIBUTION.md"', html)
         self.assertNotIn("PotatoMasher", html)
         self.assertNotIn("WJohnston", html)
         self.assertNotIn("scriptis", html)
@@ -44,8 +44,8 @@ class LandingPageTest(unittest.TestCase):
         for name, (filename, asset_id) in sources.items():
             with self.subTest(sprite=name):
                 self.assertRegex(html, rf'class="[^"]*\b{name}\b')
-                self.assertIn(f'src="{filename}"', html)
-                self.assertTrue((LANDING / filename).is_file())
+                self.assertIn(f'src="sprites/{filename}"', html)
+                self.assertTrue((LANDING / "sprites" / filename).is_file())
                 self.assertIn(asset_id, attribution)
         self.assertNotRegex(html, r'src="https://github\.com/user-attachments/')
         self.assertIn("PotatoMasher", attribution)
@@ -62,7 +62,7 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("animation: wizard-spin 96s linear -72s infinite", css)
         self.assertIn(".narsie-anchor { position: fixed; bottom: 0; left: 50%", css)
         self.assertIn(".singularity { position: absolute; top: 50%; left: 50%", css)
-        self.assertIn('background-image: url("layer1.webp")', css)
+        self.assertIn('background-image: url("assets/layer1.webp")', css)
         self.assertIn("background-repeat: repeat", css)
         self.assertIn("@keyframes background-drift", css)
         self.assertIn("animation: background-drift 180s linear infinite", css)
@@ -71,9 +71,9 @@ class LandingPageTest(unittest.TestCase):
 
     def test_station_alert_banner_is_used_and_has_gator_features(self):
         html = (LANDING / "index.html").read_text()
-        banner = (ROOT / "assets/banners/alert.svg").read_text()
+        banner = (LANDING / "assets/banners/alert.svg").read_text()
         self.assertIn(
-            '<img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">',
+            '<img class="landing-banner" src="assets/banners/alert.svg" alt="LazorGator Party 13">',
             html,
         )
         self.assertIn(
@@ -88,7 +88,7 @@ class LandingPageTest(unittest.TestCase):
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
-        self.assertEqual(html.count('src="clown.webp"'), 1)
+        self.assertEqual(html.count('src="sprites/clown.webp"'), 1)
         self.assertIn('class="space" aria-hidden="true"', html)
         self.assertIn("@keyframes drift", css)
         self.assertIn("animation: drift 96s linear infinite", css)
@@ -134,7 +134,7 @@ class LandingPageTest(unittest.TestCase):
 
     def test_smoke_test_fetches_the_tiled_background_asset(self):
         smoke = (ROOT / "tests/smoke-landing.sh").read_text()
-        self.assertIn('curl -fsS "$base/layer1.webp"', smoke)
+        self.assertIn('curl -fsS "$base/assets/layer1.webp"', smoke)
         self.assertIn(
             "for asset in clown.webp alien.png operative.png wizard.png narsie.gif singularity.gif;",
             smoke,
@@ -162,17 +162,18 @@ class LandingPageTest(unittest.TestCase):
                     "landing/wizard.js",
                     "landing/narsie.js",
                     "landing/style.css",
-                    "landing/clown.webp",
-                    "landing/alien.png",
-                    "landing/operative.png",
-                    "landing/wizard.png",
-                    "landing/narsie.gif",
-                    "landing/singularity.gif",
-                    "landing/layer1.webp",
                     "/srv/landing/",
                 ],
-                ["assets/banners/alert.svg", "/srv/landing/station-alert.svg"],
-                ["assets/ATTRIBUTION.md", "/srv/landing/ATTRIBUTION.md"],
+                ["landing/sprites/", "/srv/landing/sprites/"],
+                [
+                    "landing/assets/ATTRIBUTION.md",
+                    "landing/assets/layer1.webp",
+                    "/srv/landing/assets/",
+                ],
+                [
+                    "landing/assets/banners/alert.svg",
+                    "/srv/landing/assets/banners/alert.svg",
+                ],
                 ["landing/server.py", "/opt/landing/server.py"],
             ],
         )
@@ -181,8 +182,21 @@ class LandingPageTest(unittest.TestCase):
             "server.py",
             "requirements.txt",
             "__pycache__",
+            "assets",
+            "sprites",
         }
         self.assertEqual(served, {Path(path).name for path in copies[1][:-1]})
+        self.assertEqual(
+            {path.name for path in (LANDING / "sprites").iterdir()},
+            {
+                "clown.webp",
+                "alien.png",
+                "operative.png",
+                "wizard.png",
+                "narsie.gif",
+                "singularity.gif",
+            },
+        )
         self.assertIn("USER 65534:65534", dockerfile)
         self.assertIn('CMD ["python3", "/opt/landing/server.py"]', dockerfile)
         self.assertEqual(server.PAGE_ROOT, "/srv/landing")
@@ -207,8 +221,9 @@ class LandingPageTest(unittest.TestCase):
             "wizard.png",
             "narsie.gif",
             "singularity.gif",
-            "layer1.webp",
-            "ATTRIBUTION.md",
+            "$base/sprites/$asset",
+            "assets/layer1.webp",
+            "assets/ATTRIBUTION.md",
         ):
             with self.subTest(path=path):
                 self.assertIn(path, smoke)
