@@ -162,6 +162,16 @@ class RunClientTest(unittest.TestCase):
                 timeout=5,
             )
             if key_file is not None and expect_key:
+                if server and result.returncode == 0:
+                    events = root / "event-log"
+                    deadline = time.monotonic() + 5
+                    while not (
+                        events.exists()
+                        and events.read_text().splitlines().count("launch") == 2
+                    ):
+                        if time.monotonic() >= deadline:
+                            self.fail("Timed out waiting for both mock launch events")
+                        time.sleep(0.01)
                 key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
                 key_bytes = Path(key_file).read_bytes()
                 self.assertTrue(key.read_bytes() == key_bytes)
