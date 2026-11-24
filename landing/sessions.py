@@ -190,6 +190,11 @@ class SlotRegistry:
                 raise ValueError("Invalid session state transition")
             self._states[account] = state
 
+    def state(self, account):
+        self.config.slot(account)
+        with self._lock:
+            return self._states[account]
+
     def release(self, account):
         """Caller must confirm container/session-data cleanup before releasing."""
         self.config.slot(account)
