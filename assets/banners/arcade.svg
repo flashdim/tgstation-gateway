@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title description">
+  <title id="title">LazorGator Party 13 — Arcade</title>
+  <desc id="description">A playful neon gator and pixel stars frame a retro arcade title.</desc>
+  <defs>
+    <linearGradient id="space" x2="1" y2="1">
+      <stop stop-color="#211432"/>
+      <stop offset=".55" stop-color="#10192e"/>
+      <stop offset="1" stop-color="#102c34"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="1192" height="292" rx="18" fill="url(#space)" stroke="#a55cbf" stroke-width="6"/>
+  <rect x="13" y="13" width="1174" height="274" rx="12" fill="none" stroke="#69e1c4" stroke-width="2" opacity=".7"/>
+  <g fill="#ffda79">
+    <path d="M76 58h8v-8h8v8h8v8h-8v8h-8v-8h-8z"/><path d="M1092 205h7v-7h7v7h7v7h-7v7h-7v-7h-7z"/>
+    <rect x="330" y="51" width="5" height="5"/><rect x="963" y="74" width="5" height="5"/><rect x="1038" y="240" width="5" height="5"/>
+  </g>
+  <g transform="translate(65 98)" shape-rendering="crispEdges">
+    <path d="M30 44V24H50V14H101V24H121V44H143V84H121V94H30V84H10V44Z" fill="#70e3ad"/>
+    <path d="M10 64H143V84H121V94H30V84H10Z" fill="#44a77e"/>
+    <path d="M30 64h91v8H30z" fill="#102c32"/>
+    <path d="M41 72h10v10H41zm20 0h10v10H61zm20 0h10v10H81zm20 0h10v10h-10z" fill="#f4f6db"/>
+    <rect x="50" y="34" width="10" height="10" fill="#16383c"/><rect x="100" y="34" width="10" height="10" fill="#16383c"/>
+    <path d="M9 35H1V27H9V19H17V27H25V35H17V43H9Z" fill="#f7a8ea"/>
+  </g>
+  <text x="247" y="106" fill="#f6adf0" font-family="monospace" font-size="21" font-weight="700" letter-spacing="5">INSERT CREW FOR ADVENTURE</text>
+  <text x="242" y="162" fill="#f2f7ff" font-family="Arial, sans-serif" font-size="62" font-weight="900" letter-spacing="1">LAZORGATOR</text>
+  <text x="245" y="214" fill="#83f2d3" font-family="Arial, sans-serif" font-size="46" font-weight="900" letter-spacing="9">PARTY <tspan fill="#ffd47a">13</tspan></text>
+  <g fill="none" stroke="#a768c4" stroke-width="4">
+    <path d="M1023 113h105v81h-105zM1037 126h77v54h-77z"/>
+    <path d="M1046 208h59m-29-14v14"/>
+  </g>
+  <path d="M1049 147h15v-9h18v9h15v14h-15v8h-18v-8h-15z" fill="#ffb5a8"/>
+</svg>
