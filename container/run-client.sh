@@ -80,6 +80,31 @@ until display_ready; do
     sleep 1
 done
 
+seed_byond_key() {
+    local key_file="${BYOND_KEY_FILE:-}"
+    local key_path="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
+    local temporary
+
+    [ -n "$key_file" ] || return 0
+    [ -f "$key_file" ] && [ -r "$key_file" ] || {
+        echo "BYOND_KEY_FILE is not readable" >&2
+        exit 1
+    }
+    [ -s "$key_file" ] || {
+        echo "BYOND_KEY_FILE is empty" >&2
+        exit 1
+    }
+    mkdir -p "$(dirname "$key_path")"
+    temporary="$(mktemp "$key_path.XXXXXX")"
+    if ! cat -- "$key_file" >"$temporary" || ! mv -f -- "$temporary" "$key_path"; then
+        rm -f -- "$temporary"
+        echo "Failed to install BYOND key file" >&2
+        exit 1
+    fi
+}
+
+seed_byond_key
+
 dimensions="$(xdpyinfo -display "$DISPLAY" | awk '$1 == "dimensions:" { print $2; exit }')"
 if [[ ! "$dimensions" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     echo "Could not determine display dimensions" >&2
@@ -228,6 +253,10 @@ if [ -n "${BYOND_SERVER:-}" ]; then
     dreamseeker="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
     server_url="byond://$server"
 
+    if [ -n "${BYOND_KEY_FILE:-}" ]; then
+        pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+        wine "$pager" >/dev/null 2>&1 &
+    fi
     exec wine "$dreamseeker" "$server_url"
 fi
 

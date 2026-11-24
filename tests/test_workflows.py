@@ -53,6 +53,20 @@ class WorkflowTest(unittest.TestCase):
         self.assertNotIn(command, jobs["image"])
         self.assertNotIn(command, jobs["landing-image"])
 
+    def test_credential_check_is_explicit_and_uses_a_temporary_file(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        start = workflow.index("name: Check runtime BYOND key provisioning")
+        step = workflow[start : workflow.index("\n  landing-image:", start)]
+        self.assertIn("github.event_name == 'workflow_dispatch'", step)
+        self.assertIn("inputs.check_byond_key", step)
+        self.assertIn("${{ secrets.BYOND_TEST_KEY }}", step)
+        self.assertNotIn("BYOND_TEST_USERNAME", step)
+        self.assertNotIn("BYOND_TEST_PASSWORD", step)
+        self.assertIn('if [ -z "$BYOND_TEST_KEY" ]', step)
+        self.assertIn("trap 'rm -f -- \"$key_file\"' EXIT", step)
+        self.assertIn("unset BYOND_TEST_KEY", step)
+        self.assertIn('export BYOND_TEST_KEY_FILE="$key_file"', step)
+
     def test_landing_and_player_images_build_in_separate_jobs(self):
         for filename, player, tag in (
             ("ci.yml", "image", "ci"),

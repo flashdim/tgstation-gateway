@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import time
@@ -20,6 +21,9 @@ class RunClientTest(unittest.TestCase):
         existing_layout=None,
         wine_exit_code=0,
         cleanup_failure=None,
+        key_content=None,
+        key_source=None,
+        expect_key=True,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -87,6 +91,9 @@ class RunClientTest(unittest.TestCase):
             runtime.mkdir()
             prefix = root / "wine prefix"
             authority = runtime / "kwin authority"
+            key_file = key_source or (
+                root / "byond-key" if key_content is not None else None
+            )
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
@@ -94,6 +101,11 @@ class RunClientTest(unittest.TestCase):
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
+                + (
+                    f"export BYOND_KEY_FILE={shlex.quote(str(key_file))}\n"
+                    if key_file is not None
+                    else ""
+                )
             )
             env = {
                 **os.environ,
@@ -113,8 +125,11 @@ class RunClientTest(unittest.TestCase):
                 "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
             }
             env.pop("BYOND_SERVER", None)
+            env.pop("BYOND_KEY_FILE", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
             env.pop("XAUTHORITY", None)
+            if key_content is not None:
+                (root / "byond-key").write_bytes(key_content)
             layout = (
                 prefix
                 / "drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/"
@@ -146,6 +161,29 @@ class RunClientTest(unittest.TestCase):
                 text=True,
                 timeout=5,
             )
+            if key_file is not None and expect_key:
+                if server and result.returncode == 0:
+                    events = root / "event-log"
+                    deadline = time.monotonic() + 5
+                    while not (
+                        events.exists()
+                        and events.read_text().splitlines().count("launch") == 2
+                    ):
+                        if time.monotonic() >= deadline:
+                            self.fail("Timed out waiting for both mock launch events")
+                        time.sleep(0.01)
+                key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
+                key_bytes = Path(key_file).read_bytes()
+                self.assertTrue(key.read_bytes() == key_bytes)
+                self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+                self.assertFalse(key_bytes in result.stdout.encode())
+                self.assertFalse(key_bytes in result.stderr.encode())
+            elif key_file is not None:
+                self.assertFalse(
+                    (
+                        prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
+                    ).exists()
+                )
             log = root / "wine-log"
             events = root / "event-log"
             cleanup = root / "cleanup-log"
@@ -162,6 +200,40 @@ class RunClientTest(unittest.TestCase):
         result, _, _, events, _, _ = self.run_client(wine_exit_code=23)
         self.assertEqual(result.returncode, 23)
         self.assertEqual(events, ["launch"])
+
+    def test_seeds_key_and_starts_pager_before_direct_server(self):
+        result, _, _, events, _, _ = self.run_client(
+            server="example.org:1337",
+            key_content=b"BEGIN KEY TestAccount\r\nsynthetic-key-for-unit-test\r\n`\r\nEND KEY\r\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events.count("launch"), 2)
+
+    def test_rejects_empty_or_missing_key_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            for kwargs in (
+                {"key_content": b""},
+                {"key_source": Path(temporary) / "missing-key"},
+            ):
+                with self.subTest(case=next(iter(kwargs))):
+                    result, _, _, events, _, _ = self.run_client(
+                        server="example.org:1337", expect_key=False, **kwargs
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("BYOND_KEY_FILE", result.stderr)
+                    self.assertEqual(events, [])
+
+    @unittest.skipUnless(
+        os.environ.get("BYOND_TEST_KEY_FILE"),
+        "BYOND credential provisioning check not enabled or secrets unavailable",
+    )
+    def test_provisions_runtime_secret_file(self):
+        result, _, _, events, _, _ = self.run_client(
+            server="example.org:1337",
+            key_source=Path(os.environ["BYOND_TEST_KEY_FILE"]),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(events.count("launch"), 2)
 
     def test_writes_display_sized_layout_over_existing_config(self):
         result, _, _, _, layout, _ = self.run_client(
