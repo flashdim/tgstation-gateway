@@ -67,6 +67,21 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("unset BYOND_TEST_KEY", step)
         self.assertIn('export BYOND_TEST_KEY_FILE="$key_file"', step)
 
+    def test_real_login_check_is_manual_and_uses_a_read_only_secret_file(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        start = workflow.index("name: Test real BYOND server login")
+        step = workflow[start : workflow.index("\n      - name:", start + 1)]
+        self.assertIn("github.event_name == 'workflow_dispatch'", step)
+        self.assertIn("inputs.check_byond_login", step)
+        self.assertIn("${{ secrets.LGPLAYER01_KEY }}", step)
+        self.assertIn("tests/smoke-byond-login.sh", step)
+        self.assertIn("unset LGPLAYER01_KEY", step)
+        self.assertIn("timeout-minutes: 12", step)
+        self.assertIn(
+            "whether the server's reported player count increases",
+            (ROOT / ".github/workflows/README.md").read_text(),
+        )
+
     def test_landing_and_player_images_build_in_separate_jobs(self):
         for filename, player, tag in (
             ("ci.yml", "image", "ci"),
