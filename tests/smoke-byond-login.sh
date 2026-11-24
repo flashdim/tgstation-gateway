@@ -18,8 +18,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ ! -s "$key_file" ] || [ "$(stat -c '%a' "$key_file")" != 600 ]; then
-    echo "BYOND key must be a non-empty mode-600 file" >&2
+if [ ! -s "$key_file" ] ||
+    [ "$(stat -c '%u:%g %a' "$key_file")" != "1000:1000 400" ]; then
+    echo "BYOND key must be a non-empty UID-1000 mode-400 file" >&2
     exit 1
 fi
 

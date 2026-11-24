@@ -233,6 +233,8 @@ jobs:
           trap 'rm -f -- "$key_file"' EXIT
           printf '%s' "$LGPLAYER01_KEY" > "$key_file"
           unset LGPLAYER01_KEY
+          sudo chown 1000:1000 "$key_file"
+          sudo chmod 400 "$key_file"
           python3 -m venv "$RUNNER_TEMP/byond-wire"
           "$RUNNER_TEMP/byond-wire/bin/pip" install --require-hashes \
             -r landing/requirements.txt

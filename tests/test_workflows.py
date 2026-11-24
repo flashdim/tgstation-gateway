@@ -76,9 +76,11 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("${{ secrets.LGPLAYER01_KEY }}", step)
         self.assertIn("tests/smoke-byond-login.sh", step)
         self.assertIn("unset LGPLAYER01_KEY", step)
+        self.assertIn("sudo chown 1000:1000", step)
+        self.assertIn("sudo chmod 400", step)
         self.assertIn("timeout-minutes: 12", step)
         self.assertIn(
-            "whether the server's reported player count increases",
+            "reported player count increases",
             (ROOT / ".github/workflows/README.md").read_text(),
         )
 

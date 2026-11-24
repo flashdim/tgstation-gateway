@@ -47,14 +47,15 @@ or gameplay.
 
 For an explicitly enabled manual `ci.yml` dispatch, `check_byond_login` uses
 the `LGPLAYER01_KEY` Actions secret to start the real player image against
-`ss13.lazorgator.party:1337`. The key is written to a mode-600 temporary file,
-mounted read-only, and removed after the disposable container is removed. It is
-not passed into the player container as a secret-valued environment variable,
-command-line argument, log, image, cache, or artifact. The test only reports
-whether the server's reported player count increases after the client becomes
-ready; it does not identify which account caused the change or prove gameplay,
-Selkies streaming, or shared viewing. Run it only when the dedicated account is
-not already connected; if the Actions secret is unavailable, the step skips.
+`ss13.lazorgator.party:1337`. The key is written to a temporary file owned by
+the container's UID with mode 400, mounted read-only, and removed after the
+disposable container is removed. The key value is not passed to the player
+container in an environment variable or command-line argument, logged, cached,
+or included in an image or artifact. The test only reports whether the server's
+reported player count increases after the client becomes ready; it does not
+identify which account caused the change or prove gameplay, Selkies streaming,
+or shared viewing. Run it only when the dedicated account is not already
+connected; if the Actions secret is unavailable, the step skips.
 
 ## Build caches
 
