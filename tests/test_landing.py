@@ -90,7 +90,6 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("translate(calc(100vw - 80px), 20vh)", css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".character { animation: none;", css)
-        self.assertIn("#server-online::before { animation: none; }", css)
 
     def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
         css = (LANDING / "style.css").read_text()
@@ -104,9 +103,7 @@ class LandingPageTest(unittest.TestCase):
             css,
         )
         self.assertIn("@keyframes status-pulse", css)
-        self.assertIn(
-            'id="server-online" data-state="unavailable" role="status"', html
-        )
+        self.assertIn('id="server-online" data-state="unavailable" role="status"', html)
         self.assertIn("#server-online::before { animation: none; }", css)
 
     def test_compose_runs_localhost_only_landing_image(self):
@@ -577,7 +574,8 @@ setImmediate(async () => {
         )
         html = (LANDING / "index.html").read_text()
         self.assertIn(
-            'id="server-online" role="status" aria-live="polite" aria-atomic="true"',
+            'id="server-online" data-state="unavailable" role="status" '
+            'aria-live="polite" aria-atomic="true"',
             html,
         )
         self.assertLess(
