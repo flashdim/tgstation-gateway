@@ -20,6 +20,8 @@ class RunClientTest(unittest.TestCase):
         existing_layout=None,
         wine_exit_code=0,
         cleanup_failure=None,
+        key_content=None,
+        username=None,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -94,6 +96,12 @@ class RunClientTest(unittest.TestCase):
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
+                + (
+                    f"export BYOND_KEY_FILE='{root / 'byond-key'}'\n"
+                    f"export BYOND_USERNAME='{username}'\n"
+                    if key_content is not None
+                    else ""
+                )
             )
             env = {
                 **os.environ,
@@ -115,6 +123,8 @@ class RunClientTest(unittest.TestCase):
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
             env.pop("XAUTHORITY", None)
+            if key_content is not None:
+                (root / "byond-key").write_text(key_content)
             layout = (
                 prefix
                 / "drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/"
@@ -146,6 +156,16 @@ class RunClientTest(unittest.TestCase):
                 text=True,
                 timeout=5,
             )
+            if key_content is not None:
+                key = (
+                    prefix
+                    / "drive_c/users/steamuser/Documents/BYOND/key.txt"
+                )
+                self.assertEqual(
+                    key.read_text(),
+                    f"BEGIN KEY {username}\n{key_content}\nEND KEY\n",
+                )
+                self.assertEqual(key.stat().st_mode & 0o777, 0o600)
             log = root / "wine-log"
             events = root / "event-log"
             cleanup = root / "cleanup-log"
@@ -162,6 +182,15 @@ class RunClientTest(unittest.TestCase):
         result, _, _, events, _, _ = self.run_client(wine_exit_code=23)
         self.assertEqual(result.returncode, 23)
         self.assertEqual(events, ["launch"])
+
+    def test_seeds_key_and_starts_pager_before_direct_server(self):
+        result, _, _, events, _, _ = self.run_client(
+            server="example.org:1337",
+            key_content='CzFHCV-E)<#49=#*"/CQA%\'R-G0&1\'9I=\'>I]3>',
+            username="LGplayer01",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events.count("launch"), 2)
 
     def test_writes_display_sized_layout_over_existing_config(self):
         result, _, _, _, layout, _ = self.run_client(

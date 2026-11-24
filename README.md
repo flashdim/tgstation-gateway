@@ -125,9 +125,15 @@ only a single-slot configuration reaches a working player without additional
 routing. Invalid values stop the landing container at startup with an error
 naming the variable. Startup logs list each generated slot URL.
 
-The operator must create BYOND accounts manually. These labels do not sign in
-to BYOND; the login flow and secure credential provisioning are undecided.
-Never put passwords or other secrets in this public configuration or URLs.
+The operator must create BYOND accounts manually. For a pager key obtained by
+logging in to the matching account, mount a file containing only the generated
+key string read-only at `/run/secrets/byond-key`, then set
+`BYOND_KEY_FILE=/run/secrets/byond-key` and `BYOND_USERNAME` to the account
+name. The launcher writes the required disposable `key.txt` inside the Wine
+prefix and never logs its contents. Do not put the key or a password in
+environment variables, command-line arguments, public configuration, URLs,
+images or caches. Rotate the operator-managed source file when the account
+key is revoked.
 The inactive link opens its configured URL; the active watch link replaces any
 existing fragment with `#shared`, preserving the path and query.
 
@@ -154,7 +160,9 @@ To start the client connected to a server instead of opening the pager, provide 
 BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
-A BYOND account or server-side authentication may still be required.
+The key file and username are optional; without them, BYOND may require
+interactive pager login. A BYOND account or server-side authentication may
+still be required.
 Dream Seeker launches once and remains running. The desktop's **Reset Session**
 action restarts it after Selkies clients connect. The BYOND pager path is
 unchanged.

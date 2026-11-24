@@ -80,6 +80,43 @@ until display_ready; do
     sleep 1
 done
 
+seed_byond_key() {
+    local key_file="${BYOND_KEY_FILE:-}"
+    local username="${BYOND_USERNAME:-}"
+    local key_path="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
+    local temporary
+
+    [ -n "$key_file" ] || return 0
+    [ -r "$key_file" ] || {
+        echo "BYOND_KEY_FILE is not readable" >&2
+        exit 1
+    }
+    [ -s "$key_file" ] || {
+        echo "BYOND_KEY_FILE is empty" >&2
+        exit 1
+    }
+    [[ "$username" =~ ^[A-Za-z0-9._-]+$ ]] || {
+        echo "BYOND_USERNAME contains invalid characters" >&2
+        exit 1
+    }
+    if [ "$(wc -l <"$key_file")" -gt 1 ] || grep -q '[[:cntrl:]]' "$key_file"; then
+        echo "BYOND_KEY_FILE must contain one printable key line" >&2
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$key_path")"
+    temporary="$(mktemp "$key_path.XXXXXX")"
+    chmod 600 "$temporary"
+    {
+        printf 'BEGIN KEY %s\n' "$username"
+        cat "$key_file"
+        printf '\nEND KEY\n'
+    } >"$temporary"
+    mv -f "$temporary" "$key_path"
+}
+
+seed_byond_key
+
 dimensions="$(xdpyinfo -display "$DISPLAY" | awk '$1 == "dimensions:" { print $2; exit }')"
 if [[ ! "$dimensions" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     echo "Could not determine display dimensions" >&2
@@ -228,6 +265,10 @@ if [ -n "${BYOND_SERVER:-}" ]; then
     dreamseeker="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
     server_url="byond://$server"
 
+    if [ -n "${BYOND_KEY_FILE:-}" ]; then
+        pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+        wine "$pager" >/dev/null 2>&1 &
+    fi
     exec wine "$dreamseeker" "$server_url"
 fi
 
