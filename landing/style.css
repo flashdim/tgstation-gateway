@@ -38,11 +38,12 @@ body {
 .clown .character-button img { opacity: .7; }
 .wizard .character-button img { animation: wizard-spin 96s linear -72s infinite; }
 .speech-bubble { position: absolute; bottom: 100%; left: 0; width: max-content; max-width: min(190px, 80vw); padding: 8px; border-radius: 8px; background: #fff; color: #141629; font-size: .75rem; font-weight: 800; pointer-events: none; }
-.narsie { position: fixed; bottom: -16px; left: 50%; z-index: 1; width: min(220px, 42vw); padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateX(-50%); }
-.narsie img { display: block; width: 100%; image-rendering: pixelated; opacity: .9; animation: narsie-float 14s ease-in-out infinite alternate; }
+.narsie-anchor { position: fixed; bottom: 0; left: 50%; z-index: 1; width: min(220px, 42vw); transform: translateX(-50%); pointer-events: none; }
+.narsie { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
+.narsie img { display: block; width: 100%; height: auto; image-rendering: pixelated; opacity: .9; }
 .narsie[aria-disabled="true"] { cursor: default; }
 .narsie:focus-visible { outline: 2px solid #b6dbea; outline-offset: 3px; }
-.singularity { position: fixed; top: 50%; left: 50%; z-index: 2; width: min(200px, 45vmin); transform: translate(-50%, -50%); pointer-events: none; }
+.singularity { position: absolute; top: 50%; left: 50%; width: min(200px, 45vmin); transform: translate(-50%, -50%); pointer-events: none; }
 .singularity img { display: block; width: 100%; image-rendering: pixelated; }
 .character-layer.in-vortex { z-index: 3; }
 .in-vortex .character, .in-vortex .character-button img { animation-play-state: paused; }
@@ -71,16 +72,11 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(720deg); }
 }
-@keyframes narsie-float {
-  from { transform: translateY(0); }
-  to { transform: translateY(-10px); }
-}
 @media (prefers-reduced-motion: reduce) {
   .space { animation: none; }
   .character { animation: none; transform: translate(8vw, 16vh); }
   .wizard { transform: translate(65vw, 20vh); }
   .character-button img { animation: none; }
-  .narsie img { animation: none; }
   .singularity { aspect-ratio: 1; background: radial-gradient(circle, #000 26%, #927cc9 33%, transparent 64%); }
   .singularity img { display: none; }
 }

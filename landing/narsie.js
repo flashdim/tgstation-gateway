@@ -36,7 +36,7 @@
     }));
     if (!reduced) layer.classList.add("in-vortex");
 
-    let width, height, start;
+    let width, height, cx, cy, start;
     function frame(now) {
       start ??= now;
       const elapsed = (now - start) / 1000;
@@ -58,6 +58,9 @@
         if (width !== layer.clientWidth || height !== layer.clientHeight) {
           width = layer.clientWidth;
           height = layer.clientHeight;
+          const anchor = button.getBoundingClientRect();
+          cx = anchor.left + anchor.width / 2;
+          cy = anchor.top + anchor.height / 2;
           for (const sprite of sprites) {
             const rect = sprite.element.getBoundingClientRect();
             sprite.halfWidth = rect.width / 2;
@@ -72,8 +75,6 @@
           1, elapsed / fadeTime, (pullTime + fadeTime - elapsed) / fadeTime,
         ));
         for (const [index, sprite] of sprites.entries()) {
-          const cx = width / 2;
-          const cy = height / 2;
           const radius = Math.hypot(sprite.x - cx, sprite.y - cy);
           const angle = Math.atan2(sprite.y - cy, sprite.x - cx);
           const innerRadius = Math.min(radius, 16 + index * 7);

@@ -60,8 +60,8 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn(".operative { animation-delay: -48s; }", css)
         self.assertIn("animation: wizard-drift 96s linear -72s infinite", css)
         self.assertIn("animation: wizard-spin 96s linear -72s infinite", css)
-        self.assertIn("animation: narsie-float 14s ease-in-out", css)
-        self.assertIn("bottom: -16px; left: 50%", css)
+        self.assertIn(".narsie-anchor { position: fixed; bottom: 0; left: 50%", css)
+        self.assertIn(".singularity { position: absolute; top: 50%; left: 50%", css)
         self.assertIn('background-image: url("layer1.webp")', css)
         self.assertIn("background-repeat: repeat", css)
         self.assertIn("@keyframes background-drift", css)
@@ -293,6 +293,7 @@ const vm = require("node:vm");
 const style = () => ({removeProperty(key) { delete this[key]; }});
 const attributes = new Map();
 const button = {
+  getBoundingClientRect: () => ({left: 300, top: 400, width: 200, height: 200}),
   getAttribute: name => attributes.get(name),
   setAttribute: (name, value) => attributes.set(name, value),
   removeAttribute: name => attributes.delete(name),
@@ -329,16 +330,16 @@ assert.ok(layer.classList.has("in-vortex"));
 tick(0);
 assert.equal(singularity.hidden, false);
 assert.equal(singularity.style.opacity, 0);
-assert.deepEqual(center(), [150, 150]);
+assert.ok(Math.hypot(center()[0] - 150, center()[1] - 150) < 0.001);
 tick(600);
 assert.equal(singularity.style.opacity, 1);
 tick(2900);
-assert.ok(Math.hypot(center()[0] - 400, center()[1] - 300) < 25);
+assert.ok(Math.hypot(center()[0] - 400, center()[1] - 500) < 25);
 assert.ok(parseFloat(image.style.rotate) > 10);
 tick(3000);
-const ejectionX = center()[0];
+const ejectionY = center()[1];
 tick(3050);
-assert.ok(ejectionX - center()[0] > 25);
+assert.ok(ejectionY - center()[1] > 25);
 tick(3400);
 assert.ok(singularity.style.opacity > 0 && singularity.style.opacity < 1);
 let prevX = center()[0];
