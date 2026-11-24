@@ -1,1 +1,0 @@
-byond-wire==0.1.2 --hash=sha256:1ea2eef684b6fdcbe88ff9e82e62b970e267ea787fc46abd1109403ba70b6db2

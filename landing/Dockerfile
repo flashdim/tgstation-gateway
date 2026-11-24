@@ -2,9 +2,7 @@
 #   docker build -f landing/Dockerfile -t tgstation-gateway-landing:local .
 FROM python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
 
-COPY landing/requirements.txt /opt/landing/requirements.txt
-RUN pip install --no-cache-dir --only-binary=:all: --require-hashes -r /opt/landing/requirements.txt
-COPY landing/index.html landing/page.js landing/status.js landing/wizard.js landing/narsie.js landing/style.css /srv/landing/
+COPY landing/index.html landing/page.js landing/wizard.js landing/narsie.js landing/style.css /srv/landing/
 COPY landing/assets/sprites/ /srv/landing/assets/sprites/
 COPY landing/assets/ATTRIBUTION.md landing/assets/layer1.webp /srv/landing/assets/
 COPY landing/assets/banners/alert.svg /srv/landing/assets/banners/alert.svg

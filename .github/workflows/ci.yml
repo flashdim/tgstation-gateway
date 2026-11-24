@@ -10,10 +10,6 @@ on:
         description: Run the mocked runtime BYOND key provisioning check
         type: boolean
         default: false
-      check_byond_login:
-        description: Test the BYOND key against the configured live test server
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -213,33 +209,6 @@ jobs:
         id: smoke-wayland
         if: ${{ !cancelled() && steps.smoke-x11.outcome != 'skipped' }}
         run: bash tests/smoke-wayland.sh tgstation-gateway-player:ci
-
-      - name: Test real BYOND server login
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_byond_login }}
-        timeout-minutes: 12
-        env:
-          LGPLAYER01_KEY: ${{ secrets.LGPLAYER01_KEY }}
-        run: |
-          set -eu
-          if [ -z "$LGPLAYER01_KEY" ]; then
-            echo "Skipping BYOND login test: LGPLAYER01_KEY is unavailable."
-            exit 0
-          fi
-          umask 077
-          key_file="$RUNNER_TEMP/lgplayer01-key-$$"
-          set -C
-          : > "$key_file"
-          set +C
-          trap 'rm -f -- "$key_file"' EXIT
-          printf '%s' "$LGPLAYER01_KEY" > "$key_file"
-          unset LGPLAYER01_KEY
-          sudo chown 1000:1000 "$key_file"
-          sudo chmod 400 "$key_file"
-          python3 -m venv "$RUNNER_TEMP/byond-wire"
-          "$RUNNER_TEMP/byond-wire/bin/pip" install --require-hashes \
-            -r landing/requirements.txt
-          BYOND_WIRE_BIN="$RUNNER_TEMP/byond-wire/bin/byond-wire" \
-            bash tests/smoke-byond-login.sh tgstation-gateway-player:ci "$key_file"
 
       - name: Trace startup after a smoke-test failure
         if: ${{ failure() && (steps.smoke-x11.outcome == 'failure' || steps.smoke-wayland.outcome == 'failure') }}
