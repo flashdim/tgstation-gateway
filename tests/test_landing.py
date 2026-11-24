@@ -152,6 +152,21 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".character { animation: none;", css)
 
+    def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
+        css = (LANDING / "style.css").read_text()
+        html = (LANDING / "index.html").read_text()
+        self.assertIn(
+            '#server-online[data-state="online"]::before { background: #54ed91;',
+            css,
+        )
+        self.assertIn(
+            '#server-online[data-state="unavailable"]::before { background: #ff5261;',
+            css,
+        )
+        self.assertIn("@keyframes status-pulse", css)
+        self.assertIn('id="server-online" data-state="unavailable" role="status"', html)
+        self.assertIn("#server-online::before { animation: none; }", css)
+
     def test_floating_sprites_share_a_height_and_preserve_aspect_ratio(self):
         css = (LANDING / "style.css").read_text()
         self.assertRegex(
@@ -302,6 +317,93 @@ class LandingPageTest(unittest.TestCase):
             self.assertEqual(monitor.snapshot(), {"online": True})
             monitor.updated = 1
             self.assertEqual(monitor.snapshot(), {"online": None})
+
+    def test_status_monitor_clears_value_on_query_failure(self):
+        monitor = server.StatusMonitor(("example", 1337))
+        monitor.value = {"online": True}
+        for error in (
+            subprocess.TimeoutExpired("byond-wire", 7),
+            subprocess.CalledProcessError(1, "byond-wire"),
+            ValueError("invalid response"),
+        ):
+            with (
+                self.subTest(error=error),
+                mock.patch.object(server, "fetch_status", side_effect=error),
+                mock.patch.object(server.time, "sleep", side_effect=StopIteration),
+                self.assertRaises(StopIteration),
+            ):
+                monitor.run()
+            self.assertEqual(monitor.snapshot(), {"online": None})
+
+    def test_status_panel_refresh_and_failure(self):
+        script = """
+const fs = require("fs");
+const vm = require("vm");
+const assert = require("assert");
+const elements = Object.fromEntries(["server-online", "server-map", "server-round", "server-players"].map(id => [id, {}]));
+elements["server-online"].dataset = {state: "unavailable"};
+elements["server-online"].textContent = "UNAVAILABLE";
+let availabilityUpdates = 0;
+Object.defineProperty(elements["server-online"], "textContent", {
+  get() { return this.value; },
+  set(value) { availabilityUpdates++; this.value = value; },
+});
+elements["server-online"].value = "UNAVAILABLE";
+const callbacks = [];
+let result = {online: true, map: "<script>", players: 12, popcap: 0, round_seconds: 90061};
+let failed = false;
+const context = {
+  document: {getElementById: id => elements[id]},
+  AbortSignal: { timeout: ms => { assert.strictEqual(ms, 4000); return {}; } },
+  fetch: async () => {
+    if (failed) throw new Error("timeout");
+    return {ok: true, json: async () => result};
+  },
+  setTimeout: (callback, delay) => {assert.strictEqual(delay, 5000); callbacks.push(callback);},
+};
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
+setImmediate(async () => {
+  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-online"].dataset.state, "online");
+  assert.strictEqual(availabilityUpdates, 1);
+  assert.strictEqual(elements["server-map"].textContent, "<script>");
+  assert.strictEqual(elements["server-round"].textContent, "25:01:01");
+  assert.strictEqual(elements["server-players"].textContent, "12 / ∞");
+  await callbacks.shift()();
+  assert.strictEqual(availabilityUpdates, 1);
+  failed = true;
+  await callbacks.shift()();
+  assert.strictEqual(elements["server-online"].textContent, "UNAVAILABLE");
+  assert.strictEqual(elements["server-online"].dataset.state, "unavailable");
+  assert.strictEqual(availabilityUpdates, 2);
+  assert.strictEqual(elements["server-map"].textContent, "--");
+  failed = false;
+  result = {online: true, map: "Station", players: 1, popcap: null, round_seconds: null};
+  await callbacks.shift()();
+  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-online"].dataset.state, "online");
+  assert.strictEqual(availabilityUpdates, 3);
+  assert.strictEqual(elements["server-round"].textContent, "--:--:--");
+  assert.strictEqual(elements["server-players"].textContent, "1 / ?");
+});
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "status.js")],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        html = (LANDING / "index.html").read_text()
+        self.assertIn(
+            'id="server-online" data-state="unavailable" role="status" '
+            'aria-live="polite" aria-atomic="true"',
+            html,
+        )
+        self.assertLess(
+            html.index("</span>", html.index('id="server-online"')),
+            html.index('id="server-round"'),
+        )
 
     def test_image_serves_only_page_files_and_attribution(self):
         dockerfile = (LANDING / "Dockerfile").read_text()
