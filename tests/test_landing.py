@@ -174,6 +174,24 @@ class LandingPageTest(unittest.TestCase):
             r"\.character-button img \{[^}]*height: clamp\([^;]+\); width: auto;",
         )
 
+    def test_slots_use_a_compact_scrollable_responsive_grid(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"\.slots \{[^}]*grid-template-columns: repeat\(auto-fit, "
+            r"minmax\(min\(100%, 130px\), 1fr\)\);[^}]*"
+            r"max-height: 50vh; overflow-y: auto;",
+        )
+        self.assertRegex(css, r"\.slot-details \{[^}]*overflow-wrap: anywhere;")
+        self.assertNotIn("min-height: 132px", css)
+
+    def test_sprites_are_above_page_content_during_normal_and_vortex_states(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(css, r"\.character-layer \{[^}]*z-index: 6;")
+        self.assertRegex(css, r"\.narsie-anchor \{[^}]*z-index: 5;")
+        self.assertNotRegex(css, r"\.character-layer\.in-vortex \{[^}]*z-index:")
+        self.assertRegex(css, r"footer \{[^}]*z-index: 4;")
+
     def test_clown_alien_operative_and_wizard_sprites_share_dimensions(self):
         sprites = LANDING / "assets/sprites"
         dimensions = {}

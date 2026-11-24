@@ -26,7 +26,7 @@ body {
   animation: background-drift 180s linear infinite;
 }
 
-.character-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+.character-layer { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
 .character { position: absolute; top: 0; left: 0; animation: drift 96s linear infinite; }
 .clown { animation-delay: 0s; }
 .alien { animation-delay: -24s; }
@@ -38,14 +38,13 @@ body {
 .clown .character-button img { opacity: .7; }
 .wizard .character-button img { animation: wizard-spin 96s linear -72s infinite; }
 .speech-bubble { position: absolute; bottom: 100%; left: 0; width: max-content; max-width: min(190px, 80vw); padding: 8px; border-radius: 8px; background: #fff; color: #141629; font-size: .75rem; font-weight: 800; pointer-events: none; }
-.narsie-anchor { position: fixed; bottom: 0; left: 50%; z-index: 1; width: min(220px, 42vw); transform: translateX(-50%); pointer-events: none; }
+.narsie-anchor { position: fixed; bottom: 0; left: 50%; z-index: 5; width: min(220px, 42vw); transform: translateX(-50%); pointer-events: none; }
 .narsie { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
 .narsie img { display: block; width: 100%; height: auto; image-rendering: pixelated; opacity: .9; }
 .narsie[aria-disabled="true"] { cursor: default; }
 .narsie:focus-visible { outline: 2px solid #b6dbea; outline-offset: 3px; }
 .singularity { position: absolute; top: 50%; left: 50%; width: min(200px, 45vmin); transform: translate(-50%, -50%); pointer-events: none; }
 .singularity img { display: block; width: 100%; image-rendering: pixelated; }
-.character-layer.in-vortex { z-index: 3; }
 .in-vortex .character, .in-vortex .character-button img { animation-play-state: paused; }
 
 @keyframes drift {
@@ -102,15 +101,16 @@ header { text-align: center; margin-bottom: 38px; }
 .eyebrow { color: #99adce; font-size: .75rem; font-weight: 700; letter-spacing: .18em; margin: 8px 0 48px; }
 h1 { margin: 0 0 8px; font-size: 2rem; }
 header > p:last-child { color: #b6c1d5; margin: 0; }
-.slots { display: grid; gap: 16px; }
+.slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 8px; max-height: 50vh; overflow-y: auto; padding: 4px; }
 .slot {
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 20px;
-  min-height: 132px;
-  padding: 24px;
+  gap: 8px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 10px;
   border: 1px solid #52617b;
   border-left: 5px solid #67d8af;
   border-radius: 8px;
@@ -121,14 +121,14 @@ header > p:last-child { color: #b6c1d5; margin: 0; }
 }
 .slot.active { border-left-color: #f3b965; }
 .slot:hover, .slot:focus-visible { background: #2a3a55; border-color: #b6dbea; outline: 2px solid #b6dbea; outline-offset: 3px; }
-.slot-icon { display: grid; place-items: center; flex: 0 0 58px; height: 58px; border-radius: 50%; background: #294d4b; color: #91e8c3; font-size: 2rem; }
-.active .slot-icon { background: #57432f; color: #ffcd80; font-size: 1.4rem; }
-.slot-details { display: grid; gap: 4px; }
-.slot-status { color: #91e8c3; font-size: .7rem; font-weight: 800; letter-spacing: .12em; }
+.slot-icon { display: grid; place-items: center; flex: 0 0 32px; height: 32px; border-radius: 50%; background: #294d4b; color: #91e8c3; font-size: 1.4rem; }
+.active .slot-icon { background: #57432f; color: #ffcd80; font-size: 1rem; }
+.slot-details { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.slot-status { color: #91e8c3; font-size: .6rem; font-weight: 800; letter-spacing: .06em; }
 .active .slot-status { color: #ffcd80; }
-.slot strong { font-size: 1.35rem; }
-.slot-action { color: #c2ccdc; font-size: .9rem; }
-.arrow { margin-left: auto; font-size: 1.7rem; color: #b7c8e3; }
+.slot strong { font-size: .95rem; }
+.slot-action { color: #c2ccdc; font-size: .75rem; }
+.arrow { margin-left: auto; font-size: 1rem; color: #b7c8e3; }
 .notice { padding: 16px; border: 1px solid #f3b965; border-radius: 6px; background: #3b2b21; }
 footer { position: relative; z-index: 4; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 6px 24px; padding: 10px 16px; color: #a7b3c9; font-size: .8rem; line-height: 1.5; pointer-events: none; }
 footer p { margin: 0; padding: 2px 4px; background: #080d1a; }
@@ -136,7 +136,6 @@ footer p:last-child { margin-left: auto; text-align: right; }
 footer a { color: #a5e5e3; pointer-events: auto; }
 @media (max-width: 480px) {
   main { padding: 40px 16px 24px; }
-  .slot { padding: 18px; gap: 14px; }
   .clown .character-button img { opacity: .3; }
   .alien .character-button img, .operative .character-button img { opacity: .35; }
 }
