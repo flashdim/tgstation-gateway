@@ -8,6 +8,8 @@
 * { box-sizing: border-box; }
 
 body {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   min-height: 100vh;
   background: radial-gradient(ellipse at 50% 0%, #25324d 0%, #0c1425 45%, #070b16 100%);
@@ -36,7 +38,14 @@ body {
 .clown .character-button img { opacity: .7; }
 .wizard .character-button img { animation: wizard-spin 96s linear -72s infinite; }
 .speech-bubble { position: absolute; bottom: 100%; left: 0; width: max-content; max-width: min(190px, 80vw); padding: 8px; border-radius: 8px; background: #fff; color: #141629; font-size: .75rem; font-weight: 800; pointer-events: none; }
-.narsie { position: absolute; bottom: -16px; left: 50%; width: min(220px, 42vw); height: auto; transform: translateX(-50%); image-rendering: pixelated; opacity: .9; animation: narsie-float 14s ease-in-out infinite alternate; }
+.narsie { position: fixed; bottom: -16px; left: 50%; z-index: 1; width: min(220px, 42vw); padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateX(-50%); }
+.narsie img { display: block; width: 100%; image-rendering: pixelated; opacity: .9; animation: narsie-float 14s ease-in-out infinite alternate; }
+.narsie[aria-disabled="true"] { cursor: default; }
+.narsie:focus-visible { outline: 2px solid #b6dbea; outline-offset: 3px; }
+.singularity { position: fixed; top: 50%; left: 50%; z-index: 2; width: min(200px, 45vmin); transform: translate(-50%, -50%); pointer-events: none; }
+.singularity img { display: block; width: 100%; image-rendering: pixelated; }
+.character-layer.in-vortex { z-index: 3; }
+.in-vortex .character, .in-vortex .character-button img { animation-play-state: paused; }
 
 @keyframes drift {
   0% { transform: translate(8vw, 16vh); }
@@ -63,18 +72,20 @@ body {
   to { transform: rotate(720deg); }
 }
 @keyframes narsie-float {
-  from { transform: translate(-50%, 0); }
-  to { transform: translate(-50%, -10px); }
+  from { transform: translateY(0); }
+  to { transform: translateY(-10px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .space { animation: none; }
   .character { animation: none; transform: translate(8vw, 16vh); }
   .wizard { transform: translate(65vw, 20vh); }
   .character-button img { animation: none; }
-  .narsie { animation: none; }
+  .narsie img { animation: none; }
+  .singularity { aspect-ratio: 1; background: radial-gradient(circle, #000 26%, #927cc9 33%, transparent 64%); }
+  .singularity img { display: none; }
 }
 
-main { position: relative; max-width: 780px; margin: auto; padding: 64px 24px 32px; }
+main { position: relative; width: 100%; max-width: 780px; margin: auto; padding: 64px 24px 32px; }
 header { text-align: center; margin-bottom: 38px; }
 .landing-banner { position: relative; z-index: 2; display: block; width: min(100%, 760px); height: auto; margin: 0 auto 12px; pointer-events: none; }
 .server-status { max-width: 430px; margin: 0 auto 26px; padding: 12px 16px; border: 1px solid #3c927e; border-radius: 4px; background: #071b20ef; box-shadow: inset 0 0 16px #2cbd8c22, 0 5px 18px #0008; color: #a7f2ce; text-align: left; font: .8rem/1.5 monospace; }
@@ -97,6 +108,8 @@ h1 { margin: 0 0 8px; font-size: 2rem; }
 header > p:last-child { color: #b6c1d5; margin: 0; }
 .slots { display: grid; gap: 16px; }
 .slot {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -121,8 +134,10 @@ header > p:last-child { color: #b6c1d5; margin: 0; }
 .slot-action { color: #c2ccdc; font-size: .9rem; }
 .arrow { margin-left: auto; font-size: 1.7rem; color: #b7c8e3; }
 .notice { padding: 16px; border: 1px solid #f3b965; border-radius: 6px; background: #3b2b21; }
-footer { color: #a7b3c9; font-size: .8rem; line-height: 1.5; text-align: center; margin-top: 40px; }
-footer a { color: #a5e5e3; }
+footer { position: relative; z-index: 4; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 6px 24px; padding: 10px 16px; color: #a7b3c9; font-size: .8rem; line-height: 1.5; pointer-events: none; }
+footer p { margin: 0; padding: 2px 4px; background: #080d1a; }
+footer p:last-child { margin-left: auto; text-align: right; }
+footer a { color: #a5e5e3; pointer-events: auto; }
 @media (max-width: 480px) {
   main { padding: 40px 16px 24px; }
   .slot { padding: 18px; gap: 14px; }

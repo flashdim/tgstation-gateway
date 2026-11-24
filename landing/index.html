@@ -9,10 +9,15 @@
     <script defer src="page.js"></script>
     <script defer src="status.js"></script>
     <script defer src="wizard.js"></script>
+    <script defer src="narsie.js"></script>
   </head>
   <body>
-    <div class="space" aria-hidden="true">
-      <img class="narsie" src="narsie.gif" alt="">
+    <div class="space" aria-hidden="true"></div>
+    <button class="narsie" type="button" aria-label="Summon a singularity with Nar’sie">
+      <img src="narsie.gif" alt="">
+    </button>
+    <div class="singularity" aria-hidden="true" hidden>
+      <img src="singularity.gif" alt="">
     </div>
     <div class="character-layer">
       <div class="character clown">
@@ -59,10 +64,10 @@
         <p id="config-error" class="notice" hidden></p>
         <noscript><p class="notice">JavaScript is required to display configured slots.</p></noscript>
       </section>
-      <footer>
-        <p>Slot status is static test data; access is not enforced by this page.</p>
-        <p><a href="ATTRIBUTION.md">Artwork attributions and licenses</a>.</p>
-      </footer>
     </main>
+    <footer>
+      <p>Slot status is static test data; access is not enforced by this page.</p>
+      <p><a href="ATTRIBUTION.md">Artwork attributions and licenses</a>.</p>
+    </footer>
   </body>
 </html>

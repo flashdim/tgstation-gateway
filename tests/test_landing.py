@@ -36,6 +36,10 @@ class LandingPageTest(unittest.TestCase):
                 "89ee354c-4b68-4661-944b-0c88a11a8411",
             ),
             "wizard": ("wizard.png", "fd8813b9-0dac-47b9-ab8f-40c0070f6bbc"),
+            "singularity": (
+                "singularity.gif",
+                "3858a45e-ce06-463f-a429-f5ad967531d0",
+            ),
         }
         for name, (filename, asset_id) in sources.items():
             with self.subTest(sprite=name):
@@ -46,6 +50,7 @@ class LandingPageTest(unittest.TestCase):
         self.assertNotRegex(html, r'src="https://github\.com/user-attachments/')
         self.assertIn("PotatoMasher", attribution)
         self.assertIn("WJohnston", attribution)
+        self.assertIn("https://wiki.tgstation13.org/User:Kingfish", attribution)
         self.assertIn("CC BY-NC-SA 4.0", attribution)
         self.assertIn("Repository copies:", attribution)
         self.assertIn("Narsie GIF retains its animation", attribution)
@@ -131,7 +136,7 @@ class LandingPageTest(unittest.TestCase):
         smoke = (ROOT / "tests/smoke-landing.sh").read_text()
         self.assertIn('curl -fsS "$base/layer1.webp"', smoke)
         self.assertIn(
-            "for asset in clown.webp alien.png operative.png wizard.png narsie.gif;",
+            "for asset in clown.webp alien.png operative.png wizard.png narsie.gif singularity.gif;",
             smoke,
         )
         self.assertIn("Web/P image", smoke)
@@ -155,12 +160,14 @@ class LandingPageTest(unittest.TestCase):
                     "landing/page.js",
                     "landing/status.js",
                     "landing/wizard.js",
+                    "landing/narsie.js",
                     "landing/style.css",
                     "landing/clown.webp",
                     "landing/alien.png",
                     "landing/operative.png",
                     "landing/wizard.png",
                     "landing/narsie.gif",
+                    "landing/singularity.gif",
                     "landing/layer1.webp",
                     "/srv/landing/",
                 ],
@@ -193,11 +200,13 @@ class LandingPageTest(unittest.TestCase):
             "slots.js",
             "page.js",
             "wizard.js",
+            "narsie.js",
             "clown.webp",
             "alien.png",
             "operative.png",
             "wizard.png",
             "narsie.gif",
+            "singularity.gif",
             "layer1.webp",
             "ATTRIBUTION.md",
         ):
@@ -270,6 +279,105 @@ for (const { button, bubble, message } of speakers) {
         self.assertEqual(html.count('class="speech-bubble"'), 4)
         self.assertIn(
             'id="wizard-bubble" class="speech-bubble" role="status" hidden', html
+        )
+
+    def test_narsie_summons_a_singularity_then_restores_the_orbits(self):
+        html = (LANDING / "index.html").read_text()
+        self.assertIn('<script defer src="narsie.js"></script>', html)
+        self.assertIn('<button class="narsie" type="button" aria-label=', html)
+        self.assertIn('class="singularity" aria-hidden="true" hidden', html)
+        script = """
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+const style = () => ({removeProperty(key) { delete this[key]; }});
+const attributes = new Map();
+const button = {
+  getAttribute: name => attributes.get(name),
+  setAttribute: (name, value) => attributes.set(name, value),
+  removeAttribute: name => attributes.delete(name),
+  addEventListener: (event, callback) => { button[event] = callback; },
+};
+const singularity = {hidden: true, style: style()};
+const image = {style: style()};
+const sprite = {
+  style: style(),
+  getBoundingClientRect: () => ({left: 130, top: 130, width: 40, height: 40}),
+  querySelector: () => image,
+};
+const layer = {
+  clientWidth: 800, clientHeight: 600, querySelectorAll: () => [sprite],
+  classList: new Set(),
+};
+layer.classList.remove = name => layer.classList.delete(name);
+const motion = {matches: false};
+const callbacks = [];
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), {
+  document: {querySelector: name => ({
+    ".narsie": button, ".singularity": singularity, ".character-layer": layer,
+  })[name]},
+  matchMedia: () => motion,
+  requestAnimationFrame: callback => callbacks.push(callback),
+});
+const tick = now => callbacks.shift()(now);
+const center = () => sprite.style.translate.split(" ").map(value => 150 + parseFloat(value));
+
+button.click();
+button.click();
+assert.equal(callbacks.length, 1);
+assert.ok(layer.classList.has("in-vortex"));
+tick(0);
+assert.equal(singularity.hidden, false);
+assert.equal(singularity.style.opacity, 0);
+assert.deepEqual(center(), [150, 150]);
+tick(600);
+assert.equal(singularity.style.opacity, 1);
+tick(2900);
+assert.ok(Math.hypot(center()[0] - 400, center()[1] - 300) < 25);
+assert.ok(parseFloat(image.style.rotate) > 10);
+tick(3000);
+const ejectionX = center()[0];
+tick(3050);
+assert.ok(ejectionX - center()[0] > 25);
+tick(3400);
+assert.ok(singularity.style.opacity > 0 && singularity.style.opacity < 1);
+let prevX = center()[0];
+let bounced = false;
+for (let time = 3450; time <= 8000; time += 50) {
+  tick(time);
+  const [x, y] = center();
+  assert.ok(x >= 20 && x <= 780 && y >= 20 && y <= 580);
+  bounced ||= x > prevX;
+  prevX = x;
+}
+assert.ok(bounced);
+assert.equal(singularity.hidden, true);
+assert.equal(singularity.style.opacity, 0);
+assert.ok(layer.classList.has("in-vortex"));
+tick(9990);
+assert.ok(Math.hypot(center()[0] - 150, center()[1] - 150) < 1);
+tick(10000);
+assert.equal(callbacks.length, 0);
+assert.equal(singularity.hidden, true);
+assert.equal(attributes.has("aria-disabled"), false);
+assert.equal(layer.classList.size, 0);
+assert.equal(sprite.style.translate, undefined);
+assert.equal(image.style.rotate, undefined);
+
+motion.matches = true;
+button.click();
+tick(11000);
+assert.equal(singularity.hidden, false);
+assert.equal(singularity.style.opacity, 1);
+assert.equal(layer.classList.size, 0);
+assert.equal(sprite.style.translate, undefined);
+tick(14000);
+assert.equal(singularity.hidden, true);
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "narsie.js")],
+            check=True,
+            timeout=30,
         )
 
     def render(self, slots=None, js=None):

@@ -33,6 +33,14 @@ the wallpapers, which have their own distinct licenses.
 - Repository copy: `../landing/layer1.webp`
 - Modifications: none to the image; tiled and animated diagonally by the page.
 
+## Landing page singularity
+
+- Artist: **Kingfish** ([tgstation wiki profile](https://wiki.tgstation13.org/User:Kingfish))
+- Source: [user-provided GIF](https://github.com/user-attachments/assets/3858a45e-ce06-463f-a429-f5ad967531d0)
+- License: **CC BY-NC-SA 4.0** — [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+- Repository copy: `../landing/singularity.gif`
+- Modifications: none to the GIF; scaled and faded by the page.
+
 ## Glory to Nanotrasen
 
 - Artwork: **Glory to Nanotrasen**
