@@ -49,6 +49,8 @@ def build_slots(env):
     path = env.get("GATEWAY_SLOT_PATH", "").strip() or "/"
     if not PATH_PATTERN.fullmatch(path):
         raise ConfigError("GATEWAY_SLOT_PATH must be an absolute URL path")
+    if {".", ".."} & set(path.split("/")):
+        raise ConfigError("GATEWAY_SLOT_PATH must not contain . or .. segments")
     leftover = re.sub(r"\{(?:account|number)\}", "", path)
     if "{" in leftover or "}" in leftover:
         raise ConfigError("GATEWAY_SLOT_PATH supports only {account} and {number}")

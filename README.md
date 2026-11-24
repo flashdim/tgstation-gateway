@@ -23,9 +23,8 @@ docker compose -f examples/compose.yaml pull
 docker compose -f examples/compose.yaml up
 ```
 
-Open [http://localhost:8080](http://localhost:8080) for the player or
-[http://localhost:8000](http://localhost:8000) for the test session landing page.
-The player default setup opens the BYOND pager; sign in and choose a server.
+Open [http://localhost:8080](http://localhost:8080) for the player.
+The default setup opens the BYOND pager; sign in and choose a server.
 If the image is not available from GHCR yet, build it locally as described below.
 
 The image uses Selkies' EGL KDE Plasma desktop with KWin on Wayland by
@@ -70,21 +69,21 @@ Before the first release, or to try the latest CI build, select the development
 image with `GATEWAY_LANDING_IMAGE=ghcr.io/flashdim/tgstation-gateway-landing:dev`.
 To use the image built locally, set
 `GATEWAY_LANDING_IMAGE=tgstation-gateway-landing:local`. Then
-`docker compose -f examples/compose.yaml up` starts the landing page with the
-player. Open [http://localhost:8000](http://localhost:8000), or set
+`docker compose -f examples/compose.yaml --profile landing up` starts the landing
+page with the player; without `--profile landing` it is not started. Open [http://localhost:8000](http://localhost:8000), or set
 `GATEWAY_LANDING_PORT` to choose another host port.
 
 The landing server generates `slots.js` from its environment at startup; no
 configuration file is mounted. Compose passes these variables through:
 
-| Variable                 | Default          | Meaning                                                             |
-| ------------------------ | ---------------- | ------------------------------------------------------------------- |
-| `GATEWAY_PLAY_HOST`      | `localhost:8080` | DNS name, with optional port, that serves player sessions           |
-| `GATEWAY_PLAY_SCHEME`    | see below        | `http` or `https`; defaults to `http` for localhost, else `https`   |
-| `GATEWAY_SLOT_COUNT`     | `1`              | Number of slots, 1–99                                               |
-| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`       | Slot accounts are the prefix plus a two-digit number (`LGplayer01`) |
-| `GATEWAY_SLOT_PATH`      | `/`              | URL path per slot; `{account}` and `{number}` are substituted       |
-| `GATEWAY_ACTIVE_SLOTS`   | empty            | Comma-separated accounts shown as active (static test status only)  |
+| Variable                 | Default                           | Meaning                                                             |
+| ------------------------ | --------------------------------- | ------------------------------------------------------------------- |
+| `GATEWAY_PLAY_HOST`      | `localhost:${GATEWAY_PORT:-8080}` | DNS name, with optional port, that serves player sessions           |
+| `GATEWAY_PLAY_SCHEME`    | see below                         | `http` or `https`; defaults to `http` for localhost, else `https`   |
+| `GATEWAY_SLOT_COUNT`     | `1`                               | Number of slots, 1–99                                               |
+| `GATEWAY_ACCOUNT_PREFIX` | `LGplayer`                        | Slot accounts are the prefix plus a two-digit number (`LGplayer01`) |
+| `GATEWAY_SLOT_PATH`      | `/`                               | URL path per slot; `{account}` and `{number}` are substituted       |
+| `GATEWAY_ACTIVE_SLOTS`   | empty                             | Comma-separated accounts shown as active (static test status only)  |
 
 For example, to list two slots at `https://play.lazorgator.party/LGplayer01/`
 and `https://play.lazorgator.party/LGplayer02/`, with the second shown active:
@@ -94,11 +93,11 @@ GATEWAY_PLAY_HOST=play.lazorgator.party \
 GATEWAY_SLOT_COUNT=2 \
 GATEWAY_SLOT_PATH='/{account}/' \
 GATEWAY_ACTIVE_SLOTS=LGplayer02 \
-docker compose -f examples/compose.yaml up
+docker compose -f examples/compose.yaml --profile landing up
 ```
 
 With more than one slot, `GATEWAY_SLOT_PATH` must contain `{account}` or
-`{number}` so each slot has a distinct link. The landing page only builds these
+`{number}` so each slot has a distinct link; `.` and `..` path segments are rejected. The landing page only builds these
 links; the operator's reverse proxy must route each path (or host) to the
 corresponding player container. The example Compose file runs one player, so
 only a single-slot configuration reaches a working player without additional

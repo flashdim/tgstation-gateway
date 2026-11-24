@@ -99,8 +99,10 @@ class LandingPageTest(unittest.TestCase):
             service,
         )
         self.assertIn(
-            "GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:-localhost:8080}", service
+            "GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:-localhost:${GATEWAY_PORT:-8080}}",
+            service,
         )
+        self.assertIn("profiles:\n      - landing\n", service)
         self.assertIn("GATEWAY_SLOT_PATH: ${GATEWAY_SLOT_PATH:-/}", service)
         self.assertNotIn("volumes:", service)
         self.assertNotIn("slots.js", service)
@@ -366,6 +368,8 @@ process.stdout.write(JSON.stringify({list, error}));
             {"GATEWAY_SLOT_PATH": "relative"},
             {"GATEWAY_SLOT_PATH": "/{password}/"},
             {"GATEWAY_SLOT_PATH": "/?x=1"},
+            {"GATEWAY_SLOT_COUNT": "2", "GATEWAY_SLOT_PATH": "/{account}/../"},
+            {"GATEWAY_SLOT_PATH": "/./{account}/"},
             {"GATEWAY_ACCOUNT_PREFIX": "bad prefix"},
             {"GATEWAY_ACTIVE_SLOTS": "LGplayer09"},
         ):

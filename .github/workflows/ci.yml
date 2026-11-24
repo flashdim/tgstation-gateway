@@ -169,6 +169,8 @@ jobs:
           docker compose -f examples/compose.yaml config --format json |
             python3 -c 'import json, sys; assert json.load(sys.stdin)["services"]["player"]["security_opt"] == ["seccomp=./seccomp.json"]'
           docker compose -f examples/compose.yaml config --format json |
+            python3 -c 'import json, sys; assert "landing" not in json.load(sys.stdin)["services"]'
+          docker compose -f examples/compose.yaml --profile landing config --format json |
             python3 -c 'import json, sys; ports = json.load(sys.stdin)["services"]["landing"]["ports"]; assert [p["host_ip"] for p in ports] == ["127.0.0.1"]'
           python3 -c 'import json; p=json.load(open("examples/seccomp.json")); assert p["defaultAction"] == "SCMP_ACT_ERRNO" and any(rule["names"] == ["socket"] and rule["action"] == "SCMP_ACT_ALLOW" and rule.get("includes", {}).get("arches") == ["SCMP_ARCH_X86"] for rule in p["syscalls"])'
           DRI_RENDER_GID=123 docker compose -f examples/compose.yaml -f examples/compose.gpu.yaml config --quiet
