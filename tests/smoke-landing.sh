@@ -107,7 +107,7 @@ curl -fsS "$base/assets/banners/alert.svg" -o "$workdir/station-alert.svg"
 grep -q 'LazorGator Party 13' "$workdir/station-alert.svg"
 grep -q 'laser-glow' "$workdir/station-alert.svg"
 for asset in clown.webp alien.png operative.png wizard.png narsie.gif singularity.gif; do
-    curl -fsS "$base/sprites/$asset" -o "$workdir/$asset"
+    curl -fsS "$base/assets/sprites/$asset" -o "$workdir/$asset"
 done
 file "$workdir/alien.png" | grep -q 'PNG image data'
 file "$workdir/operative.png" | grep -q 'PNG image data'

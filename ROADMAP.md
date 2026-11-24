@@ -2,11 +2,16 @@
 
 ## Goal and boundaries
 
-Enable players to use the standard Windows BYOND client in a browser to play
-one operator-configured tgstation server. The first multi-player deployment
-targets one Docker host: a session manager creates a disposable player
-container on demand for each player. Keep the game server and
+The long-term goal is to enable players to use the standard Windows BYOND client
+in a browser to play one operator-configured tgstation server. The first
+multi-player deployment targets one Docker host: a session manager creates a
+disposable player container on demand for each player. Keep the game server and
 tgstation-server separate; neither is managed by this project.
+
+The current repository provides a single-player BYOND image and an optional
+landing-page prototype that generates static slot links and can query server
+status. It does not create or manage player sessions, and a complete
+authenticated gameplay session remains unverified.
 
 This is a private, self-hosted solution. Access control and connection security
 are the operator's responsibility outside the project. The gateway must still
