@@ -1,9 +1,12 @@
+from functools import partial
 import json
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import unittest
 from unittest import mock
+from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +17,59 @@ import server  # noqa: E402
 
 
 class LandingPageTest(unittest.TestCase):
+    def test_static_page_and_slots_include_unavailable_status_without_configuration(
+        self,
+    ):
+        slots = server.render_slots(
+            server.build_slots(
+                {
+                    "GATEWAY_SLOT_COUNT": "2",
+                    "GATEWAY_SLOT_PATH": "/{account}/",
+                    "GATEWAY_ACTIVE_SLOTS": "LGplayer02",
+                }
+            )
+        )
+        handler = partial(server.LandingHandler, directory=str(LANDING))
+        with (
+            mock.patch.object(server.LandingHandler, "slots_js", slots),
+            mock.patch.object(server.LandingHandler, "log_message"),
+            server.ThreadingHTTPServer(("127.0.0.1", 0), handler) as httpd,
+        ):
+            thread = threading.Thread(target=httpd.serve_forever)
+            thread.start()
+            base = f"http://127.0.0.1:{httpd.server_port}"
+            try:
+                with urlopen(f"{base}/status.json", timeout=5) as response:
+                    self.assertEqual(json.loads(response.read()), {"online": None})
+                    self.assertEqual(response.headers["Cache-Control"], "no-store")
+                with urlopen(f"{base}/status.js", timeout=5) as response:
+                    self.assertIn(b"status.json", response.read())
+                with urlopen(f"{base}/slots.js", timeout=5) as response:
+                    self.assertEqual(response.read(), slots)
+                    self.assertEqual(response.headers["Cache-Control"], "no-store")
+                for path in (
+                    "index.html",
+                    "page.js",
+                    "status.js",
+                    "wizard.js",
+                    "narsie.js",
+                    "style.css",
+                    "assets/layer1.webp",
+                    "assets/banners/alert.svg",
+                    "assets/sprites/clown.webp",
+                ):
+                    with self.subTest(path=path):
+                        with urlopen(f"{base}/{path}", timeout=5) as response:
+                            self.assertEqual(
+                                response.read(), (LANDING / path).read_bytes()
+                            )
+            finally:
+                httpd.shutdown()
+                thread.join(timeout=5)
+        html = (LANDING / "index.html").read_text()
+        self.assertIn('src="status.js"', html)
+        self.assertIn('class="server-status"', html)
+
     def test_wiki_sprites_are_attributed_and_displayed(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
@@ -96,6 +152,21 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".character { animation: none;", css)
 
+    def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
+        css = (LANDING / "style.css").read_text()
+        html = (LANDING / "index.html").read_text()
+        self.assertIn(
+            '#server-online[data-state="online"]::before { background: #54ed91;',
+            css,
+        )
+        self.assertIn(
+            '#server-online[data-state="unavailable"]::before { background: #ff5261;',
+            css,
+        )
+        self.assertIn("@keyframes status-pulse", css)
+        self.assertIn('id="server-online" data-state="unavailable" role="status"', html)
+        self.assertIn("#server-online::before { animation: none; }", css)
+
     def test_floating_sprites_share_a_height_and_preserve_aspect_ratio(self):
         css = (LANDING / "style.css").read_text()
         self.assertRegex(
@@ -124,21 +195,6 @@ class LandingPageTest(unittest.TestCase):
                     1 + (b1 >> 6) + (b2 << 2) + ((b3 & 0x0F) << 10),
                 )
         self.assertEqual(set(dimensions.values()), {(32, 32)})
-
-    def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
-        css = (LANDING / "style.css").read_text()
-        html = (LANDING / "index.html").read_text()
-        self.assertIn(
-            '#server-online[data-state="online"]::before { background: #54ed91;',
-            css,
-        )
-        self.assertIn(
-            '#server-online[data-state="unavailable"]::before { background: #ff5261;',
-            css,
-        )
-        self.assertIn("@keyframes status-pulse", css)
-        self.assertIn('id="server-online" data-state="unavailable" role="status"', html)
-        self.assertIn("#server-online::before { animation: none; }", css)
 
     def test_compose_runs_localhost_only_landing_image(self):
         compose = (ROOT / "examples/compose.yaml").read_text()
@@ -169,6 +225,185 @@ class LandingPageTest(unittest.TestCase):
             smoke,
         )
         self.assertIn("Web/P image", smoke)
+
+    def test_query_configuration_is_separate_from_play_host(self):
+        self.assertIsNone(server.query_config({}))
+        self.assertEqual(
+            server.query_config(
+                {
+                    "GATEWAY_QUERY_HOST": "game.example.test",
+                    "GATEWAY_QUERY_PORT": "1337",
+                    "GATEWAY_PLAY_HOST": "play.example.test",
+                }
+            ),
+            ("game.example.test", 1337),
+        )
+        for env in (
+            {"GATEWAY_QUERY_HOST": "game.example"},
+            {"GATEWAY_QUERY_PORT": "1337"},
+            {"GATEWAY_QUERY_HOST": "game.example:1337", "GATEWAY_QUERY_PORT": "1"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "0"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "65536"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "-1"},
+        ):
+            with self.subTest(env=env), self.assertRaises(server.ConfigError):
+                server.query_config(env)
+
+    def test_game_status_maps_only_public_fields(self):
+        response = {
+            "map_name": "MetaStation",
+            "players": 12,
+            "round_duration": 3661,
+            "gamestate": 3,
+            "popcap": 100,
+            "host": "private",
+        }
+        with mock.patch.object(
+            server.subprocess,
+            "run",
+            return_value=mock.Mock(stdout=json.dumps(response).encode()),
+        ) as run:
+            self.assertEqual(
+                server.fetch_status("game.example", 1337),
+                {
+                    "online": True,
+                    "map": "MetaStation",
+                    "round_seconds": 3661,
+                    "players": 12,
+                    "popcap": 100,
+                },
+            )
+        run.assert_called_once_with(
+            ["byond-wire", "game.example", "1337", "?status&format=json"],
+            capture_output=True,
+            check=True,
+            timeout=7,
+        )
+
+    def test_game_status_rejects_invalid_values_and_maps_lobby(self):
+        response = {
+            "map_name": "Loading...",
+            "players": 0,
+            "round_duration": 0,
+            "gamestate": 1,
+        }
+        with mock.patch.object(server.subprocess, "run") as run:
+            run.return_value.stdout = json.dumps(response).encode()
+            status = server.fetch_status("game.example", 1337)
+            self.assertIsNone(status["round_seconds"])
+            self.assertIsNone(status["popcap"])
+            for value in (
+                {**response, "players": -1},
+                {**response, "players": True},
+                {**response, "gamestate": True},
+                {**response, "round_duration": -1},
+                {**response, "popcap": True},
+            ):
+                with self.subTest(value=value):
+                    run.return_value.stdout = json.dumps(value).encode()
+                    with self.assertRaises(ValueError):
+                        server.fetch_status("game.example", 1337)
+            for invalid in (b"3", b"{broken", b"[]"):
+                with self.subTest(invalid=invalid):
+                    run.return_value.stdout = invalid
+                    with self.assertRaises((ValueError, json.JSONDecodeError)):
+                        server.fetch_status("game.example", 1337)
+
+    def test_status_monitor_never_serves_stale_data(self):
+        monitor = server.StatusMonitor(("example", 1337))
+        monitor.value = {"online": True}
+        with mock.patch.object(server.time, "monotonic", return_value=100):
+            monitor.updated = 99
+            self.assertEqual(monitor.snapshot(), {"online": True})
+            monitor.updated = 1
+            self.assertEqual(monitor.snapshot(), {"online": None})
+
+    def test_status_monitor_clears_value_on_query_failure(self):
+        monitor = server.StatusMonitor(("example", 1337))
+        monitor.value = {"online": True}
+        for error in (
+            subprocess.TimeoutExpired("byond-wire", 7),
+            subprocess.CalledProcessError(1, "byond-wire"),
+            ValueError("invalid response"),
+        ):
+            with (
+                self.subTest(error=error),
+                mock.patch.object(server, "fetch_status", side_effect=error),
+                mock.patch.object(server.time, "sleep", side_effect=StopIteration),
+                self.assertRaises(StopIteration),
+            ):
+                monitor.run()
+            self.assertEqual(monitor.snapshot(), {"online": None})
+
+    def test_status_panel_refresh_and_failure(self):
+        script = """
+const fs = require("fs");
+const vm = require("vm");
+const assert = require("assert");
+const elements = Object.fromEntries(["server-online", "server-map", "server-round", "server-players"].map(id => [id, {}]));
+elements["server-online"].dataset = {state: "unavailable"};
+elements["server-online"].textContent = "UNAVAILABLE";
+let availabilityUpdates = 0;
+Object.defineProperty(elements["server-online"], "textContent", {
+  get() { return this.value; },
+  set(value) { availabilityUpdates++; this.value = value; },
+});
+elements["server-online"].value = "UNAVAILABLE";
+const callbacks = [];
+let result = {online: true, map: "<script>", players: 12, popcap: 0, round_seconds: 90061};
+let failed = false;
+const context = {
+  document: {getElementById: id => elements[id]},
+  AbortSignal: { timeout: ms => { assert.strictEqual(ms, 4000); return {}; } },
+  fetch: async () => {
+    if (failed) throw new Error("timeout");
+    return {ok: true, json: async () => result};
+  },
+  setTimeout: (callback, delay) => {assert.strictEqual(delay, 5000); callbacks.push(callback);},
+};
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
+setImmediate(async () => {
+  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-online"].dataset.state, "online");
+  assert.strictEqual(availabilityUpdates, 1);
+  assert.strictEqual(elements["server-map"].textContent, "<script>");
+  assert.strictEqual(elements["server-round"].textContent, "25:01:01");
+  assert.strictEqual(elements["server-players"].textContent, "12 / ∞");
+  await callbacks.shift()();
+  assert.strictEqual(availabilityUpdates, 1);
+  failed = true;
+  await callbacks.shift()();
+  assert.strictEqual(elements["server-online"].textContent, "UNAVAILABLE");
+  assert.strictEqual(elements["server-online"].dataset.state, "unavailable");
+  assert.strictEqual(availabilityUpdates, 2);
+  assert.strictEqual(elements["server-map"].textContent, "--");
+  failed = false;
+  result = {online: true, map: "Station", players: 1, popcap: null, round_seconds: null};
+  await callbacks.shift()();
+  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-online"].dataset.state, "online");
+  assert.strictEqual(availabilityUpdates, 3);
+  assert.strictEqual(elements["server-round"].textContent, "--:--:--");
+  assert.strictEqual(elements["server-players"].textContent, "1 / ?");
+});
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "status.js")],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        html = (LANDING / "index.html").read_text()
+        self.assertIn(
+            'id="server-online" data-state="unavailable" role="status" '
+            'aria-live="polite" aria-atomic="true"',
+            html,
+        )
+        self.assertLess(
+            html.index("</span>", html.index('id="server-online"')),
+            html.index('id="server-round"'),
+        )
 
     def test_image_serves_only_page_files_and_attribution(self):
         dockerfile = (LANDING / "Dockerfile").read_text()
@@ -553,187 +788,6 @@ process.stdout.write(JSON.stringify({list, error}));
             [{"account": "</script>", "url": "https://x/", "active": False}]
         ).decode()
         self.assertNotIn("</script>", js)
-
-    def test_query_configuration_is_separate_from_play_host(self):
-        self.assertIsNone(server.query_config({}))
-        self.assertEqual(
-            server.query_config(
-                {
-                    "GATEWAY_QUERY_HOST": "game.example.test",
-                    "GATEWAY_QUERY_PORT": "1337",
-                    "GATEWAY_PLAY_HOST": "play.example.test",
-                }
-            ),
-            ("game.example.test", 1337),
-        )
-        for env in (
-            {"GATEWAY_QUERY_HOST": "game.example"},
-            {"GATEWAY_QUERY_PORT": "1337"},
-            {"GATEWAY_QUERY_HOST": "game.example:1337", "GATEWAY_QUERY_PORT": "1"},
-            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "0"},
-            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "65536"},
-            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "-1"},
-        ):
-            with self.subTest(env=env), self.assertRaises(server.ConfigError):
-                server.query_config(env)
-
-    def test_game_status_maps_only_public_fields(self):
-        response = {
-            "map_name": "MetaStation",
-            "players": 12,
-            "round_duration": 3661,
-            "gamestate": 3,
-            "popcap": 100,
-            "host": "private",
-        }
-        with mock.patch.object(
-            server.subprocess,
-            "run",
-            return_value=mock.Mock(stdout=json.dumps(response).encode()),
-        ) as run:
-            self.assertEqual(
-                server.fetch_status("game.example", 1337),
-                {
-                    "online": True,
-                    "map": "MetaStation",
-                    "round_seconds": 3661,
-                    "players": 12,
-                    "popcap": 100,
-                },
-            )
-        run.assert_called_once_with(
-            ["byond-wire", "game.example", "1337", "?status&format=json"],
-            capture_output=True,
-            check=True,
-            timeout=7,
-        )
-
-    def test_game_status_handles_lobby_missing_cap_and_bad_response(self):
-        data = {
-            "map_name": "Loading...",
-            "players": 0,
-            "round_duration": 0,
-            "gamestate": 1,
-        }
-        with mock.patch.object(server.subprocess, "run") as run:
-            run.return_value.stdout = json.dumps(data).encode()
-            status = server.fetch_status("game.example", 1337)
-            self.assertIsNone(status["round_seconds"])
-            self.assertIsNone(status["popcap"])
-            data["players"] = -1
-            run.return_value.stdout = json.dumps(data).encode()
-            with self.assertRaises(ValueError):
-                server.fetch_status("game.example", 1337)
-            run.return_value.stdout = b"3"
-            with self.assertRaises(ValueError):
-                server.fetch_status("game.example", 1337)
-            run.return_value.stdout = b"{broken"
-            with self.assertRaises(ValueError):
-                server.fetch_status("game.example", 1337)
-            data["players"] = True
-            run.return_value.stdout = json.dumps(data).encode()
-            with self.assertRaises(ValueError):
-                server.fetch_status("game.example", 1337)
-            data["players"] = 0
-            data["popcap"] = None
-            run.return_value.stdout = json.dumps(data).encode()
-            self.assertIsNone(server.fetch_status("game.example", 1337)["popcap"])
-
-    def test_status_monitor_never_serves_stale_data(self):
-        monitor = server.StatusMonitor(("example", 1337))
-        monitor.value = {"online": True}
-        with mock.patch.object(server.time, "monotonic", return_value=100):
-            monitor.updated = 99
-            self.assertEqual(monitor.snapshot(), {"online": True})
-            monitor.updated = 1
-            self.assertEqual(monitor.snapshot(), {"online": None})
-
-    def test_status_monitor_clears_value_on_query_failure(self):
-        monitor = server.StatusMonitor(("example", 1337))
-        monitor.value = {"online": True}
-        for error in (
-            subprocess.TimeoutExpired("byond-wire", 7),
-            subprocess.CalledProcessError(1, "byond-wire"),
-            ValueError("invalid response"),
-        ):
-            with (
-                self.subTest(error=error),
-                mock.patch.object(server, "fetch_status", side_effect=error),
-                mock.patch.object(server.time, "sleep", side_effect=StopIteration),
-                self.assertRaises(StopIteration),
-            ):
-                monitor.run()
-            self.assertEqual(monitor.snapshot(), {"online": None})
-
-    def test_status_panel_refresh_and_failure(self):
-        script = """
-const fs = require("fs");
-const vm = require("vm");
-const assert = require("assert");
-const elements = Object.fromEntries(["server-online", "server-map", "server-round", "server-players"].map(id => [id, {}]));
-elements["server-online"].dataset = {state: "unavailable"};
-elements["server-online"].textContent = "UNAVAILABLE";
-let availabilityUpdates = 0;
-Object.defineProperty(elements["server-online"], "textContent", {
-  get() { return this.value; },
-  set(value) { availabilityUpdates++; this.value = value; },
-});
-elements["server-online"].value = "UNAVAILABLE";
-const callbacks = [];
-let result = {online: true, map: "<script>", players: 12, popcap: 0, round_seconds: 90061};
-let failed = false;
-const context = {
-  document: {getElementById: id => elements[id]},
-  AbortSignal: { timeout: ms => { assert.strictEqual(ms, 4000); return {}; } },
-  fetch: async () => {
-    if (failed) throw new Error("timeout");
-    return {ok: true, json: async () => result};
-  },
-  setTimeout: (callback, delay) => {assert.strictEqual(delay, 5000); callbacks.push(callback);},
-};
-vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
-setImmediate(async () => {
-  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
-  assert.strictEqual(elements["server-online"].dataset.state, "online");
-  assert.strictEqual(availabilityUpdates, 1);
-  assert.strictEqual(elements["server-map"].textContent, "<script>");
-  assert.strictEqual(elements["server-round"].textContent, "25:01:01");
-  assert.strictEqual(elements["server-players"].textContent, "12 / ∞");
-  await callbacks.shift()();
-  assert.strictEqual(availabilityUpdates, 1);
-  failed = true;
-  await callbacks.shift()();
-  assert.strictEqual(elements["server-online"].textContent, "UNAVAILABLE");
-  assert.strictEqual(elements["server-online"].dataset.state, "unavailable");
-  assert.strictEqual(availabilityUpdates, 2);
-  assert.strictEqual(elements["server-map"].textContent, "--");
-  failed = false;
-  result = {online: true, map: "Station", players: 1, popcap: null, round_seconds: null};
-  await callbacks.shift()();
-  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
-  assert.strictEqual(elements["server-online"].dataset.state, "online");
-  assert.strictEqual(availabilityUpdates, 3);
-  assert.strictEqual(elements["server-round"].textContent, "--:--:--");
-  assert.strictEqual(elements["server-players"].textContent, "1 / ?");
-});
-"""
-        subprocess.run(
-            ["node", "-e", script, str(LANDING / "status.js")],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        html = (LANDING / "index.html").read_text()
-        self.assertIn(
-            'id="server-online" data-state="unavailable" role="status" '
-            'aria-live="polite" aria-atomic="true"',
-            html,
-        )
-        self.assertLess(
-            html.index("</span>", html.index('id="server-online"')),
-            html.index('id="server-round"'),
-        )
 
     def test_statuses_and_urls(self):
         result = self.render(

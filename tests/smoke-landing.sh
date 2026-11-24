@@ -2,13 +2,18 @@
 set -euo pipefail
 
 image="${1:?usage: smoke-landing.sh IMAGE}"
-workdir="$(mktemp -d)"
+workdir="./.smoke-landing-$$"
+mkdir -m 700 "$workdir"
 container=""
+configured_container=""
 fake=""
 network=""
 cleanup() {
     if [ -n "$container" ]; then
         docker rm -f "$container" >/dev/null
+    fi
+    if [ -n "$configured_container" ]; then
+        docker rm -f "$configured_container" >/dev/null
     fi
     if [ -n "$fake" ]; then
         docker rm -f "$fake" >/dev/null
@@ -24,6 +29,29 @@ if docker run --rm -e GATEWAY_PLAY_HOST='bad host' "$image" >/dev/null 2>&1; the
     echo "Landing image accepted an invalid play host" >&2
     exit 1
 fi
+
+container="$(docker run -d --read-only --cap-drop ALL \
+    --security-opt no-new-privileges \
+    -p 127.0.0.1::8000 \
+    -e GATEWAY_PLAY_HOST=play.example.test \
+    -e GATEWAY_SLOT_COUNT=2 \
+    -e GATEWAY_SLOT_PATH='/{account}/' \
+    -e GATEWAY_ACTIVE_SLOTS=LGplayer02 "$image")"
+port="$(docker port "$container" 8000/tcp | head -n 1 | sed 's/.*://')"
+base="http://127.0.0.1:$port"
+
+for _ in $(seq 1 30); do
+    if curl -fsS "$base/" -o "$workdir/index.html" 2>/dev/null; then
+        break
+    fi
+    sleep 1
+done
+
+grep -q 'src="slots.js"' "$workdir/index.html"
+curl -fsS "$base/status.json" -o "$workdir/status.json"
+grep -q '"online": null' "$workdir/status.json"
+curl -fsS "$base/status.js" -o "$workdir/status.js"
+grep -q 'status.json' "$workdir/status.js"
 
 network="gateway-landing-test-$$"
 docker network create "$network" >/dev/null
@@ -47,7 +75,8 @@ class Server(socketserver.TCPServer):
 Server(("0.0.0.0", 1337), Handler).serve_forever()
 ')"
 
-container="$(docker run -d --read-only --cap-drop ALL --network "$network" \
+configured_container="$(docker run -d --read-only --cap-drop ALL \
+    --network "$network" \
     --security-opt no-new-privileges \
     -p 127.0.0.1::8000 \
     -e GATEWAY_PLAY_HOST=play.example.test \
@@ -55,45 +84,45 @@ container="$(docker run -d --read-only --cap-drop ALL --network "$network" \
     -e GATEWAY_SLOT_PATH='/{account}/' \
     -e GATEWAY_ACTIVE_SLOTS=LGplayer02 \
     -e GATEWAY_QUERY_HOST=game -e GATEWAY_QUERY_PORT=1337 "$image")"
-port="$(docker port "$container" 8000/tcp | head -n 1 | sed 's/.*://')"
-base="http://127.0.0.1:$port"
+configured_port="$(docker port "$configured_container" 8000/tcp | head -n 1 | sed 's/.*://')"
+configured_base="http://127.0.0.1:$configured_port"
 
-for _ in $(seq 1 30); do
-    if curl -fsS "$base/" -o "$workdir/index.html" 2>/dev/null; then
+status=""
+for _ in $(seq 1 25); do
+    if status="$(curl -fsS --max-time 4 "$configured_base/status.json" 2>/dev/null)" &&
+        echo "$status" | grep -q '"map": "MetaStation"'; then
         break
     fi
     sleep 1
 done
-
-grep -q 'src="slots.js"' "$workdir/index.html"
-grep -q 'src="status.js"' "$workdir/index.html"
-curl -fsS "$base/status.js" | grep -q 'status.json'
-for _ in $(seq 1 25); do
-    status="$(curl -fsS "$base/status.json")"
-    echo "$status" | grep -q '"map": "MetaStation"' && break
-    sleep 1
-done
+echo "$status" | grep -q '"map": "MetaStation"'
 echo "$status" | grep -q '"online": true'
 echo "$status" | grep -q '"round_seconds": 3661'
 echo "$status" | grep -q '"players": 12'
 echo "$status" | grep -q '"popcap": 100'
+
 docker stop "$fake" >/dev/null
 for _ in $(seq 1 25); do
-    status="$(curl -fsS "$base/status.json")"
+    status="$(curl -fsS "$configured_base/status.json")"
     echo "$status" | grep -q '"online": null' && break
     sleep 1
 done
 echo "$status" | grep -q '"online": null'
+
 docker start "$fake" >/dev/null
 for _ in $(seq 1 25); do
-    status="$(curl -fsS "$base/status.json")"
+    status="$(curl -fsS "$configured_base/status.json")"
     echo "$status" | grep -q '"map": "MetaStation"' && break
     sleep 1
 done
 echo "$status" | grep -q '"online": true'
+
+grep -q 'server-status' "$workdir/index.html"
 curl -fsS "$base/slots.js" -o "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer01/"' "$workdir/slots.js"
 grep -q '"url": "https://play.example.test/LGplayer02/"' "$workdir/slots.js"
+grep -q '"active": true' "$workdir/slots.js"
+grep -q '"active": false' "$workdir/slots.js"
 curl -fsS "$base/page.js" -o "$workdir/page.js"
 grep -q GATEWAY_SLOTS "$workdir/page.js"
 curl -fsS "$base/wizard.js" -o "$workdir/wizard.js"

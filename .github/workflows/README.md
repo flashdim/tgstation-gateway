@@ -29,11 +29,12 @@ the repository root. Set `GATEWAY_LANDING_IMAGE` to select this local image or
 the published `dev` image in the Compose example. See the main README for the
 landing environment variables.
 
-The landing page uses static test status only; it does not authenticate users,
+The landing page's slot status is static test data; the game-server status
+panel is a separate read-only `?status` query and does not authenticate users,
 create or isolate sessions, or enforce ownership. `#shared` is not an
 authorization boundary. Operators must provide external access controls and
-secure connections; live session status, trusted ownership and credential
-provisioning remain future integration work.
+secure connections; trusted ownership and credential provisioning remain
+future integration work.
 
 For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
 mocked launcher provisioning check using the complete pager-generated key file
