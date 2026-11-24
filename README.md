@@ -125,12 +125,13 @@ only a single-slot configuration reaches a working player without additional
 routing. Invalid values stop the landing container at startup with an error
 naming the variable. Startup logs list each generated slot URL.
 
-The operator must create BYOND accounts manually. For a pager key obtained by
-logging in to the matching account, mount a file containing only the generated
-key string read-only at `/run/secrets/byond-key`, then set
-`BYOND_KEY_FILE=/run/secrets/byond-key` and `BYOND_USERNAME` to the account
-name. The launcher writes the required disposable `key.txt` inside the Wine
-prefix and never logs its contents. Do not put the key or a password in
+The operator must create BYOND accounts manually. For a pager key file obtained
+by logging in to the matching account, mount the complete file read-only at
+`/run/secrets/LGplayer01_key.txt`, for example, then set `BYOND_KEY_FILE` to
+that path. The launcher copies the file unchanged into the disposable Wine
+prefix and does not log its contents. Restrict its host permissions while
+allowing the player container user to read it. Using this file for login in a
+fresh prefix has not yet been verified. Do not put the key or a password in
 environment variables, command-line arguments, public configuration, URLs,
 images or caches. Rotate the operator-managed source file when the account
 key is revoked.
@@ -160,7 +161,7 @@ To start the client connected to a server instead of opening the pager, provide 
 BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
-The key file and username are optional; without them, BYOND may require
+The key file is optional; without it, BYOND may require
 interactive pager login. A BYOND account or server-side authentication may
 still be required.
 Dream Seeker launches once and remains running. The desktop's **Reset Session**

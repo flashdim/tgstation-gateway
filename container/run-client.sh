@@ -82,12 +82,11 @@ done
 
 seed_byond_key() {
     local key_file="${BYOND_KEY_FILE:-}"
-    local username="${BYOND_USERNAME:-}"
     local key_path="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
     local temporary
 
     [ -n "$key_file" ] || return 0
-    [ -r "$key_file" ] || {
+    [ -f "$key_file" ] && [ -r "$key_file" ] || {
         echo "BYOND_KEY_FILE is not readable" >&2
         exit 1
     }
@@ -95,24 +94,13 @@ seed_byond_key() {
         echo "BYOND_KEY_FILE is empty" >&2
         exit 1
     }
-    [[ "$username" =~ ^[A-Za-z0-9._-]+$ ]] || {
-        echo "BYOND_USERNAME contains invalid characters" >&2
-        exit 1
-    }
-    if [ "$(wc -l <"$key_file")" -gt 1 ] || grep -q '[[:cntrl:]]' "$key_file"; then
-        echo "BYOND_KEY_FILE must contain one printable key line" >&2
-        exit 1
-    fi
-
     mkdir -p "$(dirname "$key_path")"
     temporary="$(mktemp "$key_path.XXXXXX")"
-    chmod 600 "$temporary"
-    {
-        printf 'BEGIN KEY %s\n' "$username"
-        cat "$key_file"
-        printf '\nEND KEY\n'
-    } >"$temporary"
-    mv -f "$temporary" "$key_path"
+    if ! cat -- "$key_file" >"$temporary" || ! mv -f -- "$temporary" "$key_path"; then
+        rm -f -- "$temporary"
+        echo "Failed to install BYOND key file" >&2
+        exit 1
+    fi
 }
 
 seed_byond_key

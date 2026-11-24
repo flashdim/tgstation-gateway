@@ -59,11 +59,12 @@ class WorkflowTest(unittest.TestCase):
         step = workflow[start : workflow.index("\n  landing-image:", start)]
         self.assertIn("github.event_name == 'workflow_dispatch'", step)
         self.assertIn("inputs.check_byond_key", step)
-        self.assertIn("${{ secrets.BYOND_TEST_USERNAME }}", step)
-        self.assertIn("${{ secrets.BYOND_TEST_PASSWORD }}", step)
-        self.assertIn('if [ -z "$BYOND_TEST_USERNAME" ]', step)
+        self.assertIn("${{ secrets.BYOND_TEST_KEY }}", step)
+        self.assertNotIn("BYOND_TEST_USERNAME", step)
+        self.assertNotIn("BYOND_TEST_PASSWORD", step)
+        self.assertIn('if [ -z "$BYOND_TEST_KEY" ]', step)
         self.assertIn("trap 'rm -f -- \"$key_file\"' EXIT", step)
-        self.assertIn("unset BYOND_TEST_PASSWORD", step)
+        self.assertIn("unset BYOND_TEST_KEY", step)
         self.assertIn('export BYOND_TEST_KEY_FILE="$key_file"', step)
 
     def test_landing_and_player_images_build_in_separate_jobs(self):

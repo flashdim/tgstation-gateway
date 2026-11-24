@@ -49,11 +49,10 @@ jobs:
       - name: Check runtime BYOND key provisioning
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_byond_key }}
         env:
-          BYOND_TEST_USERNAME: ${{ secrets.BYOND_TEST_USERNAME }}
-          BYOND_TEST_PASSWORD: ${{ secrets.BYOND_TEST_PASSWORD }}
+          BYOND_TEST_KEY: ${{ secrets.BYOND_TEST_KEY }}
         run: |
           set -eu
-          if [ -z "$BYOND_TEST_USERNAME" ] || [ -z "$BYOND_TEST_PASSWORD" ]; then
+          if [ -z "$BYOND_TEST_KEY" ]; then
             echo "Skipping BYOND key provisioning check: test secrets unavailable."
             exit 0
           fi
@@ -63,8 +62,8 @@ jobs:
           : > "$key_file"
           set +C
           trap 'rm -f -- "$key_file"' EXIT
-          printf '%s' "$BYOND_TEST_PASSWORD" > "$key_file"
-          unset BYOND_TEST_PASSWORD
+          printf '%s' "$BYOND_TEST_KEY" > "$key_file"
+          unset BYOND_TEST_KEY
           export BYOND_TEST_KEY_FILE="$key_file"
           python3 -m unittest discover -s tests -p test_run_client.py -k test_provisions_runtime_secret_file -v
 
