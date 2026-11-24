@@ -44,8 +44,8 @@ class LandingPageTest(unittest.TestCase):
         for name, (filename, asset_id) in sources.items():
             with self.subTest(sprite=name):
                 self.assertRegex(html, rf'class="[^"]*\b{name}\b')
-                self.assertIn(f'src="sprites/{filename}"', html)
-                self.assertTrue((LANDING / "sprites" / filename).is_file())
+                self.assertIn(f'src="assets/sprites/{filename}"', html)
+                self.assertTrue((LANDING / "assets/sprites" / filename).is_file())
                 self.assertIn(asset_id, attribution)
         self.assertNotRegex(html, r'src="https://github\.com/user-attachments/')
         self.assertIn("PotatoMasher", attribution)
@@ -88,7 +88,7 @@ class LandingPageTest(unittest.TestCase):
     def test_one_decorative_clown_moves_and_respects_reduced_motion(self):
         html = (LANDING / "index.html").read_text()
         css = (LANDING / "style.css").read_text()
-        self.assertEqual(html.count('src="sprites/clown.webp"'), 1)
+        self.assertEqual(html.count('src="assets/sprites/clown.webp"'), 1)
         self.assertIn('class="space" aria-hidden="true"', html)
         self.assertIn("@keyframes drift", css)
         self.assertIn("animation: drift 96s linear infinite", css)
@@ -102,6 +102,28 @@ class LandingPageTest(unittest.TestCase):
             css,
             r"\.character-button img \{[^}]*height: clamp\([^;]+\); width: auto;",
         )
+
+    def test_clown_alien_operative_and_wizard_sprites_share_dimensions(self):
+        sprites = LANDING / "assets/sprites"
+        dimensions = {}
+        for name in ("clown.webp", "alien.png", "operative.png", "wizard.png"):
+            data = (sprites / name).read_bytes()
+            if name.endswith(".png"):
+                self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+                self.assertEqual(data[12:16], b"IHDR")
+                dimensions[name] = (
+                    int.from_bytes(data[16:20], "big"),
+                    int.from_bytes(data[20:24], "big"),
+                )
+            else:
+                self.assertEqual(data[12:16], b"VP8L")
+                self.assertEqual(data[20], 0x2F)
+                b0, b1, b2, b3 = data[21:25]
+                dimensions[name] = (
+                    1 + b0 + ((b1 & 0x3F) << 8),
+                    1 + (b1 >> 6) + (b2 << 2) + ((b3 & 0x0F) << 10),
+                )
+        self.assertEqual(set(dimensions.values()), {(32, 32)})
 
     def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
         css = (LANDING / "style.css").read_text()
@@ -171,7 +193,7 @@ class LandingPageTest(unittest.TestCase):
                     "landing/style.css",
                     "/srv/landing/",
                 ],
-                ["landing/sprites/", "/srv/landing/sprites/"],
+                ["landing/assets/sprites/", "/srv/landing/assets/sprites/"],
                 [
                     "landing/assets/ATTRIBUTION.md",
                     "landing/assets/layer1.webp",
@@ -190,11 +212,10 @@ class LandingPageTest(unittest.TestCase):
             "requirements.txt",
             "__pycache__",
             "assets",
-            "sprites",
         }
         self.assertEqual(served, {Path(path).name for path in copies[1][:-1]})
         self.assertEqual(
-            {path.name for path in (LANDING / "sprites").iterdir()},
+            {path.name for path in (LANDING / "assets/sprites").iterdir()},
             {
                 "clown.webp",
                 "alien.png",
@@ -228,7 +249,7 @@ class LandingPageTest(unittest.TestCase):
             "wizard.png",
             "narsie.gif",
             "singularity.gif",
-            "$base/sprites/$asset",
+            "$base/assets/sprites/$asset",
             "assets/layer1.webp",
             "assets/ATTRIBUTION.md",
         ):

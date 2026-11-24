@@ -11,10 +11,10 @@
   <a href="https://github.com/Kron4ek/Wine-Builds"><img src="https://img.shields.io/badge/Proton%20Wine-10.0--4-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Proton Wine 10.0-4"></a>
 </p>
 
-Run the BYOND player in your browser without installing BYOND on your computer. This experimental project streams the player's screen and audio; it does not host a game server.
+The repository currently provides an experimental single-player BYOND image and an optional landing-page prototype. The player streams the screen and audio; it does not host a game server or manage player sessions, and a complete authenticated gameplay session has not been verified.
 <img width="1575" height="904" alt="image" src="https://github.com/user-attachments/assets/352d64c5-5ff8-4676-b582-7642ee001f9a" />
 
-## Start playing
+## Run the player
 
 You need Docker Compose and an internet connection to download the image. From the repository directory, run:
 
