@@ -159,16 +159,17 @@ mount the Docker socket into the landing container.
   for a slot wait for the same startup and receive the same session; exactly
   one container is created.
 - The capacity check and slot reservation run atomically under a host-wide
-  lock. Capacity is `GATEWAY_SLOT_COUNT` containers: reserved slots, slots
-  whose cleanup is pending, and untracked containers matching this
-  deployment's project/deployment/role labels (for example, left by a previous
-  manager process) all count. Excess requests fail with `capacity_exhausted`.
+  lock. Capacity is `GATEWAY_SLOT_COUNT` containers: every container matching
+  this deployment's project/deployment/role labels (including untracked ones,
+  for example left by a previous manager process) counts, as do reserved slots
+  and slots whose cleanup is pending. Excess requests fail with `capacity_exhausted`.
   Untracked containers are counted but never removed.
 - Each container gets the ownership labels above, the operator's image and
   non-secret environment, `--init`, a 2 GiB shared-memory size, no restart
   policy and the required custom seccomp profile, which must be the same
   profile as `examples/seccomp.json`. It publishes no ports.
-- Startup waits for the image healthcheck to report healthy. The default
+- Startup waits for the image healthcheck to report healthy; an image without
+  a healthcheck fails. The default
   readiness timeout is 180 seconds; Docker API requests time out after 30
   seconds. A timeout, Docker API error, container exit or unhealthy container
   marks the slot `failed`, records the error code and removes the partial

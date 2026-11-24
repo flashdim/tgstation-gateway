@@ -163,7 +163,9 @@ class DockerClient:
         )
 
     def inspect(self, container_id):
-        result = self._request("GET", f"/containers/{quote(container_id, safe='')}/json")
+        result = self._request(
+            "GET", f"/containers/{quote(container_id, safe='')}/json"
+        )
         if not isinstance(result, dict):
             raise DockerError("Docker API returned an invalid inspect response")
         return result
@@ -391,17 +393,17 @@ class SessionManager:
                 raise DockerUnavailable("Docker API unavailable") from error
             with self._meta_lock:
                 sessions = dict(self._sessions)
-            known = {session.session_id for session in sessions.values()}
-            used = sum(
-                1
-                for container in containers
-                if container["labels"].get(SESSION_LABEL) not in known
-            )
+            present = {
+                container["labels"].get(SESSION_LABEL) for container in containers
+            }
+            used = len(containers)
             for other in self.config.slots:
                 state = self.registry.state(other.account)
                 if state is None:
                     continue
                 session = sessions.get(other.account)
+                if session and session.session_id in present:
+                    continue
                 if state is not SessionState.FAILED or (
                     session and session.cleanup_pending
                 ):
@@ -438,8 +440,10 @@ class SessionManager:
             if state.get("Running") is not True:
                 raise StartupFailed("Player container exited during startup")
             health = (state.get("Health") or {}).get("Status")
-            if health in (None, "healthy"):
+            if health == "healthy":
                 return
+            if health is None:
+                raise StartupFailed("Player container has no healthcheck")
             if health == "unhealthy":
                 raise StartupFailed("Player container became unhealthy")
             remaining = deadline - self.clock()
@@ -476,8 +480,7 @@ class SessionManager:
                 for container in self.docker.list_containers(labels)
                 if self.config.owns_container(container["labels"])
                 and container["labels"].get(SESSION_LABEL) == session.session_id
-                and container["labels"].get(LABEL_PREFIX + "account")
-                == session.account
+                and container["labels"].get(LABEL_PREFIX + "account") == session.account
             ]
 
         for container in owned():

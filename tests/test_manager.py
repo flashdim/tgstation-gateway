@@ -237,6 +237,16 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(states.count(SessionState.READY), 1)
         self.assertEqual(states.count(None), 2)
 
+    def test_capacity_counts_every_owned_container(self):
+        manager = make_manager(count=2)
+        session = manager.start("LGplayer01")
+        manager.docker.add(
+            manager.config.container_labels("LGplayer01", session.session_id)
+        )
+        with self.assertRaises(CapacityExhausted):
+            manager.start("LGplayer02")
+        self.assertEqual(len(manager.docker.containers), 2)
+
     def test_untracked_containers_of_other_deployments_do_not_use_capacity(self):
         manager = make_manager(count=1)
         other = SessionConfig.from_env({"GATEWAY_DEPLOYMENT_ID": "deployment-b"})
@@ -291,6 +301,7 @@ class SessionManagerTest(unittest.TestCase):
             "inspect": lambda d: d.fail.__setitem__("inspect", DockerError("x")),
             "exited": lambda d: setattr(d, "running_after_start", False),
             "unhealthy": lambda d: setattr(d, "health", "unhealthy"),
+            "no healthcheck": lambda d: setattr(d, "health", None),
         }
         for name, setup in cases.items():
             with self.subTest(name=name):
@@ -352,7 +363,9 @@ class SessionManagerTest(unittest.TestCase):
         second = self.manager.start("LGplayer02")
         config = self.manager.config
         other = SessionConfig.from_env({"GATEWAY_DEPLOYMENT_ID": "deployment-b"})
-        foreign = self.docker.add(other.container_labels("LGplayer01", first.session_id))
+        foreign = self.docker.add(
+            other.container_labels("LGplayer01", first.session_id)
+        )
         forged = self.docker.add(
             {
                 **config.container_labels("LGplayer01", first.session_id),
@@ -505,9 +518,7 @@ class FakeDockerHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(length)) if length else None
         url = urlsplit(self.path)
-        self.server.requests.append(
-            (self.command, url.path, parse_qs(url.query), body)
-        )
+        self.server.requests.append((self.command, url.path, parse_qs(url.query), body))
         route = (self.command, url.path)
         if route == ("GET", "/v1.44/containers/json"):
             self._reply(200, [{"Id": "abc", "Labels": {"a": "b"}}])
@@ -547,7 +558,8 @@ class DockerClientTest(unittest.TestCase):
 
     def test_engine_api_requests(self):
         self.assertEqual(
-            self.client.list_containers({"x": "1"}), [{"id": "abc", "labels": {"a": "b"}}]
+            self.client.list_containers({"x": "1"}),
+            [{"id": "abc", "labels": {"a": "b"}}],
         )
         self.assertEqual(self.client.create("name", {"Image": "i"}), "abc")
         self.client.start("abc")
@@ -567,7 +579,9 @@ class DockerClientTest(unittest.TestCase):
         self.assertIn("boom", str(context.exception))
         with self.assertRaises(DockerError):
             self.client.start("../other")
-        self.assertEqual(self.server.requests[-1][1], "/v1.44/containers/..%2Fother/start")
+        self.assertEqual(
+            self.server.requests[-1][1], "/v1.44/containers/..%2Fother/start"
+        )
         missing = DockerClient(str(Path(self.directory.name) / "none.sock"))
         with self.assertRaises(DockerError) as context:
             missing.list_containers({})
