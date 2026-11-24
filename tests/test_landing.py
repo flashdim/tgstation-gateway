@@ -96,6 +96,13 @@ class LandingPageTest(unittest.TestCase):
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn(".character { animation: none;", css)
 
+    def test_floating_sprites_share_a_height_and_preserve_aspect_ratio(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"\.character-button img \{[^}]*height: clamp\([^;]+\); width: auto;",
+        )
+
     def test_server_status_dot_pulses_by_availability_and_respects_reduced_motion(self):
         css = (LANDING / "style.css").read_text()
         html = (LANDING / "index.html").read_text()
