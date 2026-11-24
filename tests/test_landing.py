@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -133,9 +134,11 @@ class LandingPageTest(unittest.TestCase):
         self.assertEqual(
             copies,
             [
+                ["landing/requirements.txt", "/opt/landing/requirements.txt"],
                 [
                     "landing/index.html",
                     "landing/page.js",
+                    "landing/status.js",
                     "landing/wizard.js",
                     "landing/style.css",
                     "landing/clown.webp",
@@ -154,9 +157,10 @@ class LandingPageTest(unittest.TestCase):
         served = {path.name for path in LANDING.iterdir() if path.suffix != ".pyc"} - {
             "Dockerfile",
             "server.py",
+            "requirements.txt",
             "__pycache__",
         }
-        self.assertEqual(served, {Path(path).name for path in copies[0][:-1]})
+        self.assertEqual(served, {Path(path).name for path in copies[1][:-1]})
         self.assertIn("USER 65534:65534", dockerfile)
         self.assertIn('CMD ["python3", "/opt/landing/server.py"]', dockerfile)
         self.assertEqual(server.PAGE_ROOT, "/srv/landing")
@@ -382,6 +386,161 @@ process.stdout.write(JSON.stringify({list, error}));
             [{"account": "</script>", "url": "https://x/", "active": False}]
         ).decode()
         self.assertNotIn("</script>", js)
+
+    def test_query_configuration_is_separate_from_play_host(self):
+        self.assertIsNone(server.query_config({}))
+        self.assertEqual(
+            server.query_config(
+                {
+                    "GATEWAY_QUERY_HOST": "game.example.test",
+                    "GATEWAY_QUERY_PORT": "1337",
+                    "GATEWAY_PLAY_HOST": "play.example.test",
+                }
+            ),
+            ("game.example.test", 1337),
+        )
+        for env in (
+            {"GATEWAY_QUERY_HOST": "game.example"},
+            {"GATEWAY_QUERY_PORT": "1337"},
+            {"GATEWAY_QUERY_HOST": "game.example:1337", "GATEWAY_QUERY_PORT": "1"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "0"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "65536"},
+            {"GATEWAY_QUERY_HOST": "game.example", "GATEWAY_QUERY_PORT": "-1"},
+        ):
+            with self.subTest(env=env), self.assertRaises(server.ConfigError):
+                server.query_config(env)
+
+    def test_game_status_maps_only_public_fields(self):
+        response = {
+            "map_name": "MetaStation",
+            "players": 12,
+            "round_duration": 3661,
+            "gamestate": 3,
+            "popcap": 100,
+            "host": "private",
+        }
+        with mock.patch.object(
+            server.subprocess,
+            "run",
+            return_value=mock.Mock(stdout=json.dumps(response).encode()),
+        ) as run:
+            self.assertEqual(
+                server.fetch_status("game.example", 1337),
+                {
+                    "online": True,
+                    "map": "MetaStation",
+                    "round_seconds": 3661,
+                    "players": 12,
+                    "popcap": 100,
+                },
+            )
+        run.assert_called_once_with(
+            ["byond-wire", "game.example", "1337", "?status&format=json"],
+            capture_output=True,
+            check=True,
+            timeout=7,
+        )
+
+    def test_game_status_handles_lobby_missing_cap_and_bad_response(self):
+        data = {
+            "map_name": "Loading...",
+            "players": 0,
+            "round_duration": 0,
+            "gamestate": 1,
+        }
+        with mock.patch.object(server.subprocess, "run") as run:
+            run.return_value.stdout = json.dumps(data).encode()
+            status = server.fetch_status("game.example", 1337)
+            self.assertIsNone(status["round_seconds"])
+            self.assertIsNone(status["popcap"])
+            data["players"] = -1
+            run.return_value.stdout = json.dumps(data).encode()
+            with self.assertRaises(ValueError):
+                server.fetch_status("game.example", 1337)
+            run.return_value.stdout = b"3"
+            with self.assertRaises(ValueError):
+                server.fetch_status("game.example", 1337)
+            run.return_value.stdout = b"{broken"
+            with self.assertRaises(ValueError):
+                server.fetch_status("game.example", 1337)
+            data["players"] = True
+            run.return_value.stdout = json.dumps(data).encode()
+            with self.assertRaises(ValueError):
+                server.fetch_status("game.example", 1337)
+            data["players"] = 0
+            data["popcap"] = None
+            run.return_value.stdout = json.dumps(data).encode()
+            self.assertIsNone(server.fetch_status("game.example", 1337)["popcap"])
+
+    def test_status_monitor_never_serves_stale_data(self):
+        monitor = server.StatusMonitor(("example", 1337))
+        monitor.value = {"online": True}
+        with mock.patch.object(server.time, "monotonic", return_value=100):
+            monitor.updated = 99
+            self.assertEqual(monitor.snapshot(), {"online": True})
+            monitor.updated = 1
+            self.assertEqual(monitor.snapshot(), {"online": None})
+
+    def test_status_monitor_clears_value_on_query_failure(self):
+        monitor = server.StatusMonitor(("example", 1337))
+        monitor.value = {"online": True}
+        for error in (
+            subprocess.TimeoutExpired("byond-wire", 7),
+            subprocess.CalledProcessError(1, "byond-wire"),
+            ValueError("invalid response"),
+        ):
+            with (
+                self.subTest(error=error),
+                mock.patch.object(server, "fetch_status", side_effect=error),
+                mock.patch.object(server.time, "sleep", side_effect=StopIteration),
+                self.assertRaises(StopIteration),
+            ):
+                monitor.run()
+            self.assertEqual(monitor.snapshot(), {"online": None})
+
+    def test_status_panel_refresh_and_failure(self):
+        script = """
+const fs = require("fs");
+const vm = require("vm");
+const assert = require("assert");
+const elements = Object.fromEntries(["server-online", "server-map", "server-round", "server-players"].map(id => [id, {}]));
+const callbacks = [];
+let result = {online: true, map: "<script>", players: 12, popcap: 0, round_seconds: 90061};
+let failed = false;
+const context = {
+  document: {getElementById: id => elements[id]},
+  AbortSignal: { timeout: ms => { assert.strictEqual(ms, 4000); return {}; } },
+  fetch: async () => {
+    if (failed) throw new Error("timeout");
+    return {ok: true, json: async () => result};
+  },
+  setTimeout: (callback, delay) => {assert.strictEqual(delay, 5000); callbacks.push(callback);},
+};
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
+setImmediate(async () => {
+  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-map"].textContent, "<script>");
+  assert.strictEqual(elements["server-round"].textContent, "25:01:01");
+  assert.strictEqual(elements["server-players"].textContent, "12 / ∞");
+  failed = true;
+  await callbacks.shift()();
+  assert.strictEqual(elements["server-online"].textContent, "UNAVAILABLE");
+  assert.strictEqual(elements["server-map"].textContent, "--");
+  failed = false;
+  result = {online: true, map: "Station", players: 1, popcap: null, round_seconds: null};
+  await callbacks.shift()();
+  assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(elements["server-round"].textContent, "--:--:--");
+  assert.strictEqual(elements["server-players"].textContent, "1 / ?");
+});
+"""
+        subprocess.run(
+            ["node", "-e", script, str(LANDING / "status.js")],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
     def test_statuses_and_urls(self):
         result = self.render(

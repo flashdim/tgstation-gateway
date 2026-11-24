@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script defer src="slots.js"></script>
     <script defer src="page.js"></script>
+    <script defer src="status.js"></script>
     <script defer src="wizard.js"></script>
   </head>
   <body>
@@ -42,6 +43,14 @@
     <main>
       <header>
         <img class="landing-banner" src="station-alert.svg" alt="LazorGator Party 13">
+        <section class="server-status" aria-label="Game server status">
+          <div class="status-heading">SERVER STATUS <span id="server-online">UNAVAILABLE</span></div>
+          <dl>
+            <div><dt>MAP</dt><dd id="server-map">--</dd></div>
+            <div><dt>ROUND</dt><dd id="server-round">--:--:--</dd></div>
+            <div><dt>PLAYERS / CAP</dt><dd id="server-players">-- / --</dd></div>
+          </dl>
+        </section>
         <h1>Choose a session</h1>
         <p>Pick an available slot or watch an active session.</p>
       </header>
@@ -51,7 +60,7 @@
         <noscript><p class="notice">JavaScript is required to display configured slots.</p></noscript>
       </section>
       <footer>
-        <p>Test configuration only. Status is not live and access is not enforced by this page.</p>
+        <p>Slot status is static test data; access is not enforced by this page.</p>
         <p><a href="ATTRIBUTION.md">Artwork attributions and licenses</a>.</p>
       </footer>
     </main>
