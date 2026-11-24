@@ -174,6 +174,15 @@ class LandingPageTest(unittest.TestCase):
             r"\.character-button img \{[^}]*height: clamp\([^;]+\); width: auto;",
         )
 
+    def test_floating_sprites_have_a_halo_but_narsie_does_not(self):
+        css = (LANDING / "style.css").read_text()
+        self.assertRegex(
+            css,
+            r"\.character-button img \{[^}]*"
+            r"filter: drop-shadow\(0 0 3px rgba\(255, 255, 255, \.65\)\);",
+        )
+        self.assertNotRegex(css, r"\.narsie img \{[^}]*filter:")
+
     def test_slots_use_a_compact_scrollable_responsive_grid(self):
         css = (LANDING / "style.css").read_text()
         self.assertRegex(

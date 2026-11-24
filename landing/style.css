@@ -34,7 +34,7 @@ body {
 .wizard { animation: wizard-drift 96s linear -72s infinite; }
 .character-button { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
 .character-button:focus-visible { outline: 2px solid #b6dbea; outline-offset: 3px; }
-.character-button img { display: block; height: clamp(52px, 8vw, 70px); width: auto; image-rendering: pixelated; opacity: .8; animation: character-spin 96s linear infinite; }
+.character-button img { display: block; height: clamp(52px, 8vw, 70px); width: auto; image-rendering: pixelated; opacity: .8; filter: drop-shadow(0 0 3px rgba(255, 255, 255, .65)); animation: character-spin 96s linear infinite; }
 .clown .character-button img { opacity: .7; }
 .wizard .character-button img { animation: wizard-spin 96s linear -72s infinite; }
 .speech-bubble { position: absolute; bottom: 100%; left: 0; width: max-content; max-width: min(190px, 80vw); padding: 8px; border-radius: 8px; background: #fff; color: #141629; font-size: .75rem; font-weight: 800; pointer-events: none; }
