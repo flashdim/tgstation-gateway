@@ -504,6 +504,13 @@ const fs = require("fs");
 const vm = require("vm");
 const assert = require("assert");
 const elements = Object.fromEntries(["server-online", "server-map", "server-round", "server-players"].map(id => [id, {}]));
+elements["server-online"].textContent = "UNAVAILABLE";
+let availabilityUpdates = 0;
+Object.defineProperty(elements["server-online"], "textContent", {
+  get() { return this.value; },
+  set(value) { availabilityUpdates++; this.value = value; },
+});
+elements["server-online"].value = "UNAVAILABLE";
 const callbacks = [];
 let result = {online: true, map: "<script>", players: 12, popcap: 0, round_seconds: 90061};
 let failed = false;
@@ -519,17 +526,22 @@ const context = {
 vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), context);
 setImmediate(async () => {
   assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(availabilityUpdates, 1);
   assert.strictEqual(elements["server-map"].textContent, "<script>");
   assert.strictEqual(elements["server-round"].textContent, "25:01:01");
   assert.strictEqual(elements["server-players"].textContent, "12 / ∞");
+  await callbacks.shift()();
+  assert.strictEqual(availabilityUpdates, 1);
   failed = true;
   await callbacks.shift()();
   assert.strictEqual(elements["server-online"].textContent, "UNAVAILABLE");
+  assert.strictEqual(availabilityUpdates, 2);
   assert.strictEqual(elements["server-map"].textContent, "--");
   failed = false;
   result = {online: true, map: "Station", players: 1, popcap: null, round_seconds: null};
   await callbacks.shift()();
   assert.strictEqual(elements["server-online"].textContent, "ONLINE");
+  assert.strictEqual(availabilityUpdates, 3);
   assert.strictEqual(elements["server-round"].textContent, "--:--:--");
   assert.strictEqual(elements["server-players"].textContent, "1 / ?");
 });
@@ -540,6 +552,15 @@ setImmediate(async () => {
             capture_output=True,
             text=True,
             timeout=30,
+        )
+        html = (LANDING / "index.html").read_text()
+        self.assertIn(
+            'id="server-online" role="status" aria-live="polite" aria-atomic="true"',
+            html,
+        )
+        self.assertLess(
+            html.index("</span>", html.index('id="server-online"')),
+            html.index('id="server-round"'),
         )
 
     def test_statuses_and_urls(self):
