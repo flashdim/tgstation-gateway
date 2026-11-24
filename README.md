@@ -140,10 +140,57 @@ registry reserves a slot as `starting`, then permits `ready`, `reconnect_grace`,
 `stopping` and `failed`. Ready sessions can enter reconnect grace and return
 to ready. Starting, ready and grace sessions may stop or fail; failed sessions
 may enter stopping for cleanup, and stopping may fail. A slot is released only
-from stopping or failed, after the future manager confirms container and
+from stopping or failed, after the manager confirms container and
 session-data cleanup. Snapshots and transitions are serialized within a process.
-There are no timers, persistence, readiness probes or orchestration yet: the
-standalone landing starts with all slots unallocated, and a restart clears state.
+The landing server is not connected to the manager below: the standalone
+landing starts with all slots unallocated, and a restart clears state.
+
+### Slot lifecycle manager (not yet connected)
+
+`landing/manager.py` contains a single-host session manager and a minimal
+Docker Engine API client (API 1.44, Docker 25 or newer) over the daemon's UNIX
+socket. It is unit-tested with a fake daemon but is not used by the landing
+server, not copied into the landing image and has no deployment
+configuration yet; routing, credentials, reconnect grace, restart
+reconciliation and ownership checks are separate, unfinished work. Do not
+mount the Docker socket into the landing container.
+
+- Startup and teardown of each slot are serialized. Concurrent first requests
+  for a slot wait for the same startup and receive the same session; exactly
+  one container is created.
+- The capacity check and slot reservation run atomically under a host-wide
+  lock. Capacity is `GATEWAY_SLOT_COUNT` containers: reserved slots, slots
+  whose cleanup is pending, and untracked containers matching this
+  deployment's project/deployment/role labels (for example, left by a previous
+  manager process) all count. Excess requests fail with `capacity_exhausted`.
+  Untracked containers are counted but never removed.
+- Each container gets the ownership labels above, the operator's image and
+  non-secret environment, `--init`, a 2 GiB shared-memory size, no restart
+  policy and the required custom seccomp profile, which must be the same
+  profile as `examples/seccomp.json`. It publishes no ports.
+- Startup waits for the image healthcheck to report healthy. The default
+  readiness timeout is 180 seconds; Docker API requests time out after 30
+  seconds. A timeout, Docker API error, container exit or unhealthy container
+  marks the slot `failed`, records the error code and removes the partial
+  container.
+- Cleanup lists containers by this session's labels, removes only those that
+  pass the ownership predicate for the slot, deployment and session UUID
+  (forced, with anonymous volumes so the writable layer and session data are
+  discarded), and confirms that none remain. If cleanup fails, the slot stays
+  `failed` with `cleanup_pending`, keeps counting toward capacity, and is
+  retried by the next start or reaper pass.
+- Explicit termination requires the slot's current session UUID; stale or
+  unknown UUIDs fail without touching any container. Teardown is visible as
+  `stopping`. A periodic `reap()` pass cleans up crashed (stopped or missing)
+  and failed sessions, skipping slots that are busy. A start request for a
+  crashed ready session replaces it.
+
+Errors carry a code and suggested HTTP status: `unknown_slot` (404),
+`unknown_session` (404), `slot_busy` (409), `capacity_exhausted` (503),
+`docker_unavailable` (502), `startup_failed` (502), `startup_timeout` (504) and
+`cleanup_failed` (500). The operator status omits session UUIDs. State is held
+in memory; restart recovery is not implemented. These checks have not been run
+against a real Docker daemon or the player image.
 
 `GATEWAY_DEPLOYMENT_ID` contains 1–64 ASCII letters, digits, `_`, `.` or `-`,
 starting with a letter or digit. Keep it stable across manager restarts, unique

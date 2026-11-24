@@ -482,6 +482,7 @@ setImmediate(async () => {
             "Dockerfile",
             "server.py",
             "sessions.py",
+            "manager.py",
             "requirements.txt",
             "__pycache__",
             "assets",
