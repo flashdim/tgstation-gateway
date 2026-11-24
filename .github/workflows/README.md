@@ -35,6 +35,16 @@ authorization boundary. Operators must provide external access controls and
 secure connections; live session status, trusted ownership and credential
 provisioning remain future integration work.
 
+For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
+mocked launcher provisioning check using `BYOND_TEST_USERNAME` and the
+pager-generated key string in `BYOND_TEST_PASSWORD`. The key is written to a
+private temporary file on the runner, removed afterward, and not passed as a
+container environment variable or saved in an image, cache or artifact.
+The check skips with a reason if either secret is unavailable; ordinary and
+fork pull-request runs keep running the non-credential tests. This uses a
+mock Wine executable and does not verify BYOND login, key portability, streaming
+or gameplay.
+
 ## Build caches
 
 CI and release workflows separately cache the checksum-pinned Proton Wine

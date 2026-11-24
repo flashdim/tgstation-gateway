@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+import re
+import shlex
 import subprocess
 import tempfile
 import time
@@ -21,6 +23,7 @@ class RunClientTest(unittest.TestCase):
         wine_exit_code=0,
         cleanup_failure=None,
         key_content=None,
+        key_source=None,
         username=None,
     ):
         with tempfile.TemporaryDirectory() as temporary:
@@ -89,6 +92,9 @@ class RunClientTest(unittest.TestCase):
             runtime.mkdir()
             prefix = root / "wine prefix"
             authority = runtime / "kwin authority"
+            key_file = key_source or (
+                root / "byond-key" if key_content is not None else None
+            )
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
@@ -97,9 +103,9 @@ class RunClientTest(unittest.TestCase):
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
                 + (
-                    f"export BYOND_KEY_FILE='{root / 'byond-key'}'\n"
-                    f"export BYOND_USERNAME='{username}'\n"
-                    if key_content is not None
+                    f"export BYOND_KEY_FILE={shlex.quote(str(key_file))}\n"
+                    f"export BYOND_USERNAME={shlex.quote(username)}\n"
+                    if key_file is not None
                     else ""
                 )
             )
@@ -156,13 +162,16 @@ class RunClientTest(unittest.TestCase):
                 text=True,
                 timeout=5,
             )
-            if key_content is not None:
+            if key_file is not None:
                 key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
-                self.assertEqual(
-                    key.read_text(),
-                    f"BEGIN KEY {username}\n{key_content}\nEND KEY\n",
+                key_bytes = Path(key_file).read_bytes()
+                self.assertTrue(
+                    key.read_bytes()
+                    == f"BEGIN KEY {username}\n".encode() + key_bytes + b"\nEND KEY\n"
                 )
                 self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+                self.assertFalse(key_bytes in result.stdout.encode())
+                self.assertFalse(key_bytes in result.stderr.encode())
             log = root / "wine-log"
             events = root / "event-log"
             cleanup = root / "cleanup-log"
@@ -183,10 +192,25 @@ class RunClientTest(unittest.TestCase):
     def test_seeds_key_and_starts_pager_before_direct_server(self):
         result, _, _, events, _, _ = self.run_client(
             server="example.org:1337",
-            key_content="CzFHCV-E)<#49=#*\"/CQA%'R-G0&1'9I='>I]3>",
+            key_content="synthetic-key-for-unit-test",
             username="LGplayer01",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events.count("launch"), 2)
+
+    @unittest.skipUnless(
+        os.environ.get("BYOND_TEST_KEY_FILE") and os.environ.get("BYOND_TEST_USERNAME"),
+        "BYOND credential provisioning check not enabled or secrets unavailable",
+    )
+    def test_provisions_runtime_secret_file(self):
+        username = os.environ["BYOND_TEST_USERNAME"]
+        self.assertTrue(bool(re.fullmatch(r"[A-Za-z0-9._-]+", username)))
+        result, _, _, events, _, _ = self.run_client(
+            server="example.org:1337",
+            key_source=Path(os.environ["BYOND_TEST_KEY_FILE"]),
+            username=username,
+        )
+        self.assertEqual(result.returncode, 0)
         self.assertEqual(events.count("launch"), 2)
 
     def test_writes_display_sized_layout_over_existing_config(self):
