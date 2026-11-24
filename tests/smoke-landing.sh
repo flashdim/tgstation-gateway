@@ -87,11 +87,15 @@ configured_container="$(docker run -d --read-only --cap-drop ALL \
 configured_port="$(docker port "$configured_container" 8000/tcp | head -n 1 | sed 's/.*://')"
 configured_base="http://127.0.0.1:$configured_port"
 
+status=""
 for _ in $(seq 1 25); do
-    status="$(curl -fsS "$configured_base/status.json")"
-    echo "$status" | grep -q '"map": "MetaStation"' && break
+    if status="$(curl -fsS --max-time 4 "$configured_base/status.json" 2>/dev/null)" &&
+        echo "$status" | grep -q '"map": "MetaStation"'; then
+        break
+    fi
     sleep 1
 done
+echo "$status" | grep -q '"map": "MetaStation"'
 echo "$status" | grep -q '"online": true'
 echo "$status" | grep -q '"round_seconds": 3661'
 echo "$status" | grep -q '"players": 12'
