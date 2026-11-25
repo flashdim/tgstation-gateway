@@ -334,6 +334,22 @@ class SessionManagerTest(unittest.TestCase):
             ),
         )
 
+    def test_traefik_route_account_validation(self):
+        route = TraefikConfig("play.example.org", "player-auth@file")
+        session_id = str(uuid4())
+        router = f"gateway-{session_id.replace('-', '')}-router"
+        for account in ("A", "LGplayer01", "a-b", "a" * 26):
+            with self.subTest(account=account):
+                labels = route.labels(account, session_id, "public")
+                self.assertEqual(
+                    labels[f"traefik.http.routers.{router}.rule"],
+                    f"Host(`{account.lower()}.play.example.org`)",
+                )
+        for account in ("", "-a", "a-", "a_b", "a.b", "a" * 27, None):
+            with self.subTest(account=account):
+                with self.assertRaisesRegex(ValueError, "Invalid slot account"):
+                    route.labels(account, session_id, "public")
+
     def test_secret_failures_and_retry(self):
         path = Path(self.manager.spec.secret_directory) / f"{self.account}_key.txt"
         other = path.with_name("LGplayer02_key.txt")
