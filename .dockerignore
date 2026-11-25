@@ -2,4 +2,4 @@
 .github
 README.md
 .venv
-*_key.txt
+**/*_key.txt

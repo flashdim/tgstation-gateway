@@ -193,10 +193,15 @@ class DockerClient:
     def list_volumes(self, labels):
         filters = json.dumps({"label": [f"{k}={v}" for k, v in labels.items()]})
         result = self._request("GET", "/volumes", {"filters": filters})
-        if not isinstance(result, dict) or not isinstance(result.get("Volumes"), list):
+        if not isinstance(result, dict) or "Volumes" not in result:
+            raise DockerError("Docker API returned an invalid volume list")
+        items = result["Volumes"]
+        if items is None:
+            items = []
+        if not isinstance(items, list):
             raise DockerError("Docker API returned an invalid volume list")
         volumes = []
-        for item in result["Volumes"]:
+        for item in items:
             if not isinstance(item, dict) or not isinstance(item.get("Name"), str):
                 raise DockerError("Docker API returned an invalid volume")
             volumes.append({"name": item["Name"], "labels": item.get("Labels") or {}})
@@ -251,7 +256,9 @@ class PlayerSpec:
                 raise ValueError("Session paths are managed by the manager")
 
     def secret_path(self, account):
-        path = os.path.join(self.secret_directory, f"{account}_key.txt")
+        path = os.path.normpath(
+            "/" + os.path.join(self.secret_directory, f"{account}_key.txt").lstrip("/")
+        )
         try:
             fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             try:
