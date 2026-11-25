@@ -12,7 +12,27 @@
 </p>
 
 The repository currently provides an experimental single-player BYOND image and an optional landing-page prototype. The player streams the screen and audio; it does not host a game server or manage player sessions, and a complete authenticated gameplay session has not been verified.
-<img width="1575" height="904" alt="image" src="https://github.com/user-attachments/assets/352d64c5-5ff8-4676-b582-7642ee001f9a" />
+<img src="docs/landing-desktop.png" alt="Landing page rendered by the CI landing-screenshot job">
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser["Player browser"] -->|"HTTP(S), WebSocket"| Proxy["Operator proxy<br/>(access control, TLS)"]
+    Proxy -.->|"optional"| Landing["Landing page<br/>(slot links)"]
+    Proxy --> Selkies
+    subgraph Player["Player container"]
+        Selkies["Selkies streaming<br/>(video, audio, input)"] --> Desktop["KDE Plasma<br/>(KWin, Wayland or X11)"]
+        Desktop --> Wine["Proton Wine 10.0-4<br/>+ DXVK"]
+        Wine --> Client["BYOND client<br/>(Dream Seeker)"]
+    end
+    Landing -.->|"optional status query"| Server
+    Client -->|"BYOND protocol"| Server["Operator-configured<br/>BYOND game server"]
+```
+
+The proxy and the game server are outside this repository; access control and
+TLS are the operator's responsibility. The dashed landing page is optional and
+the player image works without it.
 
 ## Run the player
 
