@@ -105,6 +105,23 @@ seed_byond_key() {
 
 seed_byond_key
 
+cfg_dir="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/cfg"
+mkdir -p "$cfg_dir"
+set_byond_option() {
+    local file="$1" option="$2" temporary
+    temporary="$(mktemp "$file.XXXXXX")"
+    if { [ ! -e "$file" ] || awk -v option="$option" '$1 != option { print }' "$file"; } >"$temporary" &&
+        printf '%s on\n' "$option" >>"$temporary" &&
+        mv -f -- "$temporary" "$file"; then
+        return 0
+    fi
+    rm -f -- "$temporary"
+    echo "Failed to configure BYOND settings" >&2
+    exit 1
+}
+set_byond_option "$cfg_dir/pager.txt" auto-login
+set_byond_option "$cfg_dir/seeker.txt" graphics-hwmode
+
 dimensions="$(xdpyinfo -display "$DISPLAY" | awk '$1 == "dimensions:" { print $2; exit }')"
 if [[ ! "$dimensions" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     echo "Could not determine display dimensions" >&2
@@ -250,14 +267,8 @@ if [ -n "${BYOND_SERVER:-}" ]; then
         echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
         exit 1
     fi
-    dreamseeker="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
     server_url="byond://$server"
-
-    if [ -n "${BYOND_KEY_FILE:-}" ]; then
-        pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
-        wine "$pager" >/dev/null 2>&1 &
-    fi
-    exec wine "$dreamseeker" "$server_url"
+    exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" "$server_url"
 fi
 
 exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"

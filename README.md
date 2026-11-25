@@ -324,18 +324,22 @@ image validation and may refer to a build that later fails validation.
 
 ## Connect directly to a server
 
-To start the client connected to a server instead of opening the pager, provide its address and port:
+To request a connection to a server through the BYOND pager, provide its address and port:
 
 ```sh
 BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
-The key file is optional; without it, BYOND may require
-interactive pager login. A BYOND account or server-side authentication may
-still be required.
-Dream Seeker launches once and remains running. The desktop's **Reset Session**
-action restarts it after Selkies clients connect. The BYOND pager path is
-unchanged.
+At each client startup, the launcher enables `auto-login on` in BYOND's
+`cfg/pager.txt` and `graphics-hwmode on` in `cfg/seeker.txt`, retaining other
+settings. It starts `byond.exe` with the server URL; the pager is expected to
+log in and launch Dream Seeker. The key file is optional; without it, BYOND
+may require interactive pager login. A BYOND account or server-side
+authentication may still be required. Automatic login and joining through the
+pager have not yet been verified against a real server. In direct-server mode,
+the healthcheck still requires a Dream Seeker process; it does not prove login
+or gameplay. The desktop's **Reset Session** action restarts the supervised
+pager after Selkies clients connect.
 
 ## Customize the session
 

@@ -24,6 +24,8 @@ class RunClientTest(unittest.TestCase):
         key_content=None,
         key_source=None,
         expect_key=True,
+        existing_config=None,
+        bad_config_directory=False,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -138,6 +140,14 @@ class RunClientTest(unittest.TestCase):
             if existing_layout is not None:
                 layout.parent.mkdir(parents=True)
                 layout.write_text(existing_layout)
+            cfg = prefix / "drive_c/users/steamuser/Documents/BYOND/cfg"
+            if existing_config is not None:
+                cfg.mkdir(parents=True)
+                for name, contents in existing_config.items():
+                    (cfg / name).write_text(contents)
+            if bad_config_directory:
+                cfg.parent.mkdir(parents=True, exist_ok=True)
+                cfg.write_text("not a directory")
             if wayland:
                 authority.write_text("test cookie")
                 subprocess.run(
@@ -162,16 +172,6 @@ class RunClientTest(unittest.TestCase):
                 timeout=5,
             )
             if key_file is not None and expect_key:
-                if server and result.returncode == 0:
-                    events = root / "event-log"
-                    deadline = time.monotonic() + 5
-                    while not (
-                        events.exists()
-                        and events.read_text().splitlines().count("launch") == 2
-                    ):
-                        if time.monotonic() >= deadline:
-                            self.fail("Timed out waiting for both mock launch events")
-                        time.sleep(0.01)
                 key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
                 key_bytes = Path(key_file).read_bytes()
                 self.assertTrue(key.read_bytes() == key_bytes)
@@ -184,6 +184,23 @@ class RunClientTest(unittest.TestCase):
                         prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
                     ).exists()
                 )
+            if result.returncode == 0:
+                for name, option in (
+                    ("pager.txt", "auto-login"),
+                    ("seeker.txt", "graphics-hwmode"),
+                ):
+                    lines = (cfg / name).read_text().splitlines()
+                    self.assertEqual(
+                        [
+                            line
+                            for line in lines
+                            if line.split() and line.split()[0] == option
+                        ],
+                        [f"{option} on"],
+                    )
+                    for line in (existing_config or {}).get(name, "").splitlines():
+                        if line.split() and line.split()[0] != option:
+                            self.assertIn(line, lines)
             log = root / "wine-log"
             events = root / "event-log"
             cleanup = root / "cleanup-log"
@@ -201,13 +218,14 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(result.returncode, 23)
         self.assertEqual(events, ["launch"])
 
-    def test_seeds_key_and_starts_pager_before_direct_server(self):
+    def test_seeds_key_and_launches_pager_with_direct_server(self):
         result, _, _, events, _, _ = self.run_client(
             server="example.org:1337",
             key_content=b"BEGIN KEY TestAccount\r\nsynthetic-key-for-unit-test\r\n`\r\nEND KEY\r\n",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(events.count("launch"), 2)
+        self.assertEqual(events, ["launch"])
+        self.assertTrue(result.stdout.endswith("byond://example.org:1337\n"))
 
     def test_rejects_empty_or_missing_key_file(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -233,7 +251,21 @@ class RunClientTest(unittest.TestCase):
             key_source=Path(os.environ["BYOND_TEST_KEY_FILE"]),
         )
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(events.count("launch"), 2)
+        self.assertEqual(events, ["launch"])
+
+    def test_updates_settings_without_discarding_other_preferences(self):
+        config = {
+            "pager.txt": "other-setting yes\nauto-login off\n  auto-login on\n",
+            "seeker.txt": "graphics-hwmode off\nother-setting no\n",
+        }
+        result, _, _, events, _, _ = self.run_client(existing_config=config)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["launch"])
+
+    def test_config_creation_failure_prevents_launch(self):
+        result, _, _, events, _, _ = self.run_client(bad_config_directory=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(events, [])
 
     def test_writes_display_sized_layout_over_existing_config(self):
         result, _, _, _, layout, _ = self.run_client(
@@ -299,7 +331,7 @@ class RunClientTest(unittest.TestCase):
                     ],
                 )
 
-    def test_launches_dreamseeker_with_server_url(self):
+    def test_launches_pager_with_server_url(self):
         for server, url in (
             ("ss13.lazorgator.party:1337", "byond://ss13.lazorgator.party:1337"),
             ("byond://example.org:1234", "byond://example.org:1234"),
@@ -313,10 +345,7 @@ class RunClientTest(unittest.TestCase):
                     result.stdout.splitlines(),
                     [
                         ":42",
-                        str(
-                            prefix
-                            / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
-                        ),
+                        str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
                         url,
                     ],
                 )
@@ -362,7 +391,7 @@ class RunClientTest(unittest.TestCase):
             result.stdout.splitlines(),
             [
                 ":42",
-                str(prefix / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"),
+                str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
                 "byond://example.org:1337",
             ],
         )
