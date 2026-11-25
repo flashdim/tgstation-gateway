@@ -97,7 +97,11 @@ def compose_config(env):
                         and info.st_nlink == 1
                         and (
                             (info.st_uid == 1000 and info.st_mode & stat.S_IRUSR)
-                            or (info.st_uid != 1000 and info.st_mode & stat.S_IROTH)
+                            or (
+                                info.st_uid != 1000
+                                and info.st_mode & stat.S_IRGRP
+                                and info.st_mode & stat.S_IROTH
+                            )
                         )
                     )
                 finally:

@@ -2,10 +2,13 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
+from unittest.mock import patch
 import unittest
 import uuid
 
@@ -99,6 +102,20 @@ class FixedSlotsTest(unittest.TestCase):
                 fixed_slots.compose_config(
                     self.environment(GATEWAY_SECRET_DIRECTORY=directory)
                 )
+        with tempfile.TemporaryDirectory() as directory:
+            for account in ("LGplayer01", "LGplayer02"):
+                (Path(directory) / f"{account}_key.txt").write_text("key")
+            owner_group_only = SimpleNamespace(
+                st_mode=stat.S_IFREG | 0o604,
+                st_size=3,
+                st_nlink=1,
+                st_uid=0,
+            )
+            with patch.object(fixed_slots.os, "fstat", return_value=owner_group_only):
+                with self.assertRaises(fixed_slots.ConfigError):
+                    fixed_slots.compose_config(
+                        self.environment(GATEWAY_SECRET_DIRECTORY=directory)
+                    )
             (Path(directory) / "LGplayer02_key.txt").unlink()
             os.link(
                 Path(directory) / "LGplayer01_key.txt",
@@ -167,7 +184,10 @@ class FixedSlotsDockerTest(FixedSlotsTest):
             for service in config["services"].values():
                 service["image"] = os.environ["GATEWAY_DOCKER_TEST_IMAGE"]
                 service["entrypoint"] = ["/bin/sh", "-c"]
-                service["command"] = ["while :; do sleep 60; done"]
+                service["command"] = [
+                    "echo $$ > /tmp/workload.pid; exec tail -f /dev/null"
+                ]
+                service["init"] = True
                 service.pop("ports")
             path = Path(directory) / "compose.json"
             path.write_text(json.dumps(fixed_slots.escape_compose(config)))
@@ -243,22 +263,38 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                 )
                 self.assertNotEqual(blocked.returncode, 0)
                 container_id = run("ps", "-q", "player02")
+                workload_pid = run("exec", "-T", "player02", "cat", "/tmp/workload.pid")
+                self.assertNotEqual(workload_pid, "1")
+                restart_count = subprocess.run(
+                    ["docker", "inspect", "-f", "{{.RestartCount}}", container_id],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
                 subprocess.run(
-                    ["docker", "exec", container_id, "kill", "-9", "1"],
+                    ["docker", "exec", container_id, "kill", "-9", workload_pid],
                     check=True,
                     capture_output=True,
                 )
                 for _ in range(50):
                     state = subprocess.run(
-                        ["docker", "inspect", "-f", "{{.State.Running}}", container_id],
+                        [
+                            "docker",
+                            "inspect",
+                            "-f",
+                            "{{.RestartCount}} {{.State.Running}}",
+                            container_id,
+                        ],
                         check=True,
                         capture_output=True,
                         text=True,
                     ).stdout.strip()
-                    if state == "true":
+                    count, running = state.split()
+                    if int(count) > int(restart_count) and running == "true":
                         break
                     time.sleep(0.2)
-                self.assertEqual(state, "true")
+                self.assertGreater(int(count), int(restart_count))
+                self.assertEqual(running, "true")
                 run("rm", "-sf", "player01")
                 run("up", "-d")
                 self.assertEqual(
