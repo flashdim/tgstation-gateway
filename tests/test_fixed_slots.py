@@ -81,6 +81,26 @@ class FixedSlotsTest(unittest.TestCase):
                 self.assertFalse(secret["bind"]["create_host_path"])
             self.assertNotIn("private", json.dumps(result))
 
+    def test_configured_capacity_and_resource_limits(self):
+        for count in (1, 3, 99):
+            with self.subTest(count=count):
+                result = fixed_slots.compose_config(
+                    self.environment(GATEWAY_SLOT_COUNT=str(count))
+                )
+                self.assertEqual(len(result["services"]), count)
+                self.assertEqual(len(result["networks"]), count)
+                self.assertEqual(len(result["volumes"]), count * 2)
+                for number in range(1, count + 1):
+                    service = result["services"][f"player{number:02}"]
+                    self.assertEqual(service["ports"][0]["host_ip"], "127.0.0.1")
+                    self.assertEqual(
+                        service["ports"][0]["published"], str(18079 + number)
+                    )
+                    self.assertEqual(service["mem_limit"], "4g")
+                    self.assertEqual(service["cpus"], 2)
+                    self.assertEqual(service["pids_limit"], 512)
+                    self.assertEqual(int(service["shm_size"]), 2 * 1024**3)
+
     def test_invalid_key_port_or_slot_configuration_fails(self):
         for overrides in (
             {"GATEWAY_PORT": "65535"},
@@ -436,6 +456,43 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                         run("exec", "-T", service, "cat", "/run/secrets/byond_key.txt"),
                         f"fixture-{number}",
                     )
+                    write_secret = subprocess.run(
+                        [
+                            *compose,
+                            "exec",
+                            "-T",
+                            service,
+                            "sh",
+                            "-c",
+                            "echo changed > /run/secrets/byond_key.txt",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertNotEqual(write_secret.returncode, 0)
+                    self.assertEqual(
+                        (Path(directory) / f"LGplayer{number:02}_key.txt").read_text(),
+                        f"fixture-{number}",
+                    )
+                    container_id = run("ps", "-q", service)
+                    host_config = json.loads(
+                        subprocess.run(
+                            [
+                                "docker",
+                                "inspect",
+                                "-f",
+                                "{{json .HostConfig}}",
+                                container_id,
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        ).stdout
+                    )
+                    self.assertEqual(host_config["Memory"], 4 * 1024**3)
+                    self.assertEqual(host_config["NanoCpus"], 2 * 10**9)
+                    self.assertEqual(host_config["PidsLimit"], 512)
+                    self.assertEqual(host_config["ShmSize"], 2 * 1024**3)
                     run(
                         "exec",
                         "-T",

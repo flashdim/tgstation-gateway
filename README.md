@@ -244,12 +244,62 @@ not proof of ownership. Protect the landing page and direct player ports; do
 not expose Docker or unauthenticated streams to players. No proxy or ownership
 integration is provided or verified.
 
+#### External boundary verification
+
+Before granting player access, the operator must select and configure an
+external TLS and authorization boundary. Bind player and landing ports only
+to loopback, restrict host and Docker access, and ensure the boundary is the
+only player-accessible route. Loopback does not protect against other users or
+processes on the Docker host. The boundary must authenticate every request,
+map a trusted identity to its assigned account, and authorize that account
+before forwarding HTTP, WebSocket upgrades and viewer access. Reject unknown
+accounts and paths. Do not accept client-supplied identity headers, account
+names or session IDs as proof; remove or overwrite such headers at the
+trusted boundary. Configure TLS and certificate renewal there.
+
+On a disposable deployment with two distinct test identities and two player
+slots, verify the operator's actual boundary before use:
+
+1. Confirm each identity reaches only its assigned slot over HTTPS and that
+   the intended WebSocket upgrade and stream use the same authorization.
+   Verify the proxy's path rewriting and the browser's actual requests, not
+   just the landing links.
+2. Try unauthenticated, expired and cross-account requests, unknown paths,
+   forged identity headers and WebSocket upgrades. They must be rejected
+   before reaching either player endpoint; use non-sensitive backend request
+   counts or equivalent evidence to verify this. Repeat for viewer access.
+3. From an untrusted network, try direct player and landing ports, including
+   applicable IPv4 and IPv6 addresses. Confirm they cannot bypass the boundary.
+   Check host firewall and proxy configuration as well as Compose bindings.
+
+Record the proxy, identity provider, transport, versions, configuration and
+results without recording credentials or player data. These are operator
+acceptance checks, not tests performed by this project. A passing HTTP check
+alone does not verify streaming or a WebSocket authorization decision.
+
 Stock Selkies uses a three-second reconnect grace for a disconnected display,
 not a timeout for a connected but inactive user. Viewers can keep a shared
 capture running; teardown may be delayed by other connections. Neither the
 container nor BYOND is deleted on disconnect. The desktop **Reset Session**
 shortcut remains a deliberate manual restart. Real disconnect/reconnect
 behavior and gameplay still require manual verification.
+
+On a test deployment, record the image and BYOND versions, browser, display
+mode, transport and timestamps for each observation separately:
+
+| Manual check                                                                                  | Result in this project             |
+| --------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Authenticated BYOND login and joining the configured server                                   | Not verified                       |
+| Browser stream, input, audio and game-scene/WebView rendering                                 | Not verified as a complete session |
+| Disconnect and reconnect before and after the grace period; same container and BYOND process  | Not verified                       |
+| A second authorized viewer stays connected while the controller disconnects, then disconnects | Not verified                       |
+| Two simultaneous accounts, server-reported IP/computer IDs and ban enforcement                | Not verified                       |
+
+For disconnect tests, record observed timings and capture behavior, not just
+container health. Repeat with and without a viewer; do not assume that the
+documented grace period guarantees a particular teardown time. Separately
+record actual gameplay results and failures; fixture, startup and health checks
+do not establish login, streaming, viewing or playability.
 
 Optionally set `GATEWAY_SECRET_DIRECTORY` to an absolute, protected host
 directory containing a nonempty `<account>_key.txt` for every slot. The
