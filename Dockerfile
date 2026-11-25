@@ -15,6 +15,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG WINE_PACKAGE_VERSION=10.0~repack-12ubuntu1
 ARG WINE_PROTON_VERSION=10.0-4
 
+COPY --chmod=644 container/selkies-controller-presence.patch /tmp/selkies-controller-presence.patch
+
 RUN set -eu; \
     selkies-privileged-files release; \
     dpkg --add-architecture i386; \
@@ -30,8 +32,11 @@ RUN set -eu; \
     apt-get install -y --no-install-recommends \
       "wine=$WINE_PACKAGE_VERSION" "wine32:i386=$WINE_PACKAGE_VERSION" \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
-      fonts-liberation libfreetype6:i386 libfontconfig1:i386 \
+      fonts-liberation libfreetype6:i386 libfontconfig1:i386 patch \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
+    patch -p1 -d /usr/local/lib/python3.14/dist-packages < /tmp/selkies-controller-presence.patch; \
+    rm /tmp/selkies-controller-presence.patch; \
+    apt-get purge -y patch; \
     apt-get autoremove -y; \
     apt-get clean; rm -rf /var/lib/apt/lists/*; \
     selkies-privileged-files restore
@@ -114,7 +119,8 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false \
-    SELKIES_RUN_AFTER_CONNECT=/usr/local/bin/reset-session \
+    SELKIES_RUN_AFTER_CONTROLLER_CONNECT="/usr/local/bin/report-controller-presence connected" \
+    SELKIES_RUN_AFTER_CONTROLLER_DISCONNECT="/usr/local/bin/report-controller-presence disconnected" \
     SELKIES_MODE=websockets \
     SELKIES_FRAMERATE=60 \
     SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS=false \
@@ -166,6 +172,7 @@ COPY --chmod=755 container/configure-plasma.sh /usr/local/bin/configure-plasma
 COPY --chmod=644 container/plasma-layout.js /usr/local/share/plasma-layout.js
 COPY --chmod=644 container/reset-session.desktop /usr/share/applications/reset-session.desktop
 COPY --chmod=755 container/reset-session.sh /usr/local/bin/reset-session
+COPY --chmod=755 container/report-controller-presence.py /usr/local/bin/report-controller-presence
 COPY --chmod=644 container/configure-plasma.desktop /etc/xdg/autostart/configure-plasma.desktop
 COPY --chmod=644 container/plasma-default-layout.js /usr/share/plasma/look-and-feel/org.kde.breezedark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
 RUN set -eu; \

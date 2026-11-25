@@ -17,11 +17,13 @@ import threading
 import time
 from urllib.parse import quote, urlencode
 from uuid import UUID, uuid4
+import weakref
 
 from sessions import LABEL_PREFIX, PROJECT, SessionState
 
 SESSION_LABEL = LABEL_PREFIX + "session"
 ACTIVE = {SessionState.READY, SessionState.RECONNECT_GRACE}
+CONTROLLER_GRACE = 30
 MAX_RESPONSE = 16 * 1024 * 1024
 
 
@@ -279,6 +281,7 @@ class PlayerSpec:
     seccomp_profile: str
     secret_directory: str
     environment: dict = field(default_factory=dict)
+    controller_socket_directory: str = "/run/tgstation-gateway"
     network: str | None = None
     traefik: TraefikConfig | None = None
     shm_size: int = 2 * 1024**3
@@ -301,6 +304,10 @@ class PlayerSpec:
             self.secret_directory
         ):
             raise ValueError("Secret directory must be an absolute path")
+        if not isinstance(self.controller_socket_directory, str) or not os.path.isabs(
+            self.controller_socket_directory
+        ):
+            raise ValueError("Controller socket directory must be an absolute path")
         if self.traefik is not None and not isinstance(self.traefik, TraefikConfig):
             raise ValueError("Traefik configuration must be operator-supplied")
         if self.traefik and not self.network:
@@ -344,8 +351,9 @@ class PlayerSpec:
             raise SecretUnavailable("Selected credential file is unavailable") from None
         return path
 
-    def container_body(self, labels, secret_path):
+    def container_body(self, labels, secret_path, controller_socket_path):
         target = "/run/secrets/byond_key.txt"
+        controller_socket_target = "/run/gateway/controller.sock"
         host = {
             "Init": True,
             "ShmSize": self.shm_size,
@@ -361,7 +369,13 @@ class PlayerSpec:
                     "Source": secret_path,
                     "Target": target,
                     "ReadOnly": True,
-                }
+                },
+                {
+                    "Type": "bind",
+                    "Source": controller_socket_path,
+                    "Target": controller_socket_target,
+                    "ReadOnly": False,
+                },
             ]
             + [
                 {
@@ -377,7 +391,10 @@ class PlayerSpec:
         return {
             "Image": self.image,
             "Env": [f"{k}={v}" for k, v in sorted(self.environment.items())]
-            + [f"BYOND_KEY_FILE={target}"],
+            + [
+                f"BYOND_KEY_FILE={target}",
+                f"GATEWAY_CONTROLLER_SOCKET={controller_socket_target}",
+            ],
             "Labels": labels,
             "HostConfig": host,
         }
@@ -391,6 +408,78 @@ class Session:
     error: str | None = None
     cleanup_pending: bool = False
     create_indeterminate: bool = False
+    controller_connected: bool = False
+    grace_deadline: float | None = None
+
+
+class ControllerEventChannel:
+    """Private, per-session Unix socket for trusted Selkies controller events."""
+
+    def __init__(self, path, callback):
+        self.path = path
+        self.callback = callback
+        os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+        if os.path.islink(os.path.dirname(path)):
+            raise OSError("Controller socket directory must not be a symlink")
+        os.chmod(os.path.dirname(path), 0o700)
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        bound = False
+        try:
+            self.server.bind(path)
+            bound = True
+            os.chmod(path, 0o666)
+            self.server.listen()
+            self.server.settimeout(0.5)
+        except Exception:
+            self.server.close()
+            if bound:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
+            raise
+        self.closed = threading.Event()
+        self.thread = threading.Thread(target=self._serve, daemon=True)
+        self.thread.start()
+
+    def _serve(self):
+        while not self.closed.is_set():
+            try:
+                connection, _ = self.server.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            with connection:
+                connection.settimeout(1)
+                try:
+                    data = bytearray()
+                    while len(data) <= 256 and not data.endswith(b"\n"):
+                        chunk = connection.recv(257 - len(data))
+                        if not chunk:
+                            break
+                        data.extend(chunk)
+                    if len(data) > 256 or not data.endswith(b"\n"):
+                        continue
+                    event = json.loads(data)
+                    if event in ("connected", "disconnected"):
+                        self.callback(event)
+                except (OSError, ValueError, TypeError):
+                    continue
+
+    def close(self):
+        self.closed.set()
+        self.server.close()
+        if threading.current_thread() is not self.thread:
+            self.thread.join(timeout=1)
+        try:
+            os.unlink(self.path)
+        except FileNotFoundError:
+            pass
+        try:
+            os.rmdir(os.path.dirname(self.path))
+        except OSError:
+            pass
 
 
 class SessionManager:
@@ -418,6 +507,7 @@ class SessionManager:
         self.spec = spec
         self.start_timeout = start_timeout
         self.poll_interval = poll_interval
+        self.controller_grace = CONTROLLER_GRACE
         self.clock = clock
         self.sleep = sleep
         self.capacity = len(self.config.slots)
@@ -427,6 +517,23 @@ class SessionManager:
         self._sessions = {}
         self._attempt_lock = threading.Lock()
         self._attempts = {}
+        self._controller_channels = {}
+        self._grace_timers = {}
+        weakref.finalize(
+            self,
+            self._close_resources,
+            self._controller_channels,
+            self._grace_timers,
+        )
+
+    @staticmethod
+    def _close_resources(channels, timers):
+        for timer in timers.values():
+            timer.cancel()
+        for channel in channels.values():
+            channel.close()
+        timers.clear()
+        channels.clear()
 
     def _slot(self, account):
         try:
@@ -510,8 +617,28 @@ class SessionManager:
         try:
             name = self._container_name(session)
             secret_path = self.spec.secret_path(account)
+            socket_directory = os.path.join(
+                self.spec.controller_socket_directory, session.session_id
+            )
+            os.makedirs(socket_directory, mode=0o700, exist_ok=True)
+            socket_path = os.path.join(socket_directory, f"{session.session_id}.sock")
+
+            manager_ref = weakref.ref(self)
+
+            def controller_event(event):
+                manager = manager_ref()
+                if manager is not None:
+                    manager._handle_controller_event(account, session.session_id, event)
+
+            channel = ControllerEventChannel(
+                socket_path, controller_event
+            )
+            with self._meta_lock:
+                self._controller_channels[account] = channel
             body = self.spec.container_body(
-                self.config.container_labels(account, session.session_id), secret_path
+                self.config.container_labels(account, session.session_id),
+                secret_path,
+                socket_path,
             )
             if self.spec.traefik:
                 body["Labels"].update(
@@ -542,6 +669,7 @@ class SessionManager:
             if creating:
                 session = replace(session, create_indeterminate=True)
             session = self._fail(session, failure.code)
+            self._stop_controller_channel(account)
             try:
                 self._cleanup(session)
             except DockerError as cleanup_error:
@@ -566,6 +694,112 @@ class SessionManager:
                 raise UnknownSession("Unknown session")
             self._teardown(account)
 
+    def controller_connected(self, account, session_id):
+        """Resume the same live session before its controller grace expires."""
+        self._slot(account)
+        with self._slot_locks[account]:
+            session = self._get(account)
+            if session is None or session.session_id != session_id:
+                return False
+            state = self.registry.state(account)
+            if state is SessionState.RECONNECT_GRACE:
+                if self.clock() >= session.grace_deadline:
+                    self._teardown(account)
+                    return False
+                self._cancel_grace(account)
+                session = replace(
+                    session, controller_connected=True, grace_deadline=None
+                )
+                self._publish(session, SessionState.READY)
+            elif state is SessionState.READY:
+                self._put(replace(session, controller_connected=True))
+            else:
+                return False
+            return True
+
+    def controller_disconnected(self, account, session_id):
+        """Start grace only when the controlling stream disconnects."""
+        self._slot(account)
+        with self._slot_locks[account]:
+            session = self._get(account)
+            if session is None or session.session_id != session_id:
+                return False
+            if (
+                self.registry.state(account) is not SessionState.READY
+                or not session.controller_connected
+            ):
+                return False
+            session = replace(
+                session,
+                controller_connected=False,
+                grace_deadline=self.clock() + self.controller_grace,
+            )
+            self._publish(session, SessionState.RECONNECT_GRACE)
+            self._schedule_grace(session)
+            return True
+
+    def _handle_controller_event(self, account, session_id, event):
+        try:
+            if event == "connected":
+                self.controller_connected(account, session_id)
+            elif event == "disconnected":
+                self.controller_disconnected(account, session_id)
+        except SessionError:
+            pass
+
+    def _schedule_grace(self, session):
+        manager_ref = weakref.ref(self)
+
+        def expire():
+            manager = manager_ref()
+            if manager is not None:
+                try:
+                    manager._expire_grace(
+                        session.account, session.session_id, session.grace_deadline
+                    )
+                except SessionError:
+                    pass
+
+        timer = threading.Timer(
+            self.controller_grace,
+            expire,
+        )
+        timer.daemon = True
+        with self._meta_lock:
+            previous = self._grace_timers.pop(session.account, None)
+            self._grace_timers[session.account] = timer
+        if previous:
+            previous.cancel()
+        timer.start()
+
+    def _cancel_grace(self, account):
+        with self._meta_lock:
+            timer = self._grace_timers.pop(account, None)
+        if timer:
+            timer.cancel()
+
+    def _expire_grace(self, account, session_id, deadline):
+        with self._slot_locks[account]:
+            session = self._get(account)
+            if (
+                session is None
+                or session.session_id != session_id
+                or session.grace_deadline != deadline
+                or self.clock() < deadline
+                or self.registry.state(account) is not SessionState.RECONNECT_GRACE
+            ):
+                return
+            try:
+                self._teardown(account)
+            except SessionError:
+                pass
+
+    def _stop_controller_channel(self, account):
+        with self._meta_lock:
+            channel = self._controller_channels.pop(account, None)
+        if channel:
+            channel.close()
+
     def reap(self):
         """Clean up crashed and failed sessions without waiting for busy slots."""
         for slot in self.config.slots:
@@ -576,6 +810,13 @@ class SessionManager:
                 state = self.registry.state(slot.account)
                 session = self._get(slot.account)
                 try:
+                    if (
+                        state is SessionState.RECONNECT_GRACE
+                        and session.grace_deadline is not None
+                        and self.clock() >= session.grace_deadline
+                    ):
+                        self._teardown(slot.account)
+                        continue
                     if state in ACTIVE and not self._running(session):
                         self._fail(session, "container_stopped")
                         state = SessionState.FAILED
@@ -676,6 +917,8 @@ class SessionManager:
     def _teardown(self, account):
         session = self._get(account)
         self._publish(session, SessionState.STOPPING)
+        self._cancel_grace(account)
+        self._stop_controller_channel(account)
         try:
             self._cleanup(session)
         except DockerError as error:

@@ -4,7 +4,9 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import socketserver
+import subprocess
 import sys
 import tempfile
 import threading
@@ -179,6 +181,7 @@ def make_manager(count=2, docker=None, **kwargs):
         image="player:test",
         seccomp_profile=SECCOMP,
         secret_directory=secrets,
+        controller_socket_directory=secrets,
         environment={"BYOND_SERVER": "byond://game.test:1337"},
     )
     manager = SessionManager(
@@ -241,9 +244,162 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(host["PidsLimit"], 512)
         self.assertEqual(host["RestartPolicy"], {"Name": "no"})
         self.assertIn("BYOND_SERVER=byond://game.test:1337", container["body"]["Env"])
+        self.assertIn(
+            "GATEWAY_CONTROLLER_SOCKET=/run/gateway/controller.sock",
+            container["body"]["Env"],
+        )
+        controller_mount = next(
+            mount
+            for mount in host["Mounts"]
+            if mount["Target"] == "/run/gateway/controller.sock"
+        )
+        self.assertTrue(controller_mount["Source"].endswith(".sock"))
+        self.assertFalse(controller_mount["ReadOnly"])
         self.assertIn(session.session_id, container["name"])
         self.assertEqual(self.manager.start(self.account), session)
         self.assertEqual(len(self.docker.containers), 1)
+
+    def test_controller_disconnect_and_reconnect_reuse_the_same_session(self):
+        session = self.manager.start(self.account)
+        self.assertTrue(
+            self.manager.controller_connected(self.account, session.session_id)
+        )
+        self.assertTrue(
+            self.manager.controller_disconnected(self.account, session.session_id)
+        )
+        self.assertEqual(self.state(), SessionState.RECONNECT_GRACE)
+        deadline = self.manager._get(self.account).grace_deadline
+        self.assertEqual(deadline, self.manager.clock() + 30)
+
+        self.manager.clock.now += 29.999
+        self.assertTrue(
+            self.manager.controller_connected(self.account, session.session_id)
+        )
+        self.assertEqual(self.state(), SessionState.READY)
+        self.assertIsNone(self.manager._get(self.account).grace_deadline)
+        self.assertEqual(len(self.docker.containers), 1)
+        self.assertEqual(self.manager._get(self.account).session_id, session.session_id)
+
+    def test_viewer_event_does_not_start_or_extend_controller_grace(self):
+        session = self.manager.start(self.account)
+        mount = next(
+            mount
+            for mount in self.docker.containers[session.container_id]["body"][
+                "HostConfig"
+            ]["Mounts"]
+            if mount["Target"] == "/run/gateway/controller.sock"
+        )
+
+        def send_event(event):
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect(mount["Source"])
+                client.sendall((json.dumps(event) + "\n").encode())
+
+        send_event("viewer_connected")
+        self.assertEqual(self.state(), SessionState.READY)
+        self.assertFalse(self.manager._get(self.account).controller_connected)
+
+        self.manager.controller_connected(self.account, session.session_id)
+        self.manager.controller_disconnected(self.account, session.session_id)
+        deadline = self.manager._get(self.account).grace_deadline
+        send_event("viewer_connected")
+        time.sleep(0.05)
+        self.assertEqual(self.state(), SessionState.RECONNECT_GRACE)
+        self.assertEqual(self.manager._get(self.account).grace_deadline, deadline)
+
+        self.manager.clock.now = deadline
+        self.manager.reap()
+        self.assertIsNone(self.state())
+        self.assertEqual(self.docker.containers, {})
+        self.assertEqual(self.docker.volumes, {})
+
+    def test_controller_event_at_expiry_tears_down_from_private_socket(self):
+        session = self.manager.start(self.account)
+        self.manager.controller_connected(self.account, session.session_id)
+        self.manager.controller_disconnected(self.account, session.session_id)
+        self.manager.clock.now = self.manager._get(self.account).grace_deadline
+        socket_path = self.manager._controller_channels[self.account].path
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.connect(socket_path)
+            client.sendall(b'"connected"\n')
+        deadline = time.monotonic() + 2
+        while self.state() is not None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertIsNone(self.state())
+        self.assertEqual(self.docker.containers, {})
+
+    def test_selkies_controller_reporter_uses_private_unix_socket(self):
+        received = []
+        ready = threading.Event()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "controller.sock")
+
+            def receive_events():
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                    server.bind(path)
+                    server.listen()
+                    ready.set()
+                    for _ in range(2):
+                        connection, _ = server.accept()
+                        with connection:
+                            received.append(connection.recv(256))
+
+            receiver = threading.Thread(target=receive_events)
+            receiver.start()
+            self.assertTrue(ready.wait(2))
+            script = ROOT / "container/report-controller-presence.py"
+            for event in ("connected", "disconnected"):
+                result = subprocess.run(
+                    [sys.executable, str(script), event],
+                    env={**os.environ, "GATEWAY_CONTROLLER_SOCKET": path},
+                    capture_output=True,
+                    timeout=3,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+            receiver.join(2)
+            self.assertFalse(receiver.is_alive())
+        self.assertEqual(
+            [json.loads(payload) for payload in received],
+            ["connected", "disconnected"],
+        )
+
+    def test_controller_grace_expiry_removes_session_and_explicit_termination(self):
+        session = self.manager.start(self.account)
+        self.manager.controller_connected(self.account, session.session_id)
+        self.manager.controller_disconnected(self.account, session.session_id)
+        self.manager.clock.now += 30
+        self.manager.reap()
+        self.assertIsNone(self.state())
+        self.assertEqual(self.docker.containers, {})
+        self.assertEqual(self.docker.volumes, {})
+
+        replacement = self.manager.start(self.account)
+        self.manager.controller_connected(self.account, replacement.session_id)
+        self.manager.controller_disconnected(self.account, replacement.session_id)
+        self.manager.terminate(self.account, replacement.session_id)
+        self.assertIsNone(self.state())
+        self.assertEqual(self.docker.containers, {})
+        self.assertEqual(self.docker.volumes, {})
+
+    def test_reconnect_at_expiry_boundary_cannot_beat_teardown(self):
+        session = self.manager.start(self.account)
+        self.manager.controller_connected(self.account, session.session_id)
+        self.manager.controller_disconnected(self.account, session.session_id)
+        deadline = self.manager._get(self.account).grace_deadline
+        self.manager.clock.now = deadline
+        results = run_concurrently(
+            2,
+            lambda index: (
+                self.manager.controller_connected(self.account, session.session_id)
+                if index == 0
+                else self.manager._expire_grace(
+                    self.account, session.session_id, deadline
+                )
+            ),
+        )
+        self.assertFalse([result for result in results if isinstance(result, Exception)])
+        self.assertIsNone(self.state())
+        self.assertEqual(self.docker.containers, {})
 
     def test_player_spec_requires_seccomp_profile(self):
         for profile in (None, "", "not json", "[]", "{}"):
@@ -288,6 +444,7 @@ class SessionManagerTest(unittest.TestCase):
             image="player:test",
             seccomp_profile=SECCOMP,
             secret_directory=manager.spec.secret_directory,
+            controller_socket_directory=manager.spec.controller_socket_directory,
             environment={"BYOND_SERVER": "byond://game.test:1337"},
             network="public",
             traefik=TraefikConfig(

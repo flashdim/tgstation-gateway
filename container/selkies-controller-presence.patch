@@ -1,0 +1,87 @@
+--- a/selkies/stream_server.py
++++ b/selkies/stream_server.py
+@@ -1877,6 +1877,7 @@
+         self.web_files_ctx: Optional[tempfile.TemporaryDirectory] = None
+ 
+         self._clients_present: bool = False
++        self._controllers_present: bool = False
+         self._client_hook_tasks: Set[asyncio.Task] = set()
+ 
+@@ -1936,6 +1937,17 @@
+             self._client_hook_tasks.add(task)
+             task.add_done_callback(self._client_hook_tasks.discard)
+ 
++    def set_controllers_present(self, present: bool) -> None:
++        """Run controller-only hooks for active data-stream connections."""
++        if present == self._controllers_present:
++            return
++        self._controllers_present = present
++        name = "CONNECT" if present else "DISCONNECT"
++        cmd = os.environ.get(f"SELKIES_RUN_AFTER_CONTROLLER_{name}", "")
++        if cmd:
++            task = asyncio.create_task(self._run_client_hook(cmd, present))
++            self._client_hook_tasks.add(task)
++            task.add_done_callback(self._client_hook_tasks.discard)
++
+     async def _run_client_hook(self, cmd: str, present: bool) -> None:
+         """Run a presence hook shell command, killing it if it wedges."""
+         name = "run_after_connect" if present else "run_after_disconnect"
+--- a/selkies/websockets_mode.py
++++ b/selkies/websockets_mode.py
+@@ -2013,6 +2013,7 @@
+         )
+         self.clients: set[web.WebSocketResponse] = set()
++        self.controller_clients: set[web.WebSocketResponse] = set()
+         self.app = None
+         self.cli_args = settings
+@@ -5159,6 +5160,10 @@
+         """Tell the supervisor whether any client is connected (idle shutdown gate)."""
+         if self.supervisor:
+             self.supervisor.set_clients_present(bool(self.clients))
++
++    def _report_controller_presence(self) -> None:
++        if self.supervisor and hasattr(self.supervisor, "set_controllers_present"):
++            self.supervisor.set_controllers_present(bool(self.controller_clients))
+ 
+     def _holds_input_authority(self, websocket: web.WebSocketResponse,
+                                perms: Optional[dict] = None) -> bool:
+@@ -5278,12 +5283,15 @@
+         raddr = remote_address
+         self.clients.add(websocket)
+         perms = client_permissions.get(websocket) or {}
++        if perms.get("role") != "viewer":
++            self.controller_clients.add(websocket)
+         data_logger.info(
+             f"Client {raddr} connected ({'token' if self.is_secure_mode else 'legacy'}, "
+             f"role {perms.get('role')}, slot {perms.get('slot')}).")
+         audit.emit("session.connect", transport="websockets", role=perms.get("role"), slot=perms.get("slot"))
+         self._report_client_presence()
++        self._report_controller_presence()
+         self.data_ws = (
+             websocket 
+@@ -5298,8 +5306,10 @@
+             await websocket.send_str(f"MODE {self.mode}")
+         except (ConnectionResetError, OSError, RuntimeError):
+             self.clients.discard(websocket)
++            self.controller_clients.discard(websocket)
+             self._audit_session_end(client_permissions.pop(websocket, None))
++            self._report_controller_presence()
+             if self.data_ws is websocket:
+                 self.data_ws = None
+             return
+@@ -6272,6 +6282,8 @@
+             # Dropped first: the authority and consumer verdicts below must see
+             # the remaining clients only.
+             self.clients.discard(websocket)
++            self.controller_clients.discard(websocket)
++            self._report_controller_presence()
+             data_logger.debug(f"Cleaning up Data WS handler for {raddr} (Display ID: {client_display_id})...")
+             await capture_demand.sync(self)
+@@ -7953,8 +7965,10 @@
+ 
+         self.clients.clear()
++        self.controller_clients.clear()
+         self.video_paused_clients.clear()
+         self._report_client_presence()
++        self._report_controller_presence()
+         self.display_clients.clear()

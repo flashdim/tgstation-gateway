@@ -10,8 +10,8 @@ from test_manager import DockerClient, PlayerSpec, SECCOMP, make_manager
 
 
 class FixtureSpec(PlayerSpec):
-    def container_body(self, labels, secret_path):
-        body = super().container_body(labels, secret_path)
+    def container_body(self, labels, secret_path, controller_socket_path):
+        body = super().container_body(labels, secret_path, controller_socket_path)
         body["Entrypoint"] = ["/bin/sh", "-c"]
         body["Cmd"] = ["while :; do sleep 60; done"]
         body["Healthcheck"] = {
@@ -35,6 +35,7 @@ class DockerIsolationTest(unittest.TestCase):
             image=os.environ["GATEWAY_DOCKER_TEST_IMAGE"],
             seccomp_profile=SECCOMP,
             secret_directory=manager.spec.secret_directory,
+            controller_socket_directory=manager.spec.controller_socket_directory,
             network="none",
         )
         manager.clock = time.monotonic

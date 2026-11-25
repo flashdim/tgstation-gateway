@@ -145,15 +145,37 @@ session-data cleanup. Snapshots and transitions are serialized within a process.
 The landing server is not connected to the manager below: the standalone
 landing starts with all slots unallocated, and a restart clears state.
 
-### Slot lifecycle manager (not yet connected)
+### Slot lifecycle manager (not connected to landing)
 
 `landing/manager.py` contains a single-host session manager and a minimal
 Docker Engine API client (API 1.44, Docker 25 or newer) over the daemon's UNIX
 socket. It is unit-tested with a fake daemon but is not used by the landing
-server, not copied into the landing image and has no deployment
-configuration yet; routing, reconnect grace, restart
-reconciliation and ownership checks are separate, unfinished work. Do not
-mount the Docker socket into the landing container.
+server and is not copied into the landing image. Do not mount the Docker
+socket into the landing container.
+
+The manager starts a private Unix-domain controller-event socket for each
+player container. `PlayerSpec.controller_socket_directory` must be a
+manager-writable path on the same Docker host that the daemon can bind-mount.
+Only that session's socket is mounted into its player; it is not a network
+endpoint and does not expose Docker access. The pinned Selkies 2.2.1
+WebSocket handler reports aggregate controller-role connections through this
+channel; `#shared` pages are viewer-role connections and do not send controller
+events. HTTP health, signaling traffic and viewer connections do not start or
+extend controller grace. When the last controller data-WebSocket disconnects,
+the manager starts a 30-second deadline. A controller reconnect before expiry
+cancels it and resumes the same container and BYOND process. At expiry, the
+manager removes the owned container and verifies cleanup of its disposable
+volumes, even if viewers remain. Explicit termination still cleans up
+immediately. The normal Selkies connect hook no longer runs **Reset Session**;
+use the desktop shortcut only for a deliberate manual restart.
+
+This signal is based on the pinned Selkies controller-role data-WebSocket
+lifecycle, not interactive verification of an active game stream. The `#shared`
+fragment maps to Selkies viewer mode in the pinned browser asset, but a second
+browser joining an actual session has not been manually verified. The manager
+is still not connected to landing routes or an authenticated ownership API;
+this code does not establish a production routing or access-control boundary.
+Manager restart reconciliation remains unimplemented.
 
 The manager can optionally add per-session Traefik Docker-provider labels to
 player containers. Configure `PlayerSpec.traefik` with a player-domain suffix
@@ -329,9 +351,9 @@ server-side lifecycle state, but no containers are created, monitored or isolate
 because orchestration is not connected. It does not authenticate users or enforce ownership. `#shared` is
 not an authorization boundary, and anyone with access to a player URL may
 attempt to use it directly. Intended watching by authenticated users and
-controller reconnection require trusted identity, ownership and routing
-integration ([#48](https://github.com/flashdim/tgstation-gateway/issues/48))
-and future session-manager work. Protect both the page and player endpoints
+controller reconnection through landing routes require trusted identity,
+ownership and routing integration ([#48](https://github.com/flashdim/tgstation-gateway/issues/48)).
+Protect both the page and player endpoints
 with operator-managed access controls and secure connections; do not expose
 the local test server or player stream directly to the internet. See
 `landing/assets/ATTRIBUTION.md` for artwork sources and licenses.
@@ -356,8 +378,7 @@ may require interactive pager login. A BYOND account or server-side
 authentication may still be required. Automatic login and joining through the
 pager have not yet been verified against a real server. In direct-server mode,
 the healthcheck still requires a Dream Seeker process; it does not prove login
-or gameplay. The desktop's **Reset Session** action restarts the supervised
-pager after Selkies clients connect.
+or gameplay.
 
 ## Customize the session
 
