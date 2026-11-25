@@ -365,6 +365,45 @@ documented grace period guarantees a particular teardown time. Separately
 record actual gameplay results and failures; fixture, startup and health checks
 do not establish login, streaming, viewing or playability.
 
+#### Fixed-slot acceptance audit
+
+On 2026-11-25, the fixed-slot tests were run locally against Docker Engine
+28.0.4 and Compose 2.38.2 with the pinned Alpine fixture: 16 tests passed.
+They exercised two distinct read-only key mounts, separate Wine and data
+volumes, inter-slot connectivity rejection, process restart, recreation,
+count changes, invalid configuration, a failed service addition, selected
+volume cleanup and an unrelated fixture deployment. Capacity and resource
+limits were checked as configuration, not under load. The fixture replaces
+the player image and removes published ports; these results do not verify
+BYOND, browser access or direct-port protection.
+
+The local nginx/OpenSSL proxy test also passed against two mock backends. It
+checked that unauthorized and cross-account HTTP and WebSocket requests,
+including a simulated viewer URL, did not reach either backend. It did not
+test a real viewer, media stream, host firewall or the operator's boundary.
+These fixture results are separate from startup and health smoke tests.
+
+The acceptance criteria in [#56](https://github.com/flashdim/tgstation-gateway/issues/56)
+remain open. Closed issues #61–#68 and merged PRs #73 and #76 are historical
+implementation records, not evidence that the manual checks passed. The
+outstanding audit is tracked in [#78](https://github.com/flashdim/tgstation-gateway/issues/78);
+do not close it without follow-up issues for unresolved checks and a report
+on #56. In particular, actual boundary and direct-bypass verification, live
+Selkies reconnect/viewer timing, daemon and host restart, real credential
+rotation and cleanup, and resource exhaustion remain unverified. Complete
+real login and gameplay verification first, as required by the roadmap, and
+record the environment and results separately from the fixtures.
+
+For credential rotation on a disposable deployment, record non-sensitive
+markers in both accounts' volumes, stop the intended service, replace its key,
+and recreate that service as described below. Verify only the intended
+account receives the replacement, its data persists, and the other account
+is unchanged; do not log key contents. For resource exhaustion, use a
+disposable host with bounded test workloads and monitoring; record the
+triggered limit, service and host behavior, retained data and recovery after
+restoring capacity. Do not intentionally exhaust a shared or production host.
+Neither procedure has been verified against the player image.
+
 Optionally set `GATEWAY_SECRET_DIRECTORY` to an absolute, protected host
 directory containing a nonempty `<account>_key.txt` for every slot. The
 generator mounts only the matching file read-only and sets `BYOND_KEY_FILE` to
