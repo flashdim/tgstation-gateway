@@ -170,6 +170,236 @@ class FixedSlotsTest(unittest.TestCase):
     "Set GATEWAY_DOCKER_TEST_IMAGE to a local shell-capable fixture image",
 )
 class FixedSlotsDockerTest(FixedSlotsTest):
+    def test_deployment_recovery_count_changes_and_explicit_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "compose.json"
+            other_path = Path(directory) / "other.json"
+            deployment = uuid.uuid4().hex
+
+            def generate(count, prefix="LGplayer", deployment_id=deployment):
+                env = self.environment(
+                    GATEWAY_SLOT_COUNT=str(count),
+                    GATEWAY_ACCOUNT_PREFIX=prefix,
+                    GATEWAY_DEPLOYMENT_ID=deployment_id,
+                )
+                config = fixed_slots.compose_config(env)
+                for service in config["services"].values():
+                    service["image"] = os.environ["GATEWAY_DOCKER_TEST_IMAGE"]
+                    service["entrypoint"] = ["/bin/sh", "-c"]
+                    service["command"] = ["exec tail -f /dev/null"]
+                    service.pop("ports")
+                    service["healthcheck"] = {
+                        "test": ["CMD-SHELL", "test -e /tmp/healthy"],
+                        "interval": "1s",
+                        "timeout": "1s",
+                        "retries": 1,
+                    }
+                return config
+
+            def write(target, config):
+                target.write_text(json.dumps(fixed_slots.escape_compose(config)))
+
+            def run(target, *args):
+                return subprocess.run(
+                    ["docker", "compose", "-f", str(target), *args],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env={
+                        k: v
+                        for k, v in os.environ.items()
+                        if k != "COMPOSE_PROJECT_NAME"
+                    },
+                ).stdout.strip()
+
+            def docker(*args):
+                return subprocess.run(
+                    ["docker", *args], check=True, capture_output=True, text=True
+                ).stdout.strip()
+
+            config = generate(2)
+            other = generate(1, deployment_id=uuid.uuid4().hex)
+            write(path, config)
+            write(other_path, other)
+            project = config["name"]
+            original_volumes = {name: f"{project}_{name}" for name in config["volumes"]}
+            try:
+                run(path, "up", "-d", "--remove-orphans")
+                run(other_path, "up", "-d")
+                other_id = run(other_path, "ps", "-q", "player01")
+                run(
+                    other_path,
+                    "exec",
+                    "-T",
+                    "player01",
+                    "sh",
+                    "-c",
+                    "echo unrelated > /home/ubuntu/.wine/marker",
+                )
+                for number in (1, 2):
+                    run(
+                        path,
+                        "exec",
+                        "-T",
+                        f"player{number:02}",
+                        "sh",
+                        "-c",
+                        f"echo wine{number} > /home/ubuntu/.wine/marker; "
+                        f"echo data{number} > /home/ubuntu/.local/share/marker",
+                    )
+
+                first = run(path, "ps", "-q", "player01")
+                second = run(path, "ps", "-q", "player02")
+                for _ in range(50):
+                    state = docker("inspect", "-f", "{{.State.Health.Status}}", first)
+                    if state == "unhealthy":
+                        break
+                    time.sleep(0.2)
+                self.assertEqual(state, "unhealthy")
+                self.assertEqual(
+                    docker("inspect", "-f", "{{.RestartCount}}", first), "0"
+                )
+                run(path, "stop", "player01")
+                time.sleep(2)
+                self.assertEqual(
+                    docker("inspect", "-f", "{{.State.Running}}", first), "false"
+                )
+                run(path, "up", "-d", "--remove-orphans")
+                self.assertEqual(run(path, "ps", "-q", "player01"), first)
+                docker("rm", "-f", second)
+                run(path, "up", "-d", "--remove-orphans")
+                self.assertNotEqual(run(path, "ps", "-q", "player02"), second)
+                run(path, "up", "-d", "--remove-orphans")
+                self.assertEqual(len(run(path, "ps", "-aq").splitlines()), 2)
+
+                broken = generate(3)
+                broken["services"]["player03"]["image"] = (
+                    "gateway-missing-fixture:" + uuid.uuid4().hex
+                )
+                write(path, broken)
+                failed = subprocess.run(
+                    [
+                        "docker",
+                        "compose",
+                        "-f",
+                        str(path),
+                        "up",
+                        "-d",
+                        "--pull",
+                        "never",
+                        "--no-deps",
+                        "player03",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    env={
+                        k: v
+                        for k, v in os.environ.items()
+                        if k != "COMPOSE_PROJECT_NAME"
+                    },
+                )
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertEqual(run(path, "ps", "-q", "player01"), first)
+                self.assertEqual(len(run(path, "ps", "-aq").splitlines()), 2)
+
+                write(path, generate(3))
+                run(path, "up", "-d", "--remove-orphans")
+                self.assertEqual(len(run(path, "ps", "-aq").splitlines()), 3)
+                write(path, generate(1))
+                run(path, "up", "-d", "--remove-orphans")
+                self.assertEqual(len(run(path, "ps", "-aq").splitlines()), 1)
+                for volume in original_volumes.values():
+                    self.assertEqual(
+                        docker("volume", "inspect", "-f", "{{.Name}}", volume), volume
+                    )
+
+                write(path, generate(2, prefix="Other"))
+                run(path, "up", "-d", "--remove-orphans")
+                run(
+                    path,
+                    "exec",
+                    "-T",
+                    "player02",
+                    "sh",
+                    "-c",
+                    "test ! -e /home/ubuntu/.wine/marker && "
+                    "test ! -e /home/ubuntu/.local/share/marker",
+                )
+                write(path, config)
+                run(path, "up", "-d", "--remove-orphans")
+                for number in (1, 2):
+                    for target, expected in (
+                        (".wine", "wine"),
+                        (".local/share", "data"),
+                    ):
+                        self.assertEqual(
+                            run(
+                                path,
+                                "exec",
+                                "-T",
+                                f"player{number:02}",
+                                "cat",
+                                f"/home/ubuntu/{target}/marker",
+                            ),
+                            f"{expected}{number}",
+                        )
+                self.assertEqual(run(other_path, "ps", "-q", "player01"), other_id)
+                self.assertEqual(
+                    run(
+                        other_path,
+                        "exec",
+                        "-T",
+                        "player01",
+                        "cat",
+                        "/home/ubuntu/.wine/marker",
+                    ),
+                    "unrelated",
+                )
+
+                write(path, generate(1))
+                run(path, "up", "-d", "--remove-orphans")
+                removed = set(original_volumes) - set(generate(1)["volumes"])
+                for name in removed:
+                    docker("volume", "rm", original_volumes[name])
+                    self.assertNotEqual(
+                        subprocess.run(
+                            ["docker", "volume", "inspect", original_volumes[name]],
+                            capture_output=True,
+                        ).returncode,
+                        0,
+                    )
+                self.assertEqual(
+                    run(
+                        other_path,
+                        "exec",
+                        "-T",
+                        "player01",
+                        "cat",
+                        "/home/ubuntu/.wine/marker",
+                    ),
+                    "unrelated",
+                )
+            finally:
+                cleanup = generate(3)
+                cleanup["volumes"].update(generate(2, prefix="Other")["volumes"])
+                write(path, cleanup)
+                try:
+                    run(path, "down", "-v", "--remove-orphans")
+                finally:
+                    try:
+                        run(other_path, "down", "-v", "--remove-orphans")
+                    finally:
+                        for name in cleanup["volumes"]:
+                            volume = f"{project}_{name}"
+                            if (
+                                subprocess.run(
+                                    ["docker", "volume", "inspect", volume],
+                                    capture_output=True,
+                                ).returncode
+                                == 0
+                            ):
+                                docker("volume", "rm", volume)
+
     def test_isolation_and_recreation_with_persistent_account_data(self):
         with tempfile.TemporaryDirectory() as directory:
             for number in (1, 2):
