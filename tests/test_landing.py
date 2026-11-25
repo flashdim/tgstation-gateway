@@ -827,7 +827,7 @@ process.stdout.write(JSON.stringify({list, error}));
         ).decode()
         self.assertNotIn("</script>", js)
 
-    def test_statuses_and_urls(self):
+    def test_links_do_not_claim_lifecycle_status_or_add_viewer_fragment(self):
         result = self.render(
             [
                 {"account": "LGplayer01", "url": "/player/1?x=1", "state": None},
@@ -838,20 +838,27 @@ process.stdout.write(JSON.stringify({list, error}));
                 },
             ]
         )
-        available, active = result["list"]["children"]
-        self.assertEqual(available["href"], "https://gateway.example/player/1?x=1")
-        self.assertEqual(active["href"], "https://player.example/2?x=1#shared")
-        self.assertEqual(
-            available["children"][1]["children"][0]["textContent"], "ACCOUNT SLOT"
-        )
-        self.assertEqual(active["children"][1]["children"][0]["textContent"], "READY")
-        self.assertEqual(
-            active["children"][1]["children"][2]["textContent"], "Watch session"
-        )
+        first, second = result["list"]["children"]
+        self.assertEqual(first["href"], "https://gateway.example/player/1?x=1")
+        self.assertEqual(second["href"], "https://player.example/2?x=1#old")
+        for card in (first, second):
+            self.assertEqual(
+                card["children"][1]["children"][0]["textContent"], "ACCOUNT SLOT"
+            )
+            self.assertEqual(
+                card["children"][1]["children"][2]["textContent"], "Open player"
+            )
         self.assertTrue(result["error"]["hidden"])
 
-    def test_lifecycle_states_are_rendered_without_unavailable_links(self):
-        for state in ("starting", "stopping", "failed", "reconnect_grace"):
+    def test_lifecycle_states_do_not_change_fixed_links(self):
+        for state in (
+            None,
+            "starting",
+            "ready",
+            "stopping",
+            "failed",
+            "reconnect_grace",
+        ):
             with self.subTest(state=state):
                 result = self.render(
                     [{"account": "LGplayer01", "url": "/player/01/", "state": state}]
@@ -859,15 +866,10 @@ process.stdout.write(JSON.stringify({list, error}));
                 card = result["list"]["children"][0]
                 self.assertEqual(
                     card["children"][1]["children"][0]["textContent"],
-                    state.replace("_", " ").upper(),
+                    "ACCOUNT SLOT",
                 )
-                if state == "reconnect_grace":
-                    self.assertEqual(
-                        card["href"], "https://gateway.example/player/01/#shared"
-                    )
-                else:
-                    self.assertNotIn("href", card)
-                    self.assertEqual(card["tag"], "div")
+                self.assertEqual(card["href"], "https://gateway.example/player/01/")
+                self.assertEqual(card["tag"], "a")
                 self.assertTrue(result["error"]["hidden"])
 
     def test_invalid_configuration_is_not_linked(self):
@@ -879,7 +881,7 @@ process.stdout.write(JSON.stringify({list, error}));
                     "url": "https://user@example.com/",
                     "state": "ready",
                 },
-                {"account": "invalid", "url": "/", "state": "unknown"},
+                {"account": "invalid", "url": ""},
                 {"account": "<img src=x>", "url": "/", "state": None},
             ]
         )

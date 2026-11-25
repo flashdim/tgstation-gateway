@@ -9,8 +9,7 @@
       let url;
       try {
         if (!slot || typeof slot.account !== "string" || !slot.account.trim() ||
-            typeof slot.url !== "string" || !slot.url.trim() ||
-            ![null, "starting", "ready", "reconnect_grace", "stopping", "failed"].includes(slot.state)) {
+            typeof slot.url !== "string" || !slot.url.trim()) {
           throw new Error("Invalid slot");
         }
         url = new URL(slot.url, document.baseURI);
@@ -22,29 +21,25 @@
         continue;
       }
 
-      const active = ["ready", "reconnect_grace"].includes(slot.state);
-      const available = slot.state === null;
-      if (active) url.hash = "shared";
-
-      const card = document.createElement(available || active ? "a" : "div");
-      card.className = `slot ${available ? "available" : "active"}`;
-      if (available || active) card.href = url.href;
+      const card = document.createElement("a");
+      card.className = "slot";
+      card.href = url.href;
 
       const icon = document.createElement("span");
       icon.className = "slot-icon";
       icon.setAttribute("aria-hidden", "true");
-      icon.textContent = active ? "▶" : available ? "+" : "…";
+      icon.textContent = "+";
 
       const details = document.createElement("span");
       details.className = "slot-details";
       const status = document.createElement("span");
       status.className = "slot-status";
-      status.textContent = available ? "ACCOUNT SLOT" : slot.state.replaceAll("_", " ").toUpperCase();
+      status.textContent = "ACCOUNT SLOT";
       const account = document.createElement("strong");
       account.textContent = slot.account;
       const action = document.createElement("span");
       action.className = "slot-action";
-      action.textContent = active ? "Watch session" : available ? "Open player" : "Session unavailable";
+      action.textContent = "Open player";
       details.append(status, account, action);
 
       const arrow = document.createElement("span");
