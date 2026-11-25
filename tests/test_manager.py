@@ -274,6 +274,7 @@ class SessionManagerTest(unittest.TestCase):
             ("play.example.org/path", "player-auth@file", "https"),
             ("play.example.org", "player-auth@file,other", "https"),
             ("play.example.org", "player-auth@file", "https,other"),
+            ("play.example.org", "player-auth@file", "https-"),
         ):
             with self.subTest(
                 domain=domain, middleware=middleware, entrypoint=entrypoint

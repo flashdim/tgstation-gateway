@@ -112,7 +112,7 @@ class TraefikConfig:
         ):
             raise ValueError("A single configured Traefik auth middleware is required")
         if not isinstance(self.entrypoint, str) or not re.fullmatch(
-            r"[A-Za-z0-9][A-Za-z0-9_.-]*", self.entrypoint
+            r"[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?", self.entrypoint
         ):
             raise ValueError("Invalid Traefik entrypoint")
 
