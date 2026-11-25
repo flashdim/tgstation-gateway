@@ -107,20 +107,19 @@ jobs:
 
           with sync_playwright() as p:
               browser = p.chromium.launch()
-              for name, size in (("desktop", (1280, 900)), ("mobile", (390, 844))):
-                  page = browser.new_page(viewport={"width": size[0], "height": size[1]})
-                  page.goto("http://127.0.0.1:8000/")
-                  page.wait_for_selector(".slot")
-                  page.screenshot(path=f"screenshots/landing-{name}.png", full_page=True)
+              page = browser.new_page(viewport={"width": 1280, "height": 900})
+              page.goto("http://127.0.0.1:8000/")
+              page.wait_for_selector(".slot")
+              page.screenshot(path="screenshots/landing-desktop.png", full_page=True)
               browser.close()
           EOF
 
       - name: Upload screenshots
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: landing-screenshots
-          path: screenshots/*.png
+          path: screenshots/landing-desktop.png
+          archive: false
           if-no-files-found: error
 
       - name: Stop landing page

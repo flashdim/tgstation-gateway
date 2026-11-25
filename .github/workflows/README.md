@@ -20,8 +20,8 @@ waits for the other: if one fails, the other image may already be published for
 that release. Re-run the failed job for transient failures; otherwise fix the
 cause in a new release.
 After unit tests pass, `landing-screenshot` renders the landing page with eight
-slots in Chromium and uploads desktop and mobile PNGs as the
-`landing-screenshots` artifact, downloadable from the run summary. It is a
+slots in Chromium and uploads a desktop `landing-desktop.png` as an unzipped
+artifact, downloadable from the run summary. It is a
 visual aid, not a gameplay check.
 The landing image is smoke-tested by generating slots from `GATEWAY_PLAY_HOST`
 and related environment variables, checking the generated links, rejecting an
