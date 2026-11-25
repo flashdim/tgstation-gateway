@@ -193,13 +193,15 @@ class LandingPageTest(unittest.TestCase):
         )
         self.assertNotRegex(css, r"\.narsie img \{[^}]*filter:")
 
-    def test_slots_use_a_compact_scrollable_responsive_grid(self):
+    def test_slots_use_a_compact_scrollable_grid_with_centered_last_row(self):
         css = (LANDING / "style.css").read_text()
         self.assertRegex(
             css,
-            r"\.slots \{[^}]*grid-template-columns: "
-            r"repeat\(var\(--columns, 1\), minmax\(0, 1fr\)\);[^}]*"
-            r"max-height: 50vh; overflow-y: auto;",
+            r"\.slots \{[^}]*display: flex; flex-wrap: wrap; "
+            r"justify-content: center;[^}]*max-height: 50vh; overflow-y: auto;",
+        )
+        self.assertRegex(
+            css, r"\.slot \{\s*flex: 0 0 calc\(\(100% - \(var\(--columns, 1\) - 1\)"
         )
         self.assertRegex(css, r"\.slot-details \{[^}]*overflow-wrap: anywhere;")
         self.assertNotIn("min-height: 132px", css)
