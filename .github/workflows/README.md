@@ -29,13 +29,17 @@ the repository root. Set `GATEWAY_LANDING_IMAGE` to select this local image or
 the published `dev` image in the Compose example. See the main README for the
 landing environment variables.
 
-The landing page's slot status comes from an in-memory lifecycle model, initially
-unallocated with no orchestration connected; the game-server status
+The landing page lists configured account links without monitoring the fixed
+containers; the game-server status
 panel is a separate read-only `?status` query and does not authenticate users,
 create or isolate sessions, or enforce ownership. `#shared` is not an
 authorization boundary. Operators must provide external access controls and
 secure connections; trusted ownership and credential provisioning remain
 future integration work.
+
+Both workflows also exercise fixed-account isolation, restart and volume
+retention using a pinned Alpine fixture. This does not test the player image,
+authenticated routing, Selkies disconnect behavior or gameplay.
 
 For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
 mocked launcher provisioning check using the complete pager-generated key file

@@ -46,6 +46,13 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
 
+      - name: Test fixed account isolation
+        env:
+          GATEWAY_DOCKER_TEST_IMAGE: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+        run: |
+          docker pull "$GATEWAY_DOCKER_TEST_IMAGE"
+          python3 -m unittest discover -s tests -p test_fixed_slots.py -v
+
       - name: Check runtime BYOND key provisioning
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_byond_key }}
         env:

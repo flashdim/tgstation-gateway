@@ -132,205 +132,78 @@ only a single-slot configuration reaches a working player without additional
 routing. Invalid values stop the landing container at startup with an error
 naming the variable. Startup logs list each generated slot URL.
 
-### Session state and container ownership foundation
+### Fixed account containers
 
-`GATEWAY_ACTIVE_SLOTS` is removed, including empty values; remove it from old
-deployment configuration. Unallocated slots have `state: null`. The internal
-registry reserves a slot as `starting`, then permits `ready`, `reconnect_grace`,
-`stopping` and `failed`. Ready sessions can enter reconnect grace and return
-to ready. Starting, ready and grace sessions may stop or fail; failed sessions
-may enter stopping for cleanup, and stopping may fail. A slot is released only
-from stopping or failed, after the manager confirms container and
-session-data cleanup. Snapshots and transitions are serialized within a process.
-The landing server is not connected to the manager below: the standalone
-landing starts with all slots unallocated, and a restart clears state.
+The fixed deployment starts one player per configured account, without creating
+or deleting containers on browser connections. For example:
 
-### Slot lifecycle manager (not connected to landing)
+```sh
+export GATEWAY_SLOT_COUNT=2 GATEWAY_SLOT_PATH='/{account}/'
+export GATEWAY_PLAY_HOST=play.example.org GATEWAY_DEPLOYMENT_ID=my-gateway
+export BYOND_SERVER=game.example.org:1337
+export GATEWAY_FIXED_LANDING=1
+python3 examples/fixed-slots.py > /tmp/gateway-compose.json
+docker compose -f /tmp/gateway-compose.json up -d --remove-orphans
+```
 
-`landing/manager.py` contains a single-host session manager and a minimal
-Docker Engine API client (API 1.44, Docker 25 or newer) over the daemon's UNIX
-socket. It is unit-tested with a fake daemon but is not used by the landing
-server and is not copied into the landing image. Do not mount the Docker
-socket into the landing container.
+The generator requires Docker Engine 28 or newer and Docker Compose, and uses the player settings in
+`examples/compose.yaml` and requires an operator-configured `BYOND_SERVER`.
+Each account receives a separate service, Wine and
+data volumes, bridge network and loopback port: `GATEWAY_PORT` (default 8080) for slot 01,
+then consecutive ports. It rejects port overflow and a landing-port collision.
+The optional landing service is included when `GATEWAY_FIXED_LANDING=1`.
+To include the existing GPU override, set `GATEWAY_FIXED_GPU=1` and
+`DRI_RENDER_GID` to the host render-node group ID before generating.
+Keep `GATEWAY_DEPLOYMENT_ID` stable and unique per deployment; it determines the
+Compose project. Re-generate the file and run the same `up` command when
+changing configuration or count. `--remove-orphans` removes old services in
+that Compose project only. Do not share that project with unrelated services
+or override its name with `COMPOSE_PROJECT_NAME` or `-p`. When reducing the
+count, removed accounts' volumes remain; inspect and remove them separately
+when their data is no longer needed.
 
-The manager starts a private Unix-domain controller-event socket for each
-player container. `PlayerSpec.controller_socket_directory` must be a
-manager-writable path on the same Docker host that the daemon can bind-mount.
-Only that session's socket is mounted into its player; it is not a network
-endpoint and does not expose Docker access. The pinned Selkies 2.2.1
-WebSocket handler reports aggregate controller-role connections through this
-channel; `#shared` pages are viewer-role connections and do not send controller
-events. HTTP health, signaling traffic and viewer connections do not start or
-extend controller grace. When the last controller data-WebSocket disconnects,
-the manager starts a 30-second deadline. A controller reconnect before expiry
-cancels it and resumes the same container and BYOND process. At expiry, the
-manager removes the owned container and verifies cleanup of its disposable
-volumes, even if viewers remain. Explicit termination still cleans up
-immediately. The normal Selkies connect hook no longer runs **Reset Session**;
-use the desktop shortcut only for a deliberate manual restart.
+Containers use Docker's `unless-stopped` restart policy; stopped or unhealthy
+containers are not automatically repaired, and a manually removed container
+requires another `up`. The example sets 4 GiB memory, two CPUs, 512 PIDs and
+2 GiB shared memory per player; these are not measured recommendations. Monitor
+startup and health and ensure sufficient host resources and Docker bridge address
+pools for all slots. `docker compose -f
+/tmp/gateway-compose.json down` stops the deployment but retains the named
+account volumes. `down -v` deletes those volumes for this project; deletion is
+not secure erasure. Treat volumes, container layers and backups as sensitive.
 
-This signal is based on the pinned Selkies controller-role data-WebSocket
-lifecycle, not interactive verification of an active game stream. The `#shared`
-fragment maps to Selkies viewer mode in the pinned browser asset, but a second
-browser joining an actual session has not been manually verified. The manager
-is still not connected to landing routes or an authenticated ownership API;
-this code does not establish a production routing or access-control boundary.
-Manager restart reconciliation remains unimplemented.
+The landing page lists configured account links, not occupancy or health. The
+operator must configure a reverse proxy to route each generated path to the
+matching loopback port and enforce authenticated ownership **before** routing,
+including WebSockets and any viewer access. An account name or path alone is
+not proof of ownership. Protect the landing page and direct player ports; do
+not expose Docker or unauthenticated streams to players. No proxy or ownership
+integration is provided or verified.
 
-The manager can optionally add per-session Traefik Docker-provider labels to
-player containers. Configure `PlayerSpec.traefik` with a player-domain suffix
-(for example, `play.lazorgator.party`), a pre-existing Traefik authorization
-middleware reference (for example, `player-auth@file`), and the HTTPS
-entrypoint; set `PlayerSpec.network` to the Docker network shared with Traefik.
-The slot account determines the host (`LGplayer01.play.lazorgator.party`), and
-the current session UUID gives each router/service a unique name. The route
-targets container port 8080 and publishes no host port. Configure HTTP-to-HTTPS
-redirection on Traefik's HTTP entrypoint. The operator must ensure the named
-middleware actually authenticates the intended users and that direct player
-container access is blocked.
+Stock Selkies uses a three-second reconnect grace for a disconnected display,
+not a timeout for a connected but inactive user. Viewers can keep a shared
+capture running; teardown may be delayed by other connections. Neither the
+container nor BYOND is deleted on disconnect. The desktop **Reset Session**
+shortcut remains a deliberate manual restart. Real disconnect/reconnect
+behavior and gameplay still require manual verification.
 
-This is only the manager's container-template support: the manager is not
-connected to the landing service, the landing page does not yet generate
-these per-slot hostnames, and no live Traefik route or authorization flow is
-provided or verified. The selected network must also provide the player's
-required access to the configured BYOND server.
+Optionally set `GATEWAY_SECRET_DIRECTORY` to an absolute, protected host
+directory containing a nonempty `<account>_key.txt` for every slot. The
+generator mounts only the matching file read-only and sets `BYOND_KEY_FILE` to
+its container path. Keys must be readable by the generator and container UID
+1000; owner UID 1000 and mode `0400` is one option. Final symlinks and hard
+links are rejected. Protect parent directories from untrusted changes and keep
+files stable until containers stop; validation and Docker mounting are not
+atomic. User namespace remapping and remote daemons require separate permission
+validation. Match keys to accounts manually; never store credentials in
+environment values, command lines, images, logs or build caches. Docker
+metadata contains the host paths. To rotate a key, stop its service, replace
+the source file, and recreate it with Compose.
 
-- A caller must supply `PlayerSpec` with an absolute `secret_directory` on the
-  same host and filesystem namespace as the Docker daemon. For each configured
-  account the operator supplies exactly one regular, nonempty file named
-  `<account>_key.txt`. The manager opens it without following a final symlink,
-  rejects hard links, and mounts only that file read-only at
-  `/run/secrets/byond_key.txt`. The player receives only this path in
-  `BYOND_KEY_FILE`, not its contents. Files must be readable by the manager and
-  by container UID 1000: use owner UID 1000 and mode `0400`, for example, with
-  a directory accessible only to the manager and daemon. User namespace
-  remapping, remote daemons and other UID mappings are not supported by this
-  check. Protect the directory and all its parent directories against
-  replacement by untrusted users, and keep the files unchanged until their
-  containers stop; the check and Docker bind mount are not atomic.
-- The operator is responsible for matching each key to its account. Do not
-  reuse keys across accounts; filename and inode checks cannot prove the
-  contents belong to the named account. Keep the directory outside the
-  repository, Docker build context and caches, and never put secret contents in
-  `PlayerSpec.environment`, an image, logs, arguments, URLs or labels. Docker
-  metadata contains the host **path**, not the contents; treat daemon access
-  and paths as privileged. The image and other environment values must also be
-  trusted and non-secret.
-- Each container gets distinct, session-labelled anonymous volumes for
-  `/home/ubuntu/.wine` and `/home/ubuntu/.local/share`, populated from the
-  image by Docker on creation.
-  Other writes stay in its own container layer. No other slot's secret or the
-  secrets directory is mounted. A normal termination removes the container,
-  its writable layer and anonymous volumes; it does not delete the operator's
-  source key. This is disposal, not secure erasure of host storage or backups.
-- `PlayerSpec` defaults to 4 GiB memory, 2 CPUs (`nano_cpus=2000000000`),
-  512 PIDs and 2 GiB shared memory. These positive integer limits are
-  configurable, not measured capacity recommendations; test them on the
-  deployment host. Docker must support the configured cgroup limits.
-- Startup and teardown of each slot are serialized. Concurrent first requests
-  for a slot share the same startup result or error; exactly one container is
-  created. Later requests may retry a failed startup.
-- The capacity check and slot reservation run atomically under a host-wide
-  lock. Capacity is `GATEWAY_SLOT_COUNT` containers: every container matching
-  this deployment's project/deployment/role labels (including untracked ones,
-  for example left by a previous manager process) counts, as do reserved slots
-  and slots whose cleanup is pending. Excess requests fail with `capacity_exhausted`.
-  Untracked containers are counted but never removed.
-- Each container gets the ownership labels above, the operator's image and
-  non-secret environment, `--init`, the limits above, no restart policy and
-  the required custom seccomp profile, which must be the same
-  profile as `examples/seccomp.json`. It publishes no ports.
-- Startup waits for the image healthcheck to report healthy; an image without
-  a healthcheck fails. The default
-  readiness timeout is 180 seconds; Docker API requests time out after 30
-  seconds. A timeout, Docker API error, container exit or unhealthy container
-  marks the slot `failed` and attempts to remove the partial container.
-  A missing, empty, unreadable, linked or unsuitable credential file reports
-  `secret_unavailable`; a Docker start failure reports `secret_mount_failed`
-  (the cause may be another start error), as does a missing or writable
-  inspected secret mount. The healthcheck is not proof of login.
-- Cleanup lists containers by this session's labels, removes only those that
-  pass the ownership predicate for the slot, deployment and session UUID
-  (forced, with anonymous volumes so the writable layer and session data are
-  discarded), then removes and verifies any remaining volumes with matching
-  full ownership labels. This also handles a container removed externally
-  without its volumes. If cleanup fails, the slot stays
-  `failed` with `cleanup_pending`, keeps counting toward capacity, and is
-  retried by the next start or reaper pass.
-- If a create call fails without a usable result (including an API error
-  response), Docker might still create the container later. The manager
-  conservatively retains its session and capacity reservation
-  indefinitely, even after an empty cleanup listing; retries and reaping remove
-  observed owned containers but cannot release that reservation. This reports
-  `cleanup_failed`. To recover, stop the manager, ensure the daemon is no
-  longer processing the create (for example by restarting the daemon), and
-  manually remove any containers with the affected deployment and slot labels
-  after verifying ownership before starting a manager again. A manager restart
-  alone loses the reservation and is not safe reconciliation.
-- Explicit termination requires the slot's current session UUID; stale or
-  unknown UUIDs fail without touching any container. Teardown is visible as
-  `stopping`. A periodic `reap()` pass cleans up crashed (stopped or missing)
-  and failed sessions, skipping slots that are busy. A start request for a
-  crashed ready session replaces it.
-
-Errors carry a code and suggested HTTP status: `unknown_slot` (404),
-`unknown_session` (404), `slot_busy` (409), `capacity_exhausted` (503),
-`docker_unavailable` (502), `startup_failed` (502), `startup_timeout` (504) and
-`cleanup_failed` (500), plus `secret_unavailable` (503) and
-`secret_mount_failed` (502). Docker error response bodies are not returned.
-The operator status omits session UUIDs. State is held in memory; restart
-recovery is not implemented. A manager restart does not restart or adopt
-existing players; stop the manager and manually inspect and remove owned
-containers and session-labelled volumes before starting it again. A player service
-restart within the same container reuses its volumes and recopies the mounted
-key. Rotate keys by stopping the container, replacing the source file, and
-starting a new session. Failed removal may leave private data on the host:
-resolve `cleanup_failed` before reuse and manually inspect leftovers.
-
-An opt-in Docker integration test exercises two isolated slots with a
-shell-capable fixture image, not the player image: set
-`GATEWAY_DOCKER_TEST_IMAGE` to an existing local image containing `/bin/sh`,
-`sleep`, `sha256sum` and `tr`, then run
-`python3 -m unittest discover -s tests -p test_manager_integration.py -v`.
-It does not establish real BYOND login or gameplay.
-
-`GATEWAY_DEPLOYMENT_ID` contains 1–64 ASCII letters, digits, `_`, `.` or `-`,
-starting with a letter or digit. Keep it stable across manager restarts, unique
-on the host, and do not run two managers with the same ID. `local` is only a
-single-deployment prototype default. The model defines Docker container labels:
-
-- `io.tgstation-gateway.project=tgstation-gateway`
-- `io.tgstation-gateway.deployment=<deployment ID>`
-- `io.tgstation-gateway.role=player`
-- `io.tgstation-gateway.slot=<two-digit slot number>`
-- `io.tgstation-gateway.account=<derived account>`
-- `io.tgstation-gateway.session=<canonical UUID>`
-
-The discovery filter uses project, deployment and role. Before any future
-adoption, reconciliation or deletion, the ownership predicate additionally
-requires a configured account, its matching slot number, and a valid session
-UUID. Missing/mismatched labels, other deployments and unknown slots fail
-closed. Container names and image names alone never establish ownership.
-These are privileged-daemon ownership labels, not player authorization.
-This change does not label or manage the standalone Compose player or connect
-to Docker. Keep Docker access private to the future manager; labels must never
-include keys, credentials or player data.
-
-Exact route lookup is an allowlist, not an authentication boundary. A future
-manager must verify trusted session ownership before looking up/routing a slot;
-client headers, account names, paths or session UUIDs alone must not grant access.
-The external identity/secure-connection integration remains undecided.
-
-The operator must create BYOND accounts manually. For a pager key file obtained
-by logging in to the matching account, mount the complete file read-only at
-`/run/secrets/LGplayer01_key.txt`, for example, then set `BYOND_KEY_FILE` to
-that path. The launcher copies the file unchanged into the disposable Wine
-prefix and does not log its contents. Restrict its host permissions while
-allowing the player container user to read it. Using this file for login in a
-fresh prefix has not yet been verified. Do not put the key or a password in
-environment variables, command-line arguments, public configuration, URLs,
-images or caches. Rotate the operator-managed source file when the account
-key is revoked.
+The fixed account volumes retain login and desktop data across container
+recreation. Never reassign an account's data to a different person without an
+explicit operator-controlled cleanup. The launcher copies an optional key into
+its Wine prefix; using it for login in a fresh prefix remains unverified.
 
 The image prefix is initialized at build time and then copied into each new
 Wine volume. Consequently, any machine identifiers, registry values, or
@@ -343,20 +216,7 @@ behavior before deployment; shared IPs or cloned identities may collide.
 Never alter identifiers to evade bans. Results and any compatibility issues
 remain unverified.
 
-The unallocated link opens its configured URL; ready/grace watch links replace any
-existing fragment with `#shared`, preserving the path and query.
-
-Starting, stopping and failed slots are shown without links. The page reads
-server-side lifecycle state, but no containers are created, monitored or isolated
-because orchestration is not connected. It does not authenticate users or enforce ownership. `#shared` is
-not an authorization boundary, and anyone with access to a player URL may
-attempt to use it directly. Intended watching by authenticated users and
-controller reconnection through landing routes require trusted identity,
-ownership and routing integration ([#48](https://github.com/flashdim/tgstation-gateway/issues/48)).
-Protect both the page and player endpoints
-with operator-managed access controls and secure connections; do not expose
-the local test server or player stream directly to the internet. See
-`landing/assets/ATTRIBUTION.md` for artwork sources and licenses.
+See `landing/assets/ATTRIBUTION.md` for artwork sources and licenses.
 The landing image publishes `dev` for main-branch CI builds and `dev-pr<number>`
 for same-repository pull requests. Releases publish a version tag matching the
 release and `latest` for non-prereleases. CI development tags are pushed before
@@ -513,7 +373,7 @@ Build-time Wine errors are still logged.
 
 ## Important limitations
 
-- This is an early, single-player experiment. The session manager is not connected or deployment-ready, and persistent player data is not provided.
+- This is an early experiment. Fixed account containers and their persistent data are not yet verified with real gameplay or authenticated routing.
 - BYOND rendering and gameplay are not fully verified. A successful start does not guarantee that every game or interface will work correctly.
 - The example is bound to your local machine. The browser stream is not protected by default; do not expose it directly to the internet. Arrange your own access controls and secure connection if you need remote access.
 
