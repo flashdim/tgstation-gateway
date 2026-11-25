@@ -18,6 +18,8 @@ from sessions import ConfigError, SessionConfig  # noqa: E402
 
 def compose_config(env):
     config = SessionConfig.from_env(env)
+    if any(not slot.path.endswith("/") for slot in config.slots):
+        raise ConfigError("GATEWAY_SLOT_PATH must end in / for fixed slots")
     server = env.get("BYOND_SERVER", "").removeprefix("byond://")
     match = re.fullmatch(r"(?:[a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})", server)
     if not match or not 1 <= int(match.group(1)) <= 65535:
@@ -68,6 +70,7 @@ def compose_config(env):
         networks[network] = {}
         service["networks"] = {network: None}
         service["ports"][0]["published"] = str(first_port + slot.number - 1)
+        service["environment"]["SELKIES_SUBFOLDER"] = slot.path
         service["labels"] = {
             "io.tgstation-gateway.project": "tgstation-gateway",
             "io.tgstation-gateway.deployment": config.deployment_id,
