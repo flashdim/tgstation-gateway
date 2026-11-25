@@ -155,6 +155,24 @@ configuration yet; routing, reconnect grace, restart
 reconciliation and ownership checks are separate, unfinished work. Do not
 mount the Docker socket into the landing container.
 
+The manager can optionally add per-session Traefik Docker-provider labels to
+player containers. Configure `PlayerSpec.traefik` with a player-domain suffix
+(for example, `play.lazorgator.party`), a pre-existing Traefik authorization
+middleware reference (for example, `player-auth@file`), and the HTTPS
+entrypoint; set `PlayerSpec.network` to the Docker network shared with Traefik.
+The slot account determines the host (`LGplayer01.play.lazorgator.party`), and
+the current session UUID gives each router/service a unique name. The route
+targets container port 8080 and publishes no host port. Configure HTTP-to-HTTPS
+redirection on Traefik's HTTP entrypoint. The operator must ensure the named
+middleware actually authenticates the intended users and that direct player
+container access is blocked.
+
+This is only the manager's container-template support: the manager is not
+connected to the landing service, the landing page does not yet generate
+these per-slot hostnames, and no live Traefik route or authorization flow is
+provided or verified. The selected network must also provide the player's
+required access to the configured BYOND server.
+
 - A caller must supply `PlayerSpec` with an absolute `secret_directory` on the
   same host and filesystem namespace as the Docker daemon. For each configured
   account the operator supplies exactly one regular, nonempty file named
@@ -418,10 +436,17 @@ display mode, screenshots and any failures separately from startup or health
 checks.
 
 Selkies follows the browser's display size by default. Common stream and
-display settings can be overridden with `SELKIES_MODE` (default `webrtc`),
+display settings can be overridden with `SELKIES_MODE` (default `websockets`;
+set `webrtc` to use WebRTC instead),
 `SELKIES_FRAMERATE` (default `60`),
 `SELKIES_VIDEO_BITRATE`, `SELKIES_AUDIO_BITRATE`, `SELKIES_ENABLE_RESIZE`, and
-`SELKIES_SCALING_DPI`. To use a fixed size:
+`SELKIES_SCALING_DPI`.
+
+The WebSocket default and its behavior through a reverse proxy have not yet
+been verified in an interactive session. WebRTC may require additional network
+configuration; an HTTP reverse proxy alone does not necessarily carry its media.
+
+To use a fixed size:
 
 ```sh
 SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
