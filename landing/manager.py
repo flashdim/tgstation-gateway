@@ -9,6 +9,8 @@ from concurrent.futures import Future
 from dataclasses import dataclass, field, replace
 import http.client
 import json
+import os
+import stat
 import socket
 import threading
 import time
@@ -62,6 +64,16 @@ class StartupFailed(SessionError):
 class StartupTimeout(SessionError):
     status = 504
     code = "startup_timeout"
+
+
+class SecretUnavailable(SessionError):
+    status = 503
+    code = "secret_unavailable"
+
+
+class SecretMountFailed(StartupFailed):
+    status = 502
+    code = "secret_mount_failed"
 
 
 class CleanupFailed(SessionError):
@@ -119,14 +131,8 @@ class DockerClient:
         if len(data) > MAX_RESPONSE:
             raise DockerError("Docker API response is too large")
         if response.status not in ok:
-            message = ""
-            try:
-                message = str(json.loads(data).get("message", ""))[:200]
-            except (ValueError, AttributeError):
-                pass
             raise DockerError(
-                f"Docker API returned {response.status} for {method} {path}"
-                + (f": {message}" if message else ""),
+                f"Docker API returned {response.status} for {method} {path}",
                 response.status,
             )
         if not data:
@@ -184,6 +190,30 @@ class DockerClient:
             if error.status != 404:
                 raise
 
+    def list_volumes(self, labels):
+        filters = json.dumps({"label": [f"{k}={v}" for k, v in labels.items()]})
+        result = self._request("GET", "/volumes", {"filters": filters})
+        if not isinstance(result, dict) or "Volumes" not in result:
+            raise DockerError("Docker API returned an invalid volume list")
+        items = result["Volumes"]
+        if items is None:
+            items = []
+        if not isinstance(items, list):
+            raise DockerError("Docker API returned an invalid volume list")
+        volumes = []
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("Name"), str):
+                raise DockerError("Docker API returned an invalid volume")
+            volumes.append({"name": item["Name"], "labels": item.get("Labels") or {}})
+        return volumes
+
+    def remove_volume(self, name):
+        try:
+            self._request("DELETE", f"/volumes/{quote(name, safe='')}", ok=(204,))
+        except DockerError as error:
+            if error.status != 404:
+                raise
+
 
 @dataclass(frozen=True)
 class PlayerSpec:
@@ -191,9 +221,13 @@ class PlayerSpec:
 
     image: str
     seccomp_profile: str
+    secret_directory: str
     environment: dict = field(default_factory=dict)
     network: str | None = None
     shm_size: int = 2 * 1024**3
+    memory: int = 4 * 1024**3
+    nano_cpus: int = 2 * 10**9
+    pids_limit: int = 512
 
     def __post_init__(self):
         if not isinstance(self.image, str) or not self.image.strip():
@@ -206,25 +240,83 @@ class PlayerSpec:
             raise ValueError("Seccomp profile must be JSON") from error
         if not isinstance(profile, dict) or not profile.get("defaultAction"):
             raise ValueError("Seccomp profile must define defaultAction")
+        if not isinstance(self.secret_directory, str) or not os.path.isabs(
+            self.secret_directory
+        ):
+            raise ValueError("Secret directory must be an absolute path")
+        for value in (self.shm_size, self.memory, self.nano_cpus, self.pids_limit):
+            if type(value) is not int or value <= 0:
+                raise ValueError("Resource limits must be positive integers")
         for key, value in self.environment.items():
             if not isinstance(key, str) or not key or "=" in key:
                 raise ValueError("Invalid environment variable name")
             if not isinstance(value, str):
                 raise ValueError("Environment values must be strings")
+            if key in {"BYOND_KEY_FILE", "WINEPREFIX", "HOME"}:
+                raise ValueError("Session paths are managed by the manager")
 
-    def container_body(self, labels):
+    def secret_path(self, account):
+        path = os.path.normpath(
+            "/" + os.path.join(self.secret_directory, f"{account}_key.txt").lstrip("/")
+        )
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                info = os.fstat(fd)
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or info.st_size == 0
+                    or info.st_nlink != 1
+                    or not (
+                        (info.st_uid == 1000 and info.st_mode & stat.S_IRUSR)
+                        or (
+                            info.st_uid != 1000
+                            and info.st_mode & stat.S_IRGRP
+                            and info.st_mode & stat.S_IROTH
+                        )
+                    )
+                ):
+                    raise OSError("Invalid secret file")
+            finally:
+                os.close(fd)
+        except OSError:
+            raise SecretUnavailable("Selected credential file is unavailable") from None
+        return path
+
+    def container_body(self, labels, secret_path):
+        target = "/run/secrets/byond_key.txt"
         host = {
             "Init": True,
             "ShmSize": self.shm_size,
+            "Memory": self.memory,
+            "NanoCpus": self.nano_cpus,
+            "PidsLimit": self.pids_limit,
             "SecurityOpt": ["seccomp=" + self.seccomp_profile],
             "RestartPolicy": {"Name": "no"},
             "AutoRemove": False,
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": secret_path,
+                    "Target": target,
+                    "ReadOnly": True,
+                }
+            ]
+            + [
+                {
+                    "Type": "volume",
+                    "Target": volume_target,
+                    "VolumeOptions": {"Labels": labels},
+                }
+                for volume_target in ("/home/ubuntu/.wine", "/home/ubuntu/.local/share")
+            ],
         }
         if self.network:
             host["NetworkMode"] = self.network
         return {
             "Image": self.image,
-            "Env": [f"{k}={v}" for k, v in sorted(self.environment.items())],
+            "Env": [f"{k}={v}" for k, v in sorted(self.environment.items())]
+            + [f"BYOND_KEY_FILE={target}"],
             "Labels": labels,
             "HostConfig": host,
         }
@@ -356,16 +448,22 @@ class SessionManager:
         creating = False
         try:
             name = self._container_name(session)
+            secret_path = self.spec.secret_path(account)
             body = self.spec.container_body(
-                self.config.container_labels(account, session.session_id)
+                self.config.container_labels(account, session.session_id), secret_path
             )
             creating = True
             container_id = self.docker.create(name, body)
             creating = False
             session = replace(session, container_id=container_id)
             self._put(session)
-            self.docker.start(container_id)
-            self._wait_ready(container_id)
+            try:
+                self.docker.start(container_id)
+            except DockerError as error:
+                raise SecretMountFailed(
+                    "Container start or credential mount failed"
+                ) from error
+            self._wait_ready(container_id, secret_path)
         except Exception as error:
             if isinstance(error, SessionError):
                 failure = error
@@ -468,14 +566,24 @@ class SessionManager:
             return False
         return (data.get("State") or {}).get("Running") is True
 
-    def _wait_ready(self, container_id):
+    def _wait_ready(self, container_id, secret_path):
         deadline = self.clock() + self.start_timeout
         while True:
             if self.clock() >= deadline:
                 raise StartupTimeout("Player container did not become ready")
-            state = self.docker.inspect(container_id).get("State") or {}
+            inspection = self.docker.inspect(container_id)
             if self.clock() >= deadline:
                 raise StartupTimeout("Player container did not become ready")
+            mounts = inspection.get("Mounts") or []
+            if not any(
+                mount.get("Type") == "bind"
+                and mount.get("Source") == secret_path
+                and mount.get("Destination") == "/run/secrets/byond_key.txt"
+                and mount.get("RW") is False
+                for mount in mounts
+            ):
+                raise SecretMountFailed("Credential mount could not be verified")
+            state = inspection.get("State") or {}
             if state.get("Running") is not True:
                 raise StartupFailed("Player container exited during startup")
             health = (state.get("Health") or {}).get("Status")
@@ -528,5 +636,19 @@ class SessionManager:
             self.docker.remove(container["id"])
         if owned():
             raise DockerError("Session containers remain after removal")
+
+        def owned_volumes():
+            return [
+                volume
+                for volume in self.docker.list_volumes(labels)
+                if self.config.owns_container(volume["labels"])
+                and volume["labels"].get(SESSION_LABEL) == session.session_id
+                and volume["labels"].get(LABEL_PREFIX + "account") == session.account
+            ]
+
+        for volume in owned_volumes():
+            self.docker.remove_volume(volume["name"])
+        if owned_volumes():
+            raise DockerError("Session volumes remain after removal")
         if session.create_indeterminate:
             raise DockerError("Container creation outcome is indeterminate")

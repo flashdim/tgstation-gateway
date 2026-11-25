@@ -151,10 +151,42 @@ landing starts with all slots unallocated, and a restart clears state.
 Docker Engine API client (API 1.44, Docker 25 or newer) over the daemon's UNIX
 socket. It is unit-tested with a fake daemon but is not used by the landing
 server, not copied into the landing image and has no deployment
-configuration yet; routing, credentials, reconnect grace, restart
+configuration yet; routing, reconnect grace, restart
 reconciliation and ownership checks are separate, unfinished work. Do not
 mount the Docker socket into the landing container.
 
+- A caller must supply `PlayerSpec` with an absolute `secret_directory` on the
+  same host and filesystem namespace as the Docker daemon. For each configured
+  account the operator supplies exactly one regular, nonempty file named
+  `<account>_key.txt`. The manager opens it without following a final symlink,
+  rejects hard links, and mounts only that file read-only at
+  `/run/secrets/byond_key.txt`. The player receives only this path in
+  `BYOND_KEY_FILE`, not its contents. Files must be readable by the manager and
+  by container UID 1000: use owner UID 1000 and mode `0400`, for example, with
+  a directory accessible only to the manager and daemon. User namespace
+  remapping, remote daemons and other UID mappings are not supported by this
+  check. Protect the directory and all its parent directories against
+  replacement by untrusted users, and keep the files unchanged until their
+  containers stop; the check and Docker bind mount are not atomic.
+- The operator is responsible for matching each key to its account. Do not
+  reuse keys across accounts; filename and inode checks cannot prove the
+  contents belong to the named account. Keep the directory outside the
+  repository, Docker build context and caches, and never put secret contents in
+  `PlayerSpec.environment`, an image, logs, arguments, URLs or labels. Docker
+  metadata contains the host **path**, not the contents; treat daemon access
+  and paths as privileged. The image and other environment values must also be
+  trusted and non-secret.
+- Each container gets distinct, session-labelled anonymous volumes for
+  `/home/ubuntu/.wine` and `/home/ubuntu/.local/share`, populated from the
+  image by Docker on creation.
+  Other writes stay in its own container layer. No other slot's secret or the
+  secrets directory is mounted. A normal termination removes the container,
+  its writable layer and anonymous volumes; it does not delete the operator's
+  source key. This is disposal, not secure erasure of host storage or backups.
+- `PlayerSpec` defaults to 4 GiB memory, 2 CPUs (`nano_cpus=2000000000`),
+  512 PIDs and 2 GiB shared memory. These positive integer limits are
+  configurable, not measured capacity recommendations; test them on the
+  deployment host. Docker must support the configured cgroup limits.
 - Startup and teardown of each slot are serialized. Concurrent first requests
   for a slot share the same startup result or error; exactly one container is
   created. Later requests may retry a failed startup.
@@ -165,18 +197,24 @@ mount the Docker socket into the landing container.
   and slots whose cleanup is pending. Excess requests fail with `capacity_exhausted`.
   Untracked containers are counted but never removed.
 - Each container gets the ownership labels above, the operator's image and
-  non-secret environment, `--init`, a 2 GiB shared-memory size, no restart
-  policy and the required custom seccomp profile, which must be the same
+  non-secret environment, `--init`, the limits above, no restart policy and
+  the required custom seccomp profile, which must be the same
   profile as `examples/seccomp.json`. It publishes no ports.
 - Startup waits for the image healthcheck to report healthy; an image without
   a healthcheck fails. The default
   readiness timeout is 180 seconds; Docker API requests time out after 30
   seconds. A timeout, Docker API error, container exit or unhealthy container
   marks the slot `failed` and attempts to remove the partial container.
+  A missing, empty, unreadable, linked or unsuitable credential file reports
+  `secret_unavailable`; a Docker start failure reports `secret_mount_failed`
+  (the cause may be another start error), as does a missing or writable
+  inspected secret mount. The healthcheck is not proof of login.
 - Cleanup lists containers by this session's labels, removes only those that
   pass the ownership predicate for the slot, deployment and session UUID
   (forced, with anonymous volumes so the writable layer and session data are
-  discarded), and confirms that none remain. If cleanup fails, the slot stays
+  discarded), then removes and verifies any remaining volumes with matching
+  full ownership labels. This also handles a container removed externally
+  without its volumes. If cleanup fails, the slot stays
   `failed` with `cleanup_pending`, keeps counting toward capacity, and is
   retried by the next start or reaper pass.
 - If a create call fails without a usable result (including an API error
@@ -198,9 +236,23 @@ mount the Docker socket into the landing container.
 Errors carry a code and suggested HTTP status: `unknown_slot` (404),
 `unknown_session` (404), `slot_busy` (409), `capacity_exhausted` (503),
 `docker_unavailable` (502), `startup_failed` (502), `startup_timeout` (504) and
-`cleanup_failed` (500). The operator status omits session UUIDs. State is held
-in memory; restart recovery is not implemented. These checks have not been run
-against a real Docker daemon or the player image.
+`cleanup_failed` (500), plus `secret_unavailable` (503) and
+`secret_mount_failed` (502). Docker error response bodies are not returned.
+The operator status omits session UUIDs. State is held in memory; restart
+recovery is not implemented. A manager restart does not restart or adopt
+existing players; stop the manager and manually inspect and remove owned
+containers and session-labelled volumes before starting it again. A player service
+restart within the same container reuses its volumes and recopies the mounted
+key. Rotate keys by stopping the container, replacing the source file, and
+starting a new session. Failed removal may leave private data on the host:
+resolve `cleanup_failed` before reuse and manually inspect leftovers.
+
+An opt-in Docker integration test exercises two isolated slots with a
+shell-capable fixture image, not the player image: set
+`GATEWAY_DOCKER_TEST_IMAGE` to an existing local image containing `/bin/sh`,
+`sleep`, `sha256sum` and `tr`, then run
+`python3 -m unittest discover -s tests -p test_manager_integration.py -v`.
+It does not establish real BYOND login or gameplay.
 
 `GATEWAY_DEPLOYMENT_ID` contains 1–64 ASCII letters, digits, `_`, `.` or `-`,
 starting with a letter or digit. Keep it stable across manager restarts, unique
@@ -239,6 +291,18 @@ fresh prefix has not yet been verified. Do not put the key or a password in
 environment variables, command-line arguments, public configuration, URLs,
 images or caches. Rotate the operator-managed source file when the account
 key is revoked.
+
+The image prefix is initialized at build time and then copied into each new
+Wine volume. Consequently, any machine identifiers, registry values, or
+login state present in that template would also be cloned. The build installs
+BYOND without operator credentials; this has not established that Wine or
+BYOND generates unique machine/computer IDs per clone or that every possible
+login artifact is absent. Do not build or cache a prefix used for a real
+login. Compare two fresh clients and inspect the server's reported IDs and ban
+behavior before deployment; shared IPs or cloned identities may collide.
+Never alter identifiers to evade bans. Results and any compatibility issues
+remain unverified.
+
 The unallocated link opens its configured URL; ready/grace watch links replace any
 existing fragment with `#shared`, preserving the path and query.
 
@@ -260,18 +324,22 @@ image validation and may refer to a build that later fails validation.
 
 ## Connect directly to a server
 
-To start the client connected to a server instead of opening the pager, provide its address and port:
+To request a connection to a server through the BYOND pager, provide its address and port:
 
 ```sh
 BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
-The key file is optional; without it, BYOND may require
-interactive pager login. A BYOND account or server-side authentication may
-still be required.
-Dream Seeker launches once and remains running. The desktop's **Reset Session**
-action restarts it after Selkies clients connect. The BYOND pager path is
-unchanged.
+At each client startup, the launcher enables `auto-login on` in BYOND's
+`cfg/pager.txt` and `graphics-hwmode on` in `cfg/seeker.txt`, retaining other
+settings. It starts `byond.exe` with the server URL; the pager is expected to
+log in and launch Dream Seeker. The key file is optional; without it, BYOND
+may require interactive pager login. A BYOND account or server-side
+authentication may still be required. Automatic login and joining through the
+pager have not yet been verified against a real server. In direct-server mode,
+the healthcheck still requires a Dream Seeker process; it does not prove login
+or gameplay. The desktop's **Reset Session** action restarts the supervised
+pager after Selkies clients connect.
 
 ## Customize the session
 
@@ -399,7 +467,7 @@ Build-time Wine errors are still logged.
 
 ## Important limitations
 
-- This is an early, single-player experiment. Each player needs a separate container; session management, resource limits, and persistent player data are not provided.
+- This is an early, single-player experiment. The session manager is not connected or deployment-ready, and persistent player data is not provided.
 - BYOND rendering and gameplay are not fully verified. A successful start does not guarantee that every game or interface will work correctly.
 - The example is bound to your local machine. The browser stream is not protected by default; do not expose it directly to the internet. Arrange your own access controls and secure connection if you need remote access.
 

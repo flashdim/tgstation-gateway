@@ -1,13 +1,16 @@
 from http.server import BaseHTTPRequestHandler
 from concurrent.futures import Future
 import json
+import os
 from pathlib import Path
+import shutil
 import socketserver
 import sys
 import tempfile
 import threading
 import time
 import unittest
+import weakref
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 from uuid import uuid4
@@ -23,6 +26,8 @@ from manager import (  # noqa: E402
     DockerUnavailable,
     PlayerSpec,
     SessionManager,
+    SecretMountFailed,
+    SecretUnavailable,
     StartupFailed,
     StartupTimeout,
     UnknownSession,
@@ -37,6 +42,7 @@ class FakeDocker:
     def __init__(self):
         self.lock = threading.Lock()
         self.containers = {}
+        self.volumes = {}
         self.removed = []
         self.fail = {}
         self.health = "healthy"
@@ -77,6 +83,12 @@ class FakeDocker:
         container_id = self.add(body["Labels"], running=False)
         with self.lock:
             self.containers[container_id].update(name=name, body=body)
+            for mount in body["HostConfig"]["Mounts"]:
+                if mount["Type"] == "volume":
+                    self.volumes[uuid4().hex] = {
+                        "container_id": container_id,
+                        "labels": dict(mount["VolumeOptions"]["Labels"]),
+                    }
         self._call("create")
         return container_id
 
@@ -92,8 +104,18 @@ class FakeDocker:
             if container_id not in self.containers:
                 raise DockerError("missing", 404)
             data = self.containers[container_id]
+            mounts = data.get("body", {}).get("HostConfig", {}).get("Mounts", [])
             return {
                 "Config": {"Labels": dict(data["labels"])},
+                "Mounts": [
+                    {
+                        "Type": mount["Type"],
+                        "Source": mount.get("Source"),
+                        "Destination": mount["Target"],
+                        "RW": not mount.get("ReadOnly", False),
+                    }
+                    for mount in mounts
+                ],
                 "State": {
                     "Running": data["running"],
                     "Health": {"Status": data["health"]},
@@ -105,6 +127,25 @@ class FakeDocker:
         with self.lock:
             if self.containers.pop(container_id, None) is not None:
                 self.removed.append(container_id)
+                self.volumes = {
+                    name: volume
+                    for name, volume in self.volumes.items()
+                    if volume["container_id"] != container_id
+                }
+
+    def list_volumes(self, labels):
+        self._call("list_volumes")
+        with self.lock:
+            return [
+                {"name": name, "labels": dict(volume["labels"])}
+                for name, volume in self.volumes.items()
+                if all(volume["labels"].get(k) == v for k, v in labels.items())
+            ]
+
+    def remove_volume(self, name):
+        self._call("remove_volume")
+        with self.lock:
+            self.volumes.pop(name, None)
 
 
 class FakeClock:
@@ -128,9 +169,15 @@ def make_manager(count=2, docker=None, **kwargs):
     )
     registry = SlotRegistry(config)
     clock = FakeClock()
+    secrets = tempfile.mkdtemp()
+    for slot in config.slots:
+        path = Path(secrets) / f"{slot.account}_key.txt"
+        path.write_text(f"test key for {slot.account}")
+        path.chmod(0o644)
     spec = PlayerSpec(
         image="player:test",
         seccomp_profile=SECCOMP,
+        secret_directory=secrets,
         environment={"BYOND_SERVER": "byond://game.test:1337"},
     )
     manager = SessionManager(
@@ -143,6 +190,7 @@ def make_manager(count=2, docker=None, **kwargs):
         sleep=clock.sleep,
         **kwargs,
     )
+    weakref.finalize(manager, shutil.rmtree, secrets, ignore_errors=True)
     return manager
 
 
@@ -187,6 +235,9 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(host["SecurityOpt"], ["seccomp=" + SECCOMP])
         self.assertTrue(host["Init"])
         self.assertEqual(host["ShmSize"], 2 * 1024**3)
+        self.assertEqual(host["Memory"], 4 * 1024**3)
+        self.assertEqual(host["NanoCpus"], 2 * 10**9)
+        self.assertEqual(host["PidsLimit"], 512)
         self.assertEqual(host["RestartPolicy"], {"Name": "no"})
         self.assertIn("BYOND_SERVER=byond://game.test:1337", container["body"]["Env"])
         self.assertIn(session.session_id, container["name"])
@@ -197,11 +248,111 @@ class SessionManagerTest(unittest.TestCase):
         for profile in (None, "", "not json", "[]", "{}"):
             with self.subTest(profile=profile):
                 with self.assertRaises(ValueError):
-                    PlayerSpec(image="player:test", seccomp_profile=profile)
+                    PlayerSpec(
+                        image="player:test",
+                        seccomp_profile=profile,
+                        secret_directory="/tmp",
+                    )
         with self.assertRaises(ValueError):
-            PlayerSpec(image="", seccomp_profile=SECCOMP)
+            PlayerSpec(image="", seccomp_profile=SECCOMP, secret_directory="/tmp")
         with self.assertRaises(ValueError):
-            PlayerSpec(image="x", seccomp_profile=SECCOMP, environment={"A=B": "1"})
+            PlayerSpec(
+                image="x",
+                seccomp_profile=SECCOMP,
+                secret_directory="/tmp",
+                environment={"A=B": "1"},
+            )
+
+    def test_secret_failures_and_retry(self):
+        path = Path(self.manager.spec.secret_directory) / f"{self.account}_key.txt"
+        other = path.with_name("LGplayer02_key.txt")
+        for kind in ("missing", "empty", "symlink", "hardlink", "unreadable"):
+            with self.subTest(kind=kind):
+                path.unlink(missing_ok=True)
+                if kind == "empty":
+                    path.touch()
+                elif kind == "symlink":
+                    path.symlink_to(other)
+                elif kind == "hardlink":
+                    os.link(other, path)
+                elif kind == "unreadable":
+                    path.write_text("test key")
+                    path.chmod(0)
+                with self.assertRaises(SecretUnavailable):
+                    self.manager.start(self.account)
+                self.assertEqual(
+                    self.manager.status()[0]["error"], "secret_unavailable"
+                )
+                self.assertFalse(self.manager.status()[0]["cleanup_pending"])
+                self.assertEqual(self.docker.containers, {})
+        path.unlink()
+        path.write_text("replacement test key")
+        path.chmod(0o644)
+        self.manager.start(self.account)
+        self.assertEqual(self.state(), SessionState.READY)
+
+    def test_mount_verification_failure_is_cleaned_up(self):
+        inspect = self.docker.inspect
+
+        def incorrect_mount(container_id):
+            result = inspect(container_id)
+            result["Mounts"][0]["RW"] = True
+            return result
+
+        self.docker.inspect = incorrect_mount
+        with self.assertRaises(SecretMountFailed):
+            self.manager.start(self.account)
+        self.assertEqual(self.manager.status()[0]["error"], "secret_mount_failed")
+        self.assertEqual(self.docker.containers, {})
+
+    def test_removed_container_volumes_are_cleaned_or_reported(self):
+        session = self.manager.start(self.account)
+        del self.docker.containers[session.container_id]
+        foreign = {
+            **self.manager.config.container_labels(self.account, session.session_id),
+            LABEL_PREFIX + "slot": "99",
+        }
+        self.docker.volumes["foreign"] = {"container_id": None, "labels": foreign}
+        self.docker.fail["remove_volume"] = DockerError("failure")
+        self.manager.reap()
+        self.assertEqual(self.manager.status()[0]["error"], "cleanup_failed")
+        self.assertTrue(self.manager.status()[0]["cleanup_pending"])
+        self.assertEqual(len(self.docker.volumes), 3)
+        del self.docker.fail["remove_volume"]
+        self.manager.reap()
+        self.assertEqual(list(self.docker.volumes), ["foreign"])
+        self.assertIsNone(self.state())
+
+    def test_owner_permissions_take_precedence(self):
+        path = Path(self.manager.spec.secret_directory) / f"{self.account}_key.txt"
+        with patch("manager.os.fstat") as fstat:
+            actual = path.stat()
+            fstat.return_value = os.stat_result(
+                (
+                    actual.st_mode & ~0o777 | 0o004,
+                    actual.st_ino,
+                    actual.st_dev,
+                    actual.st_nlink,
+                    1000,
+                    actual.st_gid,
+                    actual.st_size,
+                    actual.st_atime,
+                    actual.st_mtime,
+                    actual.st_ctime,
+                )
+            )
+            with self.assertRaises(SecretUnavailable):
+                self.manager.start(self.account)
+
+    def test_resource_limits_and_managed_paths_are_validated(self):
+        for field in ("memory", "nano_cpus", "pids_limit", "shm_size"):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                PlayerSpec("player", SECCOMP, "/tmp", **{field: 0})
+        for key in ("HOME", "WINEPREFIX", "BYOND_KEY_FILE"):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                PlayerSpec("player", SECCOMP, "/tmp", environment={key: "x"})
+        with self.assertRaises(ValueError):
+            PlayerSpec("player", SECCOMP, "relative")
 
     def test_concurrent_first_requests_create_exactly_one_container(self):
         self.docker.hooks["create_before"] = lambda: time.sleep(0.05)
@@ -412,7 +563,10 @@ class SessionManagerTest(unittest.TestCase):
                     manager.start(self.account)
                 self.assertEqual(manager.docker.containers, {})
                 self.assertEqual(manager.registry.state(self.account), "failed")
-                self.assertEqual(manager.status()[0]["error"], "startup_failed")
+                self.assertEqual(
+                    manager.status()[0]["error"],
+                    "secret_mount_failed" if name == "start" else "startup_failed",
+                )
 
     def test_indeterminate_create_retains_reservation_even_after_late_container(self):
         manager = make_manager(count=2)
@@ -760,6 +914,10 @@ class FakeDockerHandler(BaseHTTPRequestHandler):
             self._reply(201, {"Id": "abc"})
         elif route == ("POST", "/v1.44/containers/abc/start"):
             self._reply(204)
+        elif route == ("GET", "/v1.44/volumes"):
+            self._reply(200, {"Volumes": [{"Name": "v", "Labels": {"a": "b"}}]})
+        elif route == ("DELETE", "/v1.44/volumes/v"):
+            self._reply(204)
         elif route == ("DELETE", "/v1.44/containers/missing"):
             self._reply(404, {"message": "No such container"})
         elif route == ("DELETE", "/v1.44/containers/abc"):
@@ -799,18 +957,23 @@ class DockerClientTest(unittest.TestCase):
         self.client.start("abc")
         self.client.remove("abc")
         self.client.remove("missing")
+        self.assertEqual(
+            self.client.list_volumes({"x": "1"}), [{"name": "v", "labels": {"a": "b"}}]
+        )
+        self.client.remove_volume("v")
         requests = self.server.requests
         self.assertEqual(requests[0][2]["all"], ["1"])
         self.assertEqual(json.loads(requests[0][2]["filters"][0]), {"label": ["x=1"]})
         self.assertEqual(requests[1][2], {"name": ["name"]})
         self.assertEqual(requests[1][3], {"Image": "i"})
         self.assertEqual(requests[3][2], {"force": ["1"], "v": ["1"]})
+        self.assertEqual(json.loads(requests[5][2]["filters"][0]), {"label": ["x=1"]})
 
     def test_errors_are_explicit(self):
         with self.assertRaises(DockerError) as context:
             self.client.inspect("abc")
         self.assertEqual(context.exception.status, 500)
-        self.assertIn("boom", str(context.exception))
+        self.assertNotIn("boom", str(context.exception))
         with self.assertRaises(DockerError):
             self.client.start("../other")
         self.assertEqual(
