@@ -165,8 +165,16 @@ class FixedProxyTest(unittest.TestCase):
                     )
                     status, body = self.request(path, number)
                     self.assertEqual((status, body), (200, server.name.encode()))
+                    websocket_before = [len(player.requests) for player in self.players]
                     status, _ = self.request(path, number, websocket=True)
                     self.assertEqual(status, 101)
+                    self.assertEqual(
+                        [len(player.requests) for player in self.players],
+                        [
+                            count + int(player is server)
+                            for count, player in zip(websocket_before, self.players)
+                        ],
+                    )
                     self.assertNotIn("Authorization", server.requests[-1][1])
                     self.assertEqual(server.requests[-1][0], path)
         before = [len(player.requests) for player in self.players]
