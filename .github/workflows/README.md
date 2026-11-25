@@ -37,9 +37,10 @@ authorization boundary. Operators must provide external access controls and
 secure connections; trusted ownership and credential provisioning remain
 future integration work.
 
-Both workflows also exercise fixed-account isolation, restart and volume
-retention using a pinned Alpine fixture. This does not test the player image,
-authenticated routing, Selkies disconnect behavior or gameplay.
+Both workflows also exercise fixed-account isolation, restart, service recovery,
+count and prefix changes, unrelated projects and volume retention/cleanup using
+a pinned Alpine fixture. This does not test daemon or host restarts, the player
+image, authenticated routing, Selkies disconnect behavior or gameplay.
 
 For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
 mocked launcher provisioning check using the complete pager-generated key file

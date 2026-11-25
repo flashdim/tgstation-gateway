@@ -142,8 +142,15 @@ export GATEWAY_SLOT_COUNT=2 GATEWAY_SLOT_PATH='/{account}/'
 export GATEWAY_PLAY_HOST=play.example.org GATEWAY_DEPLOYMENT_ID=my-gateway
 export BYOND_SERVER=game.example.org:1337
 export GATEWAY_FIXED_LANDING=1
-python3 examples/fixed-slots.py > /tmp/gateway-compose.json
-docker compose -f /tmp/gateway-compose.json up -d --remove-orphans
+umask 077
+tmp=$(mktemp /tmp/gateway-compose.XXXXXXXX)
+if python3 examples/fixed-slots.py > "$tmp" &&
+  mv "$tmp" /tmp/gateway-compose.json; then
+  docker compose -f /tmp/gateway-compose.json up -d --remove-orphans
+else
+  rm -f "$tmp"
+  echo "Generation or replacement failed; existing deployment was not changed." >&2
+fi
 ```
 
 The generator requires Docker Engine 28 or newer and Docker Compose, and uses the player settings in
@@ -162,15 +169,72 @@ or override its name with `COMPOSE_PROJECT_NAME` or `-p`. When reducing the
 count, removed accounts' volumes remain; inspect and remove them separately
 when their data is no longer needed.
 
-Containers use Docker's `unless-stopped` restart policy; stopped or unhealthy
-containers are not automatically repaired, and a manually removed container
-requires another `up`. The example sets 4 GiB memory, two CPUs, 512 PIDs and
-2 GiB shared memory per player; these are not measured recommendations. Monitor
+Containers use Docker's `unless-stopped` restart policy. Docker restarts an
+exited container and, when the daemon starts, restarts containers that were not
+manually stopped. A manual stop persists across daemon restarts; an unhealthy
+but running container is not restarted by this policy. Removing a container
+externally also requires another `up`. The example sets 4 GiB memory, two CPUs,
+512 PIDs and 2 GiB shared memory per player; these are not measured recommendations. Monitor
 startup and health and ensure sufficient host resources and Docker bridge address
 pools for all slots. `docker compose -f
 /tmp/gateway-compose.json down` stops the deployment but retains the named
-account volumes. `down -v` deletes those volumes for this project; deletion is
-not secure erasure. Treat volumes, container layers and backups as sensitive.
+account volumes. `down -v` deletes volumes declared in the current configuration,
+but not necessarily orphan volumes from earlier configurations. Deletion is not
+secure erasure. Treat volumes, container layers and backups as sensitive.
+
+#### Recovery and operator cleanup
+
+Use the same Docker context, deployment ID, account prefix and other settings
+as the original deployment. Save the generated configuration securely outside
+`/tmp` if it is needed after a reboot; it contains host paths and settings. The
+generation command above writes to a temporary file and replaces the previous
+file only on success. Never run `up` after a failed generation. Inspect
+`docker compose -f /tmp/gateway-compose.json config` and `docker compose -f
+/tmp/gateway-compose.json ps -a` before applying changes. Re-run the generation
+and `up -d --remove-orphans` command above to recreate missing services, start
+manually stopped ones, or apply a reviewed configuration. Inspect `ps -a` and
+service logs afterward. A failed `up` can leave a partially changed deployment:
+diagnose the error, restore the intended settings and rerun `up`; Compose does
+not roll back automatically.
+
+`--remove-orphans` removes containers for services no longer in that Compose
+project, not just gateway-labelled containers. Ensure the project is dedicated
+to this deployment before using it. Changing the deployment ID creates a
+different project rather than recovering the old one; changing the account
+prefix creates different account volumes. Reducing the count removes the extra
+services but retains their Wine and data volumes. Increasing it again with the
+same deployment ID and prefix reuses those volumes, including any previous
+login. Before assigning an account to someone else, stop its service and
+explicitly handle both volumes and any backups according to your data policy.
+
+To find volumes, use the project name in the generated file and run
+`docker volume ls --filter label=com.docker.compose.project=<project>`. Inspect
+the current account mounts with `docker inspect` on the corresponding container
+and `docker volume inspect <volume-name>`; retain an inventory of account-to-volume
+names before reducing the count or changing the prefix. Orphans are not listed
+in the new service configuration. For a still-configured account, remove its
+stopped container with `docker compose -f /tmp/gateway-compose.json rm -s
+player01` (substitute the intended service) before removing its volumes.
+After verifying the exact volume names, backups and that no container uses
+them, remove only the intended volumes with `docker
+volume rm <wine-volume-name> <data-volume-name>`. Do not use global volume prune.
+`down -v` is a destructive project-wide operation, not a way to select an
+individual account. Protect Docker access from players and other untrusted users.
+
+For a **disposable test host**, record the deployment ID, container IDs, both
+volume names and separate non-sensitive markers in each account's Wine and data
+volumes, plus an unrelated deployment and its marker. Test a service process
+exit, an explicit stop, an unhealthy service, external container removal and
+repeated `up`. Then restart the Docker daemon and separately reboot the host.
+After each, inspect `ps -a`, health and logs; check that non-stopped services
+return, stopped services remain stopped until `up`, each marker stays with its
+account, and the unrelated deployment is unchanged. Check count reduction,
+restoration and deliberate removal of selected orphan volumes as well. Do not
+restart the daemon or host on a shared production system just to run this test.
+Daemon/host restart and real browser disconnect/reconnect have not been verified
+by the fixture tests. For the latter, disconnect and reconnect an authenticated
+browser on a test deployment and check the same container and BYOND process
+remain; record the result separately from startup or gameplay checks.
 
 The landing page lists configured account links, not occupancy or health. The
 operator must configure a reverse proxy to route each generated path to the
