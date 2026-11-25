@@ -118,7 +118,7 @@ class TraefikConfig:
 
     def labels(self, account, session_id, network):
         if not isinstance(account, str) or not re.fullmatch(
-            r"[A-Za-z0-9_-]{1,26}", account
+            r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,24}[A-Za-z0-9])?",
         ):
             raise ValueError("Invalid slot account for Traefik routing")
         if not isinstance(session_id, str) or str(UUID(session_id)) != session_id:
