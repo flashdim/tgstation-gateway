@@ -320,8 +320,18 @@ class PlayerSpec:
                 raise ValueError("Invalid environment variable name")
             if not isinstance(value, str):
                 raise ValueError("Environment values must be strings")
-            if key in {"BYOND_KEY_FILE", "WINEPREFIX", "HOME"}:
-                raise ValueError("Session paths are managed by the manager")
+            if key in {
+                "BYOND_KEY_FILE",
+                "GATEWAY_CONTROLLER_SOCKET",
+                "HOME",
+                "SELKIES_MODE",
+                "SELKIES_RUN_AFTER_CONNECT",
+                "SELKIES_RUN_AFTER_DISCONNECT",
+                "SELKIES_RUN_AFTER_CONTROLLER_CONNECT",
+                "SELKIES_RUN_AFTER_CONTROLLER_DISCONNECT",
+                "WINEPREFIX",
+            }:
+                raise ValueError("Environment variable is managed by the manager")
 
     def secret_path(self, account):
         path = os.path.normpath(
@@ -394,6 +404,9 @@ class PlayerSpec:
             + [
                 f"BYOND_KEY_FILE={target}",
                 f"GATEWAY_CONTROLLER_SOCKET={controller_socket_target}",
+                "SELKIES_MODE=websockets",
+                "SELKIES_RUN_AFTER_CONTROLLER_CONNECT=/usr/local/bin/report-controller-presence connected",
+                "SELKIES_RUN_AFTER_CONTROLLER_DISCONNECT=/usr/local/bin/report-controller-presence disconnected",
             ],
             "Labels": labels,
             "HostConfig": host,
@@ -617,9 +630,11 @@ class SessionManager:
         try:
             name = self._container_name(session)
             secret_path = self.spec.secret_path(account)
-            socket_directory = os.path.join(
-                self.spec.controller_socket_directory, session.session_id
-            )
+            socket_base = self.spec.controller_socket_directory
+            os.makedirs(socket_base, mode=0o700, exist_ok=True)
+            if os.path.islink(socket_base):
+                raise OSError("Controller socket directory must not be a symlink")
+            socket_directory = os.path.join(socket_base, session.session_id)
             os.makedirs(socket_directory, mode=0o700, exist_ok=True)
             socket_path = os.path.join(socket_directory, f"{session.session_id}.sock")
 
@@ -630,9 +645,7 @@ class SessionManager:
                 if manager is not None:
                     manager._handle_controller_event(account, session.session_id, event)
 
-            channel = ControllerEventChannel(
-                socket_path, controller_event
-            )
+            channel = ControllerEventChannel(socket_path, controller_event)
             with self._meta_lock:
                 self._controller_channels[account] = channel
             body = self.spec.container_body(

@@ -397,7 +397,9 @@ class SessionManagerTest(unittest.TestCase):
                 )
             ),
         )
-        self.assertFalse([result for result in results if isinstance(result, Exception)])
+        self.assertFalse(
+            [result for result in results if isinstance(result, Exception)]
+        )
         self.assertIsNone(self.state())
         self.assertEqual(self.docker.containers, {})
 
@@ -592,7 +594,17 @@ class SessionManagerTest(unittest.TestCase):
         for field in ("memory", "nano_cpus", "pids_limit", "shm_size"):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 PlayerSpec("player", SECCOMP, "/tmp", **{field: 0})
-        for key in ("HOME", "WINEPREFIX", "BYOND_KEY_FILE"):
+        for key in (
+            "HOME",
+            "WINEPREFIX",
+            "BYOND_KEY_FILE",
+            "GATEWAY_CONTROLLER_SOCKET",
+            "SELKIES_MODE",
+            "SELKIES_RUN_AFTER_CONNECT",
+            "SELKIES_RUN_AFTER_DISCONNECT",
+            "SELKIES_RUN_AFTER_CONTROLLER_CONNECT",
+            "SELKIES_RUN_AFTER_CONTROLLER_DISCONNECT",
+        ):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 PlayerSpec("player", SECCOMP, "/tmp", environment={key: "x"})
         with self.assertRaises(ValueError):

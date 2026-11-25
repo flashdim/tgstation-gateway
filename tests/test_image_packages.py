@@ -70,6 +70,7 @@ class ImagePackagesTest(unittest.TestCase):
                 "apt-get": (
                     'printf "apt-get %s\\n" "$*" >> "$LOG"\n[ "$1" != "$FAIL_APT" ]'
                 ),
+                "patch": 'printf "patch %s\\n" "$*" >> "$LOG"',
                 "rm": 'printf "rm %s\\n" "$*" >> "$LOG"',
             }.items():
                 command = root / name

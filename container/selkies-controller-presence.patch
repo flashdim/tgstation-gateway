@@ -1,13 +1,13 @@
 --- a/selkies/stream_server.py
 +++ b/selkies/stream_server.py
-@@ -1877,6 +1877,7 @@
+@@ -1877,5 +1877,6 @@
          self.web_files_ctx: Optional[tempfile.TemporaryDirectory] = None
  
          self._clients_present: bool = False
 +        self._controllers_present: bool = False
          self._client_hook_tasks: Set[asyncio.Task] = set()
  
-@@ -1936,6 +1937,17 @@
+@@ -1936,6 +1936,18 @@
              self._client_hook_tasks.add(task)
              task.add_done_callback(self._client_hook_tasks.discard)
  
@@ -28,13 +28,13 @@
          name = "run_after_connect" if present else "run_after_disconnect"
 --- a/selkies/websockets_mode.py
 +++ b/selkies/websockets_mode.py
-@@ -2013,6 +2013,7 @@
+@@ -2013,4 +2013,5 @@
          )
          self.clients: set[web.WebSocketResponse] = set()
 +        self.controller_clients: set[web.WebSocketResponse] = set()
          self.app = None
          self.cli_args = settings
-@@ -5159,6 +5160,10 @@
+@@ -5159,6 +5159,10 @@
          """Tell the supervisor whether any client is connected (idle shutdown gate)."""
          if self.supervisor:
              self.supervisor.set_clients_present(bool(self.clients))
@@ -45,7 +45,7 @@
  
      def _holds_input_authority(self, websocket: web.WebSocketResponse,
                                 perms: Optional[dict] = None) -> bool:
-@@ -5278,12 +5283,15 @@
+@@ -5278,10 +5278,13 @@
          raddr = remote_address
          self.clients.add(websocket)
          perms = client_permissions.get(websocket) or {}
@@ -59,7 +59,7 @@
 +        self._report_controller_presence()
          self.data_ws = (
              websocket 
-@@ -5298,8 +5306,10 @@
+@@ -5298,7 +5298,9 @@
              await websocket.send_str(f"MODE {self.mode}")
          except (ConnectionResetError, OSError, RuntimeError):
              self.clients.discard(websocket)
@@ -69,7 +69,7 @@
              if self.data_ws is websocket:
                  self.data_ws = None
              return
-@@ -6272,6 +6282,8 @@
+@@ -6272,5 +6272,7 @@
              # Dropped first: the authority and consumer verdicts below must see
              # the remaining clients only.
              self.clients.discard(websocket)
@@ -77,7 +77,7 @@
 +            self._report_controller_presence()
              data_logger.debug(f"Cleaning up Data WS handler for {raddr} (Display ID: {client_display_id})...")
              await capture_demand.sync(self)
-@@ -7953,8 +7965,10 @@
+@@ -7953,5 +7953,7 @@
  
          self.clients.clear()
 +        self.controller_clients.clear()

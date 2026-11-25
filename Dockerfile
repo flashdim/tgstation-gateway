@@ -34,7 +34,8 @@ RUN set -eu; \
       "wine64=$WINE_PACKAGE_VERSION" cabextract unzip wget xz-utils \
       fonts-liberation libfreetype6:i386 libfontconfig1:i386 patch \
       libgnutls30t64:i386 libgssapi-krb5-2:i386 libvulkan1:i386; \
-    patch -p1 -d /usr/local/lib/python3.14/dist-packages < /tmp/selkies-controller-presence.patch; \
+    patch -p1 -d /usr/local/lib/python3.14/dist-packages \
+      -i /tmp/selkies-controller-presence.patch; \
     rm /tmp/selkies-controller-presence.patch; \
     apt-get purge -y patch; \
     apt-get autoremove -y; \

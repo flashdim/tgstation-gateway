@@ -12,9 +12,11 @@ The current repository provides a single-player BYOND image and an optional
 landing-page prototype with validated slot configuration, an in-memory lifecycle
 model, deployment-scoped container ownership labels and an unconnected,
 slot lifecycle manager with per-account file mounts and disposable volumes.
-Orchestration is not connected: it does
-not create or manage player sessions, and a complete authenticated gameplay
-session remains unverified.
+The standalone manager now consumes a private, per-session Selkies
+controller-WebSocket presence channel and enforces a 30-second reconnect grace.
+It is not connected to landing routes or authenticated session ownership:
+orchestration is not connected, and a complete authenticated gameplay session
+remains unverified.
 
 This is a private, self-hosted solution. Access control and connection security
 are the operator's responsibility outside the project. The gateway must still
