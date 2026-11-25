@@ -91,7 +91,7 @@ jobs:
         run: |
           docker run -d --name landing -p 127.0.0.1:8000:8000 \
             -e GATEWAY_PLAY_HOST=play.example.test \
-            -e GATEWAY_SLOT_COUNT=8 \
+            -e GATEWAY_SLOT_COUNT=5 \
             -e GATEWAY_SLOT_PATH='/{account}/' \
             tgstation-gateway-landing:screenshot
           curl -fsS --retry 30 --retry-delay 1 --retry-all-errors http://127.0.0.1:8000/slots.js >/dev/null

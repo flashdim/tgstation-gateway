@@ -19,7 +19,7 @@ jobs. Each image is published only after its own checks pass, but neither job
 waits for the other: if one fails, the other image may already be published for
 that release. Re-run the failed job for transient failures; otherwise fix the
 cause in a new release.
-After unit tests pass, `landing-screenshot` renders the landing page with eight
+After unit tests pass, `landing-screenshot` renders the landing page with five
 slots in Chromium and uploads a desktop `landing-desktop.png` as an unzipped
 artifact, downloadable from the run summary. It is a
 visual aid, not a gameplay check.
