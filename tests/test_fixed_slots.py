@@ -38,6 +38,8 @@ class FixedSlotsTest(unittest.TestCase):
         first, second = result["services"].values()
         self.assertEqual(first["ports"][0]["published"], "18080")
         self.assertEqual(second["ports"][0]["published"], "18081")
+        self.assertEqual(first["environment"]["SELKIES_SUBFOLDER"], "/LGplayer01/")
+        self.assertEqual(second["environment"]["SELKIES_SUBFOLDER"], "/LGplayer02/")
         self.assertEqual(first["ports"][0]["host_ip"], "127.0.0.1")
         self.assertEqual(first["restart"], "unless-stopped")
         self.assertEqual(second["restart"], "unless-stopped")
@@ -106,6 +108,7 @@ class FixedSlotsTest(unittest.TestCase):
             {"GATEWAY_PORT": "65535"},
             {"GATEWAY_PORT": "0"},
             {"GATEWAY_SLOT_PATH": "/"},
+            {"GATEWAY_SLOT_PATH": "/{account}"},
             {"GATEWAY_SECRET_DIRECTORY": "relative"},
             {"BYOND_SERVER": ""},
             {"GATEWAY_FIXED_LANDING": "1", "GATEWAY_LANDING_PORT": "18081"},

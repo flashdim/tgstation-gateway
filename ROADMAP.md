@@ -8,11 +8,13 @@ multi-player deployment targets one Docker host, with a fixed number of
 always-running player containers permanently assigned to accounts. Keep the
 game server and tgstation-server separate; neither is managed by this project.
 
-The current repository provides a single-player BYOND image and an optional
-landing-page prototype with validated slot configuration, and a Compose
-generator for fixed account containers. The landing links do not establish
-authenticated ownership or report container health. End-to-end routing and a
-complete authenticated gameplay session remain unverified.
+The current repository provides a single-player BYOND image, an optional
+landing-page prototype with validated slot configuration, a Compose generator
+for fixed account containers, and an optional two-account nginx boundary
+example. The landing links do not establish authenticated ownership or report
+container health. The example has been tested with mock backends and partially
+checked against the pinned Selkies base, but a complete authenticated gameplay
+session and the operator's actual deployment remain unverified.
 
 This is a private, self-hosted solution. Access control and connection security
 are the operator's responsibility outside the project. The gateway must still

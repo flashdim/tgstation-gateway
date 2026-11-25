@@ -122,15 +122,14 @@ With more than one slot, `GATEWAY_SLOT_PATH` must contain `{account}` or
 `{number}` so each slot has a distinct link. Prefixes contain 1–24 ASCII letters,
 digits, `_` or `-`. Paths permit ASCII letters, digits, `.`, `_`, `~`, `/`, `-`
 and the two placeholders; `.` and `..` segments, repeated slashes, percent
-encoding, query strings and fragments are rejected. The routing model accepts
-only exact generated paths/accounts, rejecting unknown or out-of-range slots.
-No client-provided destination or arbitrary upstream is accepted.
-The landing page only builds these
-links; the operator's reverse proxy must route each path (or host) to the
+encoding, query strings and fragments are rejected. These checks validate the
+landing configuration, not requests to the proxy. The landing page only builds
+these links; the operator's reverse proxy must route each path to the
 corresponding player container. The example Compose file runs one player, so
 only a single-slot configuration reaches a working player without additional
-routing. Invalid values stop the landing container at startup with an error
-naming the variable. Startup logs list each generated slot URL.
+routing. Fixed deployments require paths ending in `/`. Invalid values stop
+the landing container at startup with an error naming the variable. Startup
+logs list each generated slot URL.
 
 ### Fixed account containers
 
@@ -241,8 +240,73 @@ operator must configure a reverse proxy to route each generated path to the
 matching loopback port and enforce authenticated ownership **before** routing,
 including WebSockets and any viewer access. An account name or path alone is
 not proof of ownership. Protect the landing page and direct player ports; do
-not expose Docker or unauthenticated streams to players. No proxy or ownership
-integration is provided or verified.
+not expose Docker or unauthenticated streams to players.
+
+#### Two-account nginx example
+
+`examples/nginx-fixed-slots.conf` is an optional external boundary for the
+two-account configuration above, using nginx HTTP Basic authentication over
+TLS. It maps `/LGplayer01/` to loopback port 8080 and `/LGplayer02/` to
+8081, with a separate password file per account. The fixed-slot generator
+sets each player's `SELKIES_SUBFOLDER` to its configured path; nginx must pass
+the prefix through unchanged. The example uses `SELKIES_MODE=websockets`;
+WebRTC is not covered. The proxy does not manage containers or expose Docker.
+
+Before enabling it, the operator must:
+
+1. Use the fixed deployment settings shown above with the default account
+   prefix and ports (`GATEWAY_PORT=8080`), and keep `SELKIES_MODE=websockets`.
+   Adapt **every** nginx location, port, account and password file if those
+   settings change. Do not leave an old route enabled after reassignment.
+2. Install nginx on the Docker host. Configure a valid certificate and private
+   key at the paths in the example, replace **both** `play.example.org`
+   occurrences with the public DNS name, and ensure the nginx master can read
+   the key. Include the example server block in nginx's `http` configuration.
+   Configure certificate renewal and test with `nginx -t` before reload.
+3. Create `/etc/nginx/gateway/LGplayer01.htpasswd` and
+   `/etc/nginx/gateway/LGplayer02.htpasswd` with `htpasswd -c -B FILE USER`,
+   entering a distinct strong password interactively for each. Each file must
+   contain **only** the identity or identities explicitly authorized for that
+   account; anyone in that file can control or view that desktop. Do not reuse
+   credentials across accounts. Protect the directory, files and backups while
+   allowing nginx workers to read the password files. Never commit them.
+4. Ensure no other nginx virtual host, proxy, host listener, firewall rule,
+   Docker network or forwarded port exposes either backend. The example
+   deliberately returns 404 for other paths and does not serve the landing
+   page; protect the landing separately if it is published. Only trusted
+   administrators and processes may access loopback, the Docker daemon or
+   container networks. Docker port publishing and host firewall rules must be
+   verified for IPv4 **and** IPv6 on the actual host.
+
+Basic authentication is only one possible external implementation, not a
+requirement to use nginx or a particular identity provider. The example
+authenticates all paths under each slot, including assets, API requests,
+WebSocket upgrades and viewer traffic; it removes the Basic credential before
+forwarding and disables nginx access logs. Protect and review error logs too:
+do not record credentials, tokens, query strings or player data. The default
+Selkies same-origin WebSocket protection must not be relaxed. `#shared` is a
+browser-side viewer selection, not a secret or an authorization decision;
+viewing still requires access to the account, and anyone authorized for that
+account can also open its controller.
+
+This Basic-auth example is not compatible with WebKit browsers that omit
+Basic credentials from WebSocket handshakes: nginx will reject their streams.
+Selkies' own Basic-auth socket cookie does not authenticate to nginx. Use a
+separately verified external cookie-based authentication boundary if those
+browsers are required; do not bypass authorization for upgrades.
+
+The integration test `python3 -m unittest discover -s tests -p test_fixed_proxy.py`
+requires nginx and OpenSSL; it otherwise skips. It exercises this configuration
+over TLS with two instrumented mock backends, including denied cross-account,
+forged-header, unknown-host, traversal and WebSocket requests. It does not
+prove host firewall isolation or live media. In a disposable local check of the
+pinned Selkies 2.2.1 base image with `/LGplayer01/`, nginx served the page,
+manifest, JavaScript and health endpoint, rejected an unauthenticated upgrade,
+and forwarded an authenticated `/api/websockets` upgrade (101); a disallowed
+browser Origin was rejected (403). The missing-slash path returned 404, not a
+redirect. This does not verify the full player image, viewer behavior, media
+or gameplay. Recheck all paths, redirects and browser requests on the actual
+deployment after changing Selkies, proxy or transport settings.
 
 #### External boundary verification
 
@@ -273,8 +337,8 @@ slots, verify the operator's actual boundary before use:
    Check host firewall and proxy configuration as well as Compose bindings.
 
 Record the proxy, identity provider, transport, versions, configuration and
-results without recording credentials or player data. These are operator
-acceptance checks, not tests performed by this project. A passing HTTP check
+results without recording credentials or player data. These remain operator
+acceptance checks for the actual deployment. A passing HTTP check
 alone does not verify streaming or a WebSocket authorization decision.
 
 Stock Selkies uses a three-second reconnect grace for a disconnected display,
@@ -437,8 +501,8 @@ set `webrtc` to use WebRTC instead),
 `SELKIES_VIDEO_BITRATE`, `SELKIES_AUDIO_BITRATE`, `SELKIES_ENABLE_RESIZE`, and
 `SELKIES_SCALING_DPI`.
 
-The WebSocket default and its behavior through a reverse proxy have not yet
-been verified in an interactive session. WebRTC may require additional network
+The WebSocket default has not yet been verified through a reverse proxy in an
+interactive session. WebRTC may require additional network
 configuration; an HTTP reverse proxy alone does not necessarily carry its media.
 
 To use a fixed size:
