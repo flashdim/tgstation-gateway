@@ -39,7 +39,7 @@
       details.className = "slot-details";
       const status = document.createElement("span");
       status.className = "slot-status";
-      status.textContent = available ? "AVAILABLE SLOT" : slot.state.replaceAll("_", " ").toUpperCase();
+      status.textContent = available ? "ACCOUNT SLOT" : slot.state.replaceAll("_", " ").toUpperCase();
       const account = document.createElement("strong");
       account.textContent = slot.account;
       const action = document.createElement("span");

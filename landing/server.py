@@ -144,7 +144,7 @@ def main():
         LandingHandler.status_monitor = StatusMonitor(config)
         threading.Thread(target=LandingHandler.status_monitor.run, daemon=True).start()
     for slot in registry.snapshot():
-        print(f"Slot {slot['account']}: {slot['url']} (unallocated)", flush=True)
+        print(f"Slot {slot['account']}: {slot['url']} (status unknown)", flush=True)
     handler = partial(LandingHandler, directory=PAGE_ROOT)
     ThreadingHTTPServer(("0.0.0.0", 8000), handler).serve_forever()
     return 0

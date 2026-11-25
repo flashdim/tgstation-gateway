@@ -4,17 +4,15 @@
 
 The long-term goal is to enable players to use the standard Windows BYOND client
 in a browser to play one operator-configured tgstation server. The first
-multi-player deployment targets one Docker host: a session manager creates a
-disposable player container on demand for each player. Keep the game server and
-tgstation-server separate; neither is managed by this project.
+multi-player deployment targets one Docker host, with a fixed number of
+always-running player containers permanently assigned to accounts. Keep the
+game server and tgstation-server separate; neither is managed by this project.
 
 The current repository provides a single-player BYOND image and an optional
-landing-page prototype with validated slot configuration, an in-memory lifecycle
-model, deployment-scoped container ownership labels and an unconnected,
-slot lifecycle manager with per-account file mounts and disposable volumes.
-Orchestration is not connected: it does
-not create or manage player sessions, and a complete authenticated gameplay
-session remains unverified.
+landing-page prototype with validated slot configuration, and a Compose
+generator for fixed account containers. The landing links do not establish
+authenticated ownership or report container health. End-to-end routing and a
+complete authenticated gameplay session remain unverified.
 
 This is a private, self-hosted solution. Access control and connection security
 are the operator's responsibility outside the project. The gateway must still
@@ -120,7 +118,7 @@ demonstrate interactive play or the release publish.
 ## 2. Verify real gameplay
 
 Prove that the image is usable against an actual tgstation server before
-building session orchestration around it.
+deploying multiple fixed account containers around it.
 
 - Manually verify browser connection, BYOND login and joining a test server.
 - Reproduce and diagnose the reported black game scene with solid-color tiles;
@@ -138,30 +136,23 @@ building session orchestration around it.
 session, including any unresolved compatibility, performance or identity
 limitations. Define deployment budgets from those measurements.
 
-## 3. Single-host session lifecycle
+## 3. Fixed single-host account slots
 
-Introduce a lightweight manager that runs on one Docker host and keeps the
-player image independently usable. A request starts a separate container for
-one player and targets the operator-configured server; it must not allow
-arbitrary player-selected server destinations.
+Run one persistent container per configured account, independent of browser
+connections. Use stock Selkies disconnect behavior and keep the player image
+independently usable.
 
-- Define the session API and configuration, including startup, readiness,
-  failure, explicit termination, idle expiration and reconnect behavior.
-- Route browser traffic, including streaming connections, to the correct
-  session. Define how the external access-control boundary supplies or
-  verifies session ownership before routing; untrusted client headers or
-  guessed session identifiers must not grant access.
-- Enforce session capacity and per-container resource limits. Handle concurrent
-  requests, startup failures and timeouts with explicit errors.
-- Reconcile managed containers after manager restart and clean up expired,
-  failed and orphaned sessions without affecting unrelated containers.
-- Keep the Docker API private to the manager, never exposed to players. Treat
-  access to the Docker daemon as privileged and document that trust boundary.
+- Provision the configured count, isolated data and per-account credentials;
+  document resource limits, restart behavior and operator cleanup.
+- Route browser traffic to the corresponding account. Verify ownership at the
+  external access-control boundary before routing; an account name or path
+  alone must not grant access.
+- Test failures, container recreation and host restart without affecting
+  unrelated containers or exposing Docker to players.
 
-**Exit:** integration tests demonstrate two isolated sessions, correct
-routing and ownership enforcement, capacity handling, cleanup and recovery;
-an operator can configure and run the manager on one host. External access
-controls remain required.
+**Exit:** integration tests demonstrate two isolated fixed slots, correct
+routing and ownership enforcement, failure recovery and safe data handling.
+External access controls remain required.
 
 ## 4. Private deployment readiness
 
@@ -171,7 +162,7 @@ public or multi-host infrastructure.
 - Validate multiple real clients, including simultaneous logins and gameplay,
   against the configured server. Resolve or clearly document shared-IP and
   computer-ID limitations without bypassing server bans.
-- Test resource exhaustion, disconnects, container crashes, host/manager
+- Test resource exhaustion, disconnects, container crashes, host
   restarts and cleanup of session data. Verify credentials and player data do
   not leak between sessions or into logs, images or caches.
 - Document installation, upgrades, capacity planning, troubleshooting,

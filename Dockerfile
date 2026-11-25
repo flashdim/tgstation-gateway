@@ -114,7 +114,6 @@ ENV PATH=/opt/wine-proton/bin:${PATH} \
     SELKIES_ENABLE_HTTPS=false \
     SELKIES_ENABLE_BASIC_AUTH=false \
     SELKIES_COMMAND_ENABLED=false \
-    SELKIES_RUN_AFTER_CONNECT=/usr/local/bin/reset-session \
     SELKIES_MODE=websockets \
     SELKIES_FRAMERATE=60 \
     SELKIES_UI_SIDEBAR_SHOW_SCREEN_SETTINGS=false \

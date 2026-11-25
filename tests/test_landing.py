@@ -842,7 +842,7 @@ process.stdout.write(JSON.stringify({list, error}));
         self.assertEqual(available["href"], "https://gateway.example/player/1?x=1")
         self.assertEqual(active["href"], "https://player.example/2?x=1#shared")
         self.assertEqual(
-            available["children"][1]["children"][0]["textContent"], "AVAILABLE SLOT"
+            available["children"][1]["children"][0]["textContent"], "ACCOUNT SLOT"
         )
         self.assertEqual(active["children"][1]["children"][0]["textContent"], "READY")
         self.assertEqual(

@@ -74,6 +74,9 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn("Name=Reset Session", desktop)
         self.assertIn("Exec=/usr/local/bin/reset-session", desktop)
         self.assertIn("exec s6-svc -k /etc/service/byond", script)
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertNotIn("SELKIES_RUN_AFTER_CONNECT=", dockerfile)
+        self.assertNotIn("SELKIES_RUN_AFTER_CONTROLLER_", dockerfile)
 
     def test_reset_requests_restart_and_propagates_supervisor_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -167,13 +170,12 @@ class DesktopSessionTest(unittest.TestCase):
                 )
                 self.assertIn(f"{setting}={rendered_default}", dockerfile)
 
-    def test_selkies_runs_reset_session_after_client_connects(self):
+    def test_selkies_uses_stock_presence_without_reset_hook(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         compose = (ROOT / "examples/compose.yaml").read_text()
-        self.assertIn(
-            "SELKIES_RUN_AFTER_CONNECT=/usr/local/bin/reset-session",
-            dockerfile,
-        )
+        self.assertNotIn("SELKIES_RUN_AFTER_CONNECT", dockerfile)
+        self.assertNotIn("SELKIES_RUN_AFTER_CONTROLLER_", dockerfile)
+        self.assertNotIn("selkies-controller-presence.patch", dockerfile)
         self.assertNotIn("SELKIES_RUN_AFTER_CONNECT", compose)
 
     def test_display_size_is_only_set_by_explicit_compose_overrides(self):
