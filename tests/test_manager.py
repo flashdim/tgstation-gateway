@@ -30,6 +30,7 @@ from manager import (  # noqa: E402
     SecretUnavailable,
     StartupFailed,
     StartupTimeout,
+    TraefikConfig,
     UnknownSession,
     UnknownSlot,
 )
@@ -262,6 +263,75 @@ class SessionManagerTest(unittest.TestCase):
                 secret_directory="/tmp",
                 environment={"A=B": "1"},
             )
+
+    def test_player_spec_validates_opt_in_traefik_configuration(self):
+        route = TraefikConfig("play.example.org", "player-auth@file")
+        with self.assertRaises(ValueError):
+            PlayerSpec("player", SECCOMP, "/tmp", traefik=route)
+        with self.assertRaises(ValueError):
+            PlayerSpec("player", SECCOMP, "/tmp", network="public", traefik="untrusted")
+        for domain, middleware, entrypoint in (
+            ("play.example.org/path", "player-auth@file", "https"),
+            ("play.example.org", "player-auth@file,other", "https"),
+            ("play.example.org", "player-auth@file", "https,other"),
+        ):
+            with self.subTest(
+                domain=domain, middleware=middleware, entrypoint=entrypoint
+            ):
+                with self.assertRaises(ValueError):
+                    TraefikConfig(domain, middleware, entrypoint)
+
+    def test_traefik_routes_are_unique_use_middleware_and_unpublished(self):
+        manager = make_manager(count=2)
+        manager.spec = PlayerSpec(
+            image="player:test",
+            seccomp_profile=SECCOMP,
+            secret_directory=manager.spec.secret_directory,
+            environment={"BYOND_SERVER": "byond://game.test:1337"},
+            network="public",
+            traefik=TraefikConfig(
+                "play.example.org", "player-auth@file", entrypoint="https"
+            ),
+        )
+        sessions = [
+            manager.start("LGplayer01"),
+            manager.start("LGplayer02"),
+        ]
+        label_sets = []
+        for account, session in zip(("LGplayer01", "LGplayer02"), sessions):
+            container = manager.docker.containers[session.container_id]
+            labels = container["labels"]
+            route_id = "gateway-" + session.session_id.replace("-", "")
+            router = f"{route_id}-router"
+            service = f"{route_id}-service"
+            self.assertEqual(container["body"]["HostConfig"]["NetworkMode"], "public")
+            self.assertEqual(labels["traefik.enable"], "true")
+            self.assertEqual(labels["traefik.docker.network"], "public")
+            self.assertEqual(
+                labels[f"traefik.http.routers.{router}.rule"],
+                f"Host(`{account.lower()}.play.example.org`)",
+            )
+            self.assertEqual(
+                labels[f"traefik.http.routers.{router}.middlewares"],
+                "player-auth@file",
+            )
+            self.assertEqual(
+                labels[f"traefik.http.services.{service}.loadbalancer.server.port"],
+                "8080",
+            )
+            self.assertNotIn("PortBindings", container["body"]["HostConfig"])
+            self.assertNotIn("ExposedPorts", container["body"])
+            label_sets.append(labels)
+        self.assertNotEqual(
+            set(label_sets[0])
+            - set(
+                manager.config.container_labels("LGplayer01", sessions[0].session_id)
+            ),
+            set(label_sets[1])
+            - set(
+                manager.config.container_labels("LGplayer02", sessions[1].session_id)
+            ),
+        )
 
     def test_secret_failures_and_retry(self):
         path = Path(self.manager.spec.secret_directory) / f"{self.account}_key.txt"

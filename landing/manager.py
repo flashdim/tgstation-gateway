@@ -10,12 +10,13 @@ from dataclasses import dataclass, field, replace
 import http.client
 import json
 import os
+import re
 import stat
 import socket
 import threading
 import time
 from urllib.parse import quote, urlencode
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sessions import LABEL_PREFIX, PROJECT, SessionState
 
@@ -85,6 +86,61 @@ class DockerError(Exception):
     def __init__(self, message, status=None):
         super().__init__(message)
         self.status = status
+
+
+@dataclass(frozen=True)
+class TraefikConfig:
+    """Trusted per-player route settings backed by an existing Traefik middleware."""
+
+    domain: str
+    middleware: str
+    entrypoint: str = "https"
+
+    def __post_init__(self):
+        domain_pattern = (
+            r"(?=.{1,253}\Z)(?:[a-zA-Z0-9]"
+            r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)"
+            r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+"
+        )
+        reference_pattern = r"[A-Za-z0-9][A-Za-z0-9_.-]*(?:@[A-Za-z0-9_-]+)?"
+        if not isinstance(self.domain, str) or not re.fullmatch(
+            domain_pattern, self.domain
+        ):
+            raise ValueError("Traefik player domain must be a DNS name")
+        if not isinstance(self.middleware, str) or not re.fullmatch(
+            reference_pattern, self.middleware
+        ):
+            raise ValueError("A single configured Traefik auth middleware is required")
+        if not isinstance(self.entrypoint, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_.-]*", self.entrypoint
+        ):
+            raise ValueError("Invalid Traefik entrypoint")
+
+    def labels(self, account, session_id, network):
+        if not isinstance(account, str) or not re.fullmatch(
+            r"[A-Za-z0-9_-]{1,26}", account
+        ):
+            raise ValueError("Invalid slot account for Traefik routing")
+        if not isinstance(session_id, str) or str(UUID(session_id)) != session_id:
+            raise ValueError("Traefik route requires a canonical session UUID")
+        if not isinstance(network, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_.-]*", network
+        ):
+            raise ValueError("Traefik routing requires a valid shared Docker network")
+        route_host = f"{account.lower().replace('_', '-')}.{self.domain}"
+        route_id = "gateway-" + session_id.replace("-", "")
+        router = f"{route_id}-router"
+        service = f"{route_id}-service"
+        return {
+            "traefik.enable": "true",
+            "traefik.docker.network": network,
+            f"traefik.http.routers.{router}.rule": f"Host(`{route_host}`)",
+            f"traefik.http.routers.{router}.entrypoints": self.entrypoint,
+            f"traefik.http.routers.{router}.tls": "true",
+            f"traefik.http.routers.{router}.middlewares": self.middleware,
+            f"traefik.http.routers.{router}.service": service,
+            f"traefik.http.services.{service}.loadbalancer.server.port": "8080",
+        }
 
 
 class _UnixConnection(http.client.HTTPConnection):
@@ -224,6 +280,7 @@ class PlayerSpec:
     secret_directory: str
     environment: dict = field(default_factory=dict)
     network: str | None = None
+    traefik: TraefikConfig | None = None
     shm_size: int = 2 * 1024**3
     memory: int = 4 * 1024**3
     nano_cpus: int = 2 * 10**9
@@ -244,6 +301,10 @@ class PlayerSpec:
             self.secret_directory
         ):
             raise ValueError("Secret directory must be an absolute path")
+        if self.traefik is not None and not isinstance(self.traefik, TraefikConfig):
+            raise ValueError("Traefik configuration must be operator-supplied")
+        if self.traefik and not self.network:
+            raise ValueError("Traefik routing requires a shared Docker network")
         for value in (self.shm_size, self.memory, self.nano_cpus, self.pids_limit):
             if type(value) is not int or value <= 0:
                 raise ValueError("Resource limits must be positive integers")
@@ -452,6 +513,12 @@ class SessionManager:
             body = self.spec.container_body(
                 self.config.container_labels(account, session.session_id), secret_path
             )
+            if self.spec.traefik:
+                body["Labels"].update(
+                    self.spec.traefik.labels(
+                        account, session.session_id, self.spec.network
+                    )
+                )
             creating = True
             container_id = self.docker.create(name, body)
             creating = False
