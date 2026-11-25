@@ -418,10 +418,17 @@ display mode, screenshots and any failures separately from startup or health
 checks.
 
 Selkies follows the browser's display size by default. Common stream and
-display settings can be overridden with `SELKIES_MODE` (default `webrtc`),
+display settings can be overridden with `SELKIES_MODE` (default `websockets`;
+set `webrtc` to use WebRTC instead),
 `SELKIES_FRAMERATE` (default `60`),
 `SELKIES_VIDEO_BITRATE`, `SELKIES_AUDIO_BITRATE`, `SELKIES_ENABLE_RESIZE`, and
-`SELKIES_SCALING_DPI`. To use a fixed size:
+`SELKIES_SCALING_DPI`.
+
+The WebSocket default and its behavior through a reverse proxy have not yet
+been verified in an interactive session. WebRTC may require additional network
+configuration; an HTTP reverse proxy alone does not necessarily carry its media.
+
+To use a fixed size:
 
 ```sh
 SELKIES_MANUAL_WIDTH=1280 SELKIES_MANUAL_HEIGHT=720 \
