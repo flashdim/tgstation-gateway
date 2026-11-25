@@ -99,7 +99,7 @@ jobs:
       - name: Capture screenshots
         run: |
           python3 -m venv "$RUNNER_TEMP/shot-env"
-          "$RUNNER_TEMP/shot-env/bin/pip" install playwright==1.49.1
+          "$RUNNER_TEMP/shot-env/bin/pip" install playwright==1.65.2
           "$RUNNER_TEMP/shot-env/bin/playwright" install --with-deps chromium
           mkdir -p screenshots
           "$RUNNER_TEMP/shot-env/bin/python" - <<'EOF'
