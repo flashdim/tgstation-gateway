@@ -5,6 +5,7 @@
   let invalid = !Array.isArray(slots) || slots.length === 0;
 
   if (Array.isArray(slots)) {
+    list.style.setProperty("--columns", Math.max(1, Math.ceil(Math.sqrt(slots.length))));
     for (const slot of slots) {
       let url;
       try {

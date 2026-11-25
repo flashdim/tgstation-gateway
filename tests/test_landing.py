@@ -193,13 +193,15 @@ class LandingPageTest(unittest.TestCase):
         )
         self.assertNotRegex(css, r"\.narsie img \{[^}]*filter:")
 
-    def test_slots_use_a_compact_scrollable_responsive_grid(self):
+    def test_slots_use_a_compact_scrollable_grid_with_centered_last_row(self):
         css = (LANDING / "style.css").read_text()
         self.assertRegex(
             css,
-            r"\.slots \{[^}]*grid-template-columns: repeat\(auto-fit, "
-            r"minmax\(min\(100%, 130px\), 1fr\)\);[^}]*"
-            r"max-height: 50vh; overflow-y: auto;",
+            r"\.slots \{[^}]*display: flex; flex-wrap: wrap; "
+            r"justify-content: center;[^}]*max-height: 50vh; overflow-y: auto;",
+        )
+        self.assertRegex(
+            css, r"\.slot \{\s*flex: 0 0 calc\(\(100% - \(var\(--columns, 1\) - 1\)"
         )
         self.assertRegex(css, r"\.slot-details \{[^}]*overflow-wrap: anywhere;")
         self.assertNotIn("min-height: 132px", css)
@@ -703,7 +705,7 @@ assert.equal(singularity.hidden, true);
 const fs = require("fs");
 const vm = require("vm");
 class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.hidden = true; }
+  constructor(tag) { this.tag = tag; this.children = []; this.hidden = true; this.style = { setProperty: (name, value) => { this[name] = value; } }; }
   append(...children) { this.children.push(...children); }
   setAttribute(name, value) { this[name] = value; }
 }
@@ -826,6 +828,15 @@ process.stdout.write(JSON.stringify({list, error}));
             [{"account": "</script>", "url": "https://x/", "state": None}]
         ).decode()
         self.assertNotIn("</script>", js)
+
+    def test_grid_columns_scale_to_a_square(self):
+        for count, columns in ((1, 1), (4, 2), (5, 3), (9, 3), (10, 4)):
+            with self.subTest(count=count):
+                slots = [
+                    {"account": f"LGplayer{n:02}", "url": f"/{n}/", "state": None}
+                    for n in range(count)
+                ]
+                self.assertEqual(self.render(slots)["list"]["--columns"], columns)
 
     def test_statuses_and_urls(self):
         result = self.render(
