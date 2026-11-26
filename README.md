@@ -11,7 +11,7 @@
   <a href="https://github.com/Kron4ek/Wine-Builds"><img src="https://img.shields.io/badge/Proton%20Wine-10.0--4-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Proton Wine 10.0-4"></a>
 </p>
 
-The repository currently provides an experimental single-player BYOND image and an optional landing-page prototype. The player streams the screen and audio; it does not host a game server or manage player sessions, and a complete authenticated gameplay session has not been verified.
+The repository currently provides an experimental single-player BYOND image, an optional landing-page prototype and a fixed-slot manager. The player streams the screen and audio; it does not host a game server or dynamically assign browser sessions, and a complete authenticated gameplay session has not been verified.
 <img src="docs/landing-desktop.png" alt="Landing page rendered by the CI landing-screenshot job">
 
 ## Architecture
@@ -215,71 +215,91 @@ account volumes. `down -v` deletes volumes declared in the current configuration
 but not necessarily orphan volumes from earlier configurations. Deletion is not
 secure erasure. Treat volumes, container layers and backups as sensitive.
 
-#### Optional Traefik slot router
+#### Managed slots behind Traefik
 
-`examples/slot-router.py` generates the fixed deployment with a Caddy router
-behind an existing Traefik Docker provider. Traefik terminates HTTPS; the
-router forwards HTTP and WebSocket requests to the landing page or the
-matching player container. No landing, player or router ports are published.
-The router listens only on the Traefik-facing network, not on the individual
-player networks. The standalone player and external-proxy deployments are
-unchanged.
+`examples/compose.traefik.yaml` starts the landing page, Caddy router and a
+slot manager. The manager creates one persistent player container per slot
+and reconciles missing or stopped containers. Traefik terminates HTTPS and
+forwards requests to the router, which routes `/LGplayer01/` and subsequent
+slot paths to their corresponding players. No gateway ports are published.
+Players start asynchronously; check manager logs and player health before use.
 
 **The router does not authenticate or authorize users.** Anyone who reaches it
-can view and control every slot, including its persistent account data. A
-Cloudflare proxy alone does not provide authentication. Restrict who may
-access the site using your existing external boundary, and prevent direct
-access to Traefik and the origin from bypassing it. Only trusted containers
-should join the Traefik network; Docker and host administrators can also
-reach internal networks. The connection from Traefik to the router is HTTP.
-Use Cloudflare Full (strict) with a valid Traefik certificate to protect the
-Cloudflare-to-origin connection.
+can control every slot and access its persistent data. Cloudflare proxying
+alone is not authentication. Protect the site with an external access boundary
+and prevent direct-origin bypasses. This example connects the landing and
+player containers to the existing `public` network so they can resolve
+`tgstation`. **Any container on that network can also connect directly to
+player streams**, bypassing Traefik. Use it only with trusted containers and
+operators; Docker and host administrators can also reach the backends.
+Traefik-to-router traffic is HTTP. For Cloudflare-to-origin protection, use
+Full (strict) with a valid Traefik certificate.
 
-Create the shared Traefik network beforehand and use Docker Compose 2.23.1 or
-newer. With the example Traefik network `public`, HTTPS entrypoint `https` and
-domain `www.lazorgator.party`, generate the configuration from the repository
-root:
+**The manager has unrestricted Docker daemon access**, equivalent to host root.
+It is a privileged component, not a player-accessible API. Only the manager
+mounts the Docker socket; the landing page, router and player containers do
+not. Do not mount that socket in other services or use this deployment on an
+untrusted Docker host.
+
+From a repository checkout, with Docker Compose 2.23.1 or newer and an existing
+`public` network shared by Traefik and the BYOND server:
 
 ```sh
 export GATEWAY_PLAY_HOST=www.lazorgator.party
 export GATEWAY_TRAEFIK_NETWORK=public GATEWAY_TRAEFIK_ENTRYPOINT=https
-export GATEWAY_DEPLOYMENT_ID=my-gateway GATEWAY_SLOT_COUNT=2
-export BYOND_SERVER=game.example.org:1337
-umask 077
-tmp=$(mktemp /tmp/gateway-router-compose.XXXXXXXX)
-if python3 examples/slot-router.py > "$tmp" &&
-  mv "$tmp" /tmp/gateway-router-compose.json; then
-  docker compose -f /tmp/gateway-router-compose.json up -d --remove-orphans
-else
-  rm -f -- "$tmp"
-  echo "Generation failed; existing deployment was not changed." >&2
-fi
+export GATEWAY_DEPLOYMENT_ID=tgportals
+export GATEWAY_SLOT_COUNT=4
+export BYOND_SERVER=tgstation:1337
+export GATEWAY_QUERY_HOST=tgstation GATEWAY_QUERY_PORT=1337
+# Use the development tags if a latest release is not available.
+export GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev
+export GATEWAY_LANDING_IMAGE=ghcr.io/flashdim/tgstation-gateway-landing:dev
+docker compose -f examples/compose.traefik.yaml up -d
+docker compose -f examples/compose.traefik.yaml ps --all
+docker compose -f examples/compose.traefik.yaml logs manager
+docker ps -a --filter label=io.tgstation-gateway.deployment=tgportals
 ```
 
-The generated router carries Traefik Docker labels for the configured host,
-HTTPS entrypoint and network, with backend port 8080. Remove the old
-`tgstation-landing` router/service labels from the separately deployed landing
-container before enabling the new route: two routers for the same host may
-conflict. Move any additional middleware, certificate resolver or other custom
-labels to the generated router using a Compose override. Traefik must be
-allowed to discover the router and its shared network. Existing certificates
-and HTTPS redirects remain Traefik's responsibility.
+`GATEWAY_QUERY_HOST` and `GATEWAY_QUERY_PORT` are optional and control the
+landing page's status panel. Set the image variables to the desired release or
+PR development tags. Keep `GATEWAY_DEPLOYMENT_ID` unique and stable: it names
+the Compose project, Traefik route and persistent account volumes. It must
+contain 1–48 lowercase letters, digits, underscores or hyphens and start with
+a letter or digit. Do not override the Compose project name with `-p` or
+`COMPOSE_PROJECT_NAME`, run multiple managers for the same deployment, or
+reuse a project belonging to another deployment. The manager builds locally
+from the repository using the pinned Docker CLI image; use `up -d --build`
+after updating its source. Set these variables in the shell or a Compose
+`.env` file, not just in the landing container's environment.
 
-The generator defaults to `GATEWAY_SLOT_PATH=/{account}/`, requires HTTPS
-landing URLs and `SELKIES_MODE=websockets`, and preserves custom non-root slot
-paths except those under `/assets/`. It reuses the fixed deployment's BYOND,
-GPU and key-file settings; `GATEWAY_PORT` and `GATEWAY_LANDING_PORT` are
-ignored because backends are not published. Re-generate after changing settings
-or slot count, and keep `GATEWAY_DEPLOYMENT_ID` stable to retain account volumes. Like the
-fixed deployment, `--remove-orphans` affects the entire named Compose project;
-never reuse its project name for unrelated services.
+Remove the old `tgstation-landing` Traefik labels or stop that deployment
+before enabling the new router: two routes for the same host can conflict.
+Move any additional middleware or certificate-resolver labels to the router.
+Traefik must discover the router on the shared network; its certificate and
+HTTPS redirects remain operator responsibilities.
+
+Set `GATEWAY_SLOT_COUNT` to 1–99 and rerun `docker compose ... up -d` after
+changing it. The manager removes extra owned containers but retains their Wine
+and data volumes; increasing the count restores those account volumes. It
+refuses containers or volumes with conflicting ownership labels. Changing the
+BYOND server, player image or network recreates the affected player containers.
+To update an existing image tag, pull it first and restart the manager.
+Managed players use WebSocket mode, the project's seccomp profile, and fixed
+resource limits; this deployment does not provision per-account BYOND key
+files or GPU devices. Container startup does not establish playable sessions.
+
+The manager-created player containers and their named volumes are **not**
+Compose services or Compose-managed volumes. `docker compose down` stops the
+manager and router but does **not** stop or remove the players; `down -v` does
+not delete their data. Inspect and deliberately stop/remove them and their
+volumes separately when no longer needed. Their volume names differ from the
+`fixed-slots.py` deployment; no account data is migrated automatically.
 
 The router strips cookies, authorization headers and Cloudflare Access headers
-before forwarding to backends. It does not validate those headers. The
-integration test checks generated Traefik routing, WebSocket upgrades and
-player-network isolation with mock backends, not Cloudflare, live media or gameplay.
-Before sharing access, verify your actual Cloudflare/Traefik authorization,
-direct-origin restrictions, both slot routes, WebSocket reconnects and gameplay.
+before forwarding, but does not validate them. Before sharing access, verify
+your external authorization, direct-origin restrictions, all slot routes,
+WebSocket reconnects and gameplay. Integration tests use mock backends; real
+Cloudflare, media and gameplay remain unverified.
 
 #### Recovery and operator cleanup
 

@@ -10,11 +10,12 @@ game server and tgstation-server separate; neither is managed by this project.
 
 The current repository provides a single-player BYOND image, an optional
 landing-page prototype with validated slot configuration, a Compose generator
-for fixed account containers, and an optional two-account nginx boundary
-example. The landing links do not establish authenticated ownership or report
-container health. The example has been tested with mock backends and partially
-checked against the pinned Selkies base, but a complete authenticated gameplay
-session and the operator's actual deployment remain unverified.
+for fixed account containers, an optional two-account nginx boundary example,
+and a fixed-slot manager with a Traefik router. The manager starts persistent
+players but does not assign or authorize users. Landing links do not establish
+authenticated ownership or report container health. Routing and lifecycle
+fixtures use mock backends; a complete authenticated gameplay session and the
+operator's actual deployment remain unverified.
 
 This is a private, self-hosted solution. Access control and connection security
 are the operator's responsibility outside the project. The gateway must still

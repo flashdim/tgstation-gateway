@@ -1,9 +1,7 @@
-import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
@@ -11,163 +9,114 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "examples/slot-router.py"
-spec = importlib.util.spec_from_file_location("slot_router", SCRIPT)
-router = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(router)
+COMPOSE = ROOT / "examples/compose.traefik.yaml"
 
 
-class SlotRouterTest(unittest.TestCase):
+class ComposeTest(unittest.TestCase):
     def setUp(self):
         self.env = {
-            "PATH": os.environ["PATH"],
-            "HOME": os.environ["HOME"],
+            **os.environ,
+            "GATEWAY_DEPLOYMENT_ID": "gatewaytest",
             "GATEWAY_PLAY_HOST": "play.example.org",
             "GATEWAY_TRAEFIK_NETWORK": "public",
             "GATEWAY_TRAEFIK_ENTRYPOINT": "https",
-            "GATEWAY_SLOT_COUNT": "2",
-            "BYOND_SERVER": "game.example.org:1337",
+            "GATEWAY_SLOT_COUNT": "4",
+            "BYOND_SERVER": "tgstation:1337",
         }
 
-    def test_generated_router_keeps_backends_unpublished(self):
-        result = router.compose_config(self.env)
-        services = result["services"]
-        self.assertEqual(set(services), {"landing", "player01", "player02", "router"})
-        for service in services.values():
-            self.assertNotIn("ports", service)
-        self.assertEqual(services["player01"]["networks"], {"slot_01": None})
-        self.assertEqual(services["player02"]["networks"], {"slot_02": None})
-        self.assertEqual(
-            result["networks"]["traefik"], {"external": True, "name": "public"}
-        )
-        self.assertEqual(
-            services["landing"]["environment"]["GATEWAY_SLOT_PATH"], "/{account}/"
-        )
-        name = result["name"]
-        labels = services["router"]["labels"]
-        self.assertEqual(labels["traefik.docker.network"], "public")
-        self.assertEqual(
-            labels[f"traefik.http.routers.{name}.rule"], "Host(`play.example.org`)"
-        )
-        self.assertEqual(labels[f"traefik.http.routers.{name}.entrypoints"], "https")
-        self.assertEqual(labels[f"traefik.http.routers.{name}.tls"], "true")
-        self.assertEqual(
-            labels[f"traefik.http.services.{name}.loadbalancer.server.port"], "8080"
-        )
-        caddy = result["configs"]["caddyfile"]["content"]
-        self.assertIn("bind {$ROUTER_BIND_IP}", caddy)
-        self.assertIn("handle /LGplayer01/*", caddy)
-        self.assertIn("reverse_proxy player01:8080", caddy)
-        self.assertIn("handle /LGplayer02/*", caddy)
-        self.assertIn("reverse_proxy player02:8080", caddy)
-        self.assertIn("header_up -Cookie", caddy)
-
-    def test_custom_path_and_network(self):
-        result = router.compose_config(
-            {
-                **self.env,
-                "GATEWAY_SLOT_PATH": "/play/{number}/",
-                "GATEWAY_TRAEFIK_NETWORK": "edge-network",
-                "GATEWAY_TRAEFIK_ENTRYPOINT": "websecure",
-                "GATEWAY_PORT": "65535",
-                "GATEWAY_LANDING_PORT": "8080",
-            }
-        )
-        self.assertEqual(result["networks"]["traefik"]["name"], "edge-network")
-        self.assertIn("handle /play/01/*", result["configs"]["caddyfile"]["content"])
-        self.assertEqual(
-            result["services"]["router"]["labels"][
-                f"traefik.http.routers.{result['name']}.entrypoints"
-            ],
-            "websecure",
-        )
-
-    def test_invalid_configuration_fails(self):
-        for change in (
-            {"GATEWAY_PLAY_HOST": ""},
-            {"GATEWAY_PLAY_HOST": "example.org:443"},
-            {"GATEWAY_PLAY_SCHEME": "http"},
-            {"GATEWAY_TRAEFIK_NETWORK": ""},
-            {"GATEWAY_TRAEFIK_NETWORK": "bad network"},
-            {"GATEWAY_TRAEFIK_ENTRYPOINT": ""},
-            {"GATEWAY_TRAEFIK_ENTRYPOINT": "https,other"},
-            {"GATEWAY_SLOT_PATH": "/"},
-            {"GATEWAY_SLOT_PATH": "/assets/{account}/"},
-            {"GATEWAY_SLOT_PATH": "/Assets/{account}/"},
-            {"GATEWAY_SLOT_PATH": "/{account}"},
-            {"SELKIES_MODE": "webrtc"},
-        ):
-            with self.subTest(change=change):
-                with self.assertRaises(router.ConfigError):
-                    router.compose_config({**self.env, **change})
-
-    def test_generated_compose_config_is_valid(self):
-        output = subprocess.run(
-            [sys.executable, str(SCRIPT)],
+    def test_compose_uses_one_manager_and_no_static_players(self):
+        result = subprocess.run(
+            ["docker", "compose", "-f", str(COMPOSE), "config", "--format", "json"],
             env=self.env,
             capture_output=True,
             text=True,
             check=True,
-        ).stdout
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "compose.json"
-            path.write_text(output)
-            resolved = subprocess.run(
-                ["docker", "compose", "-f", str(path), "config", "--format", "json"],
-                env=self.env,
+        )
+        config = json.loads(result.stdout)
+        services = config["services"]
+        self.assertEqual(set(services), {"landing", "router", "manager"})
+        self.assertEqual(services["landing"]["environment"]["GATEWAY_SLOT_COUNT"], "4")
+        self.assertEqual(services["manager"]["environment"]["GATEWAY_SLOT_COUNT"], "4")
+        self.assertEqual(config["networks"]["edge"]["name"], "public")
+        self.assertEqual(
+            services["router"]["labels"]["traefik.http.routers.gatewaytest.rule"],
+            "Host(`play.example.org`)",
+        )
+        self.assertEqual(
+            services["router"]["labels"][
+                "traefik.http.services.gatewaytest.loadbalancer.server.port"
+            ],
+            "8080",
+        )
+        self.assertNotIn("ports", services["landing"])
+        self.assertNotIn("ports", services["router"])
+        self.assertNotIn("/var/run/docker.sock", json.dumps(services["router"]))
+        self.assertNotIn("/var/run/docker.sock", json.dumps(services["landing"]))
+        self.assertIn("/var/run/docker.sock", json.dumps(services["manager"]))
+        self.assertIn("path_regexp slot", config["configs"]["router_config"]["content"])
+
+    def test_required_configuration(self):
+        for key in ("GATEWAY_PLAY_HOST", "BYOND_SERVER"):
+            env = dict(self.env)
+            env.pop(key)
+            result = subprocess.run(
+                ["docker", "compose", "-f", str(COMPOSE), "config"],
+                env=env,
                 capture_output=True,
                 text=True,
-                check=True,
             )
-        config = json.loads(resolved.stdout)
-        self.assertEqual(
-            set(config["services"]), {"landing", "player01", "player02", "router"}
-        )
-        self.assertIn(
-            "bind {$$ROUTER_BIND_IP}", config["configs"]["caddyfile"]["content"]
-        )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(key, result.stderr)
+
+    def test_manager_rejects_invalid_values_before_using_docker(self):
+        for key, value in (
+            ("GATEWAY_SLOT_COUNT", "0"),
+            ("GATEWAY_SLOT_COUNT", "100"),
+            ("GATEWAY_DEPLOYMENT_ID", "bad/name"),
+            ("BYOND_SERVER", "tgstation:0"),
+            ("SELKIES_WAYLAND", "invalid"),
+        ):
+            result = subprocess.run(
+                ["sh", str(ROOT / "examples/slot-manager.sh")],
+                env={**self.env, key: value},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(key, result.stderr)
 
 
 @unittest.skipUnless(
-    os.environ.get("GATEWAY_TEST_ROUTER_IMAGE")
-    and os.environ.get("GATEWAY_TEST_BACKEND_IMAGE")
-    and os.environ.get("GATEWAY_TEST_TRAEFIK_IMAGE"),
-    "Set fixture images to run the Docker routing test",
+    all(
+        os.environ.get(key)
+        for key in ("GATEWAY_TEST_BACKEND_IMAGE", "GATEWAY_TEST_TRAEFIK_IMAGE")
+    ),
+    "Set fixture images to run the Docker manager and routing test",
 )
-class SlotRouterDockerTest(unittest.TestCase):
-    setUp = SlotRouterTest.setUp
-
-    def test_generated_compose_routes_and_isolates_backends(self):
-        network = f"gateway-router-test-{uuid.uuid4().hex}"
+class ManagerDockerTest(unittest.TestCase):
+    def test_manager_creates_routes_reconciles_and_retains_volumes(self):
+        project = f"gatewaytest{uuid.uuid4().hex[:12]}"
+        network = f"{project}-edge"
+        fixture_image = f"{project}-fixture"
+        env = {
+            **os.environ,
+            "GATEWAY_DEPLOYMENT_ID": project,
+            "GATEWAY_PLAY_HOST": "play.example.org",
+            "GATEWAY_TRAEFIK_NETWORK": network,
+            "GATEWAY_TRAEFIK_ENTRYPOINT": "https",
+            "GATEWAY_SLOT_COUNT": "2",
+            "BYOND_SERVER": "tgstation:1337",
+            "GATEWAY_IMAGE": fixture_image,
+            "GATEWAY_LANDING_IMAGE": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
+        }
         created = subprocess.run(
             ["docker", "network", "create", network],
+            env=env,
             capture_output=True,
             text=True,
-            env=self.env,
         )
         self.assertEqual(created.returncode, 0, created.stderr)
-        try:
-            config = router.compose_config(
-                {**self.env, "GATEWAY_TRAEFIK_NETWORK": network}
-            )
-            config["name"] = f"gateway-router-test-{uuid.uuid4().hex}"
-            config["services"]["router"]["image"] = os.environ[
-                "GATEWAY_TEST_ROUTER_IMAGE"
-            ]
-            alias = config["services"]["router"]["environment"]["ROUTER_ALIAS"]
-            config["services"]["router"]["labels"]["gateway.fixture"] = network
-            config["services"]["traefik"] = {
-                "image": os.environ["GATEWAY_TEST_TRAEFIK_IMAGE"],
-                "networks": {"traefik": None},
-                "volumes": ["/var/run/docker.sock:/var/run/docker.sock:ro"],
-                "command": [
-                    "--providers.docker=true",
-                    "--providers.docker.exposedbydefault=false",
-                    f"--providers.docker.constraints=Label(`gateway.fixture`,`{network}`)",
-                    "--entrypoints.https.address=:8443",
-                ],
-            }
-            backend = """
+        backend = """
 import json, os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 class Handler(BaseHTTPRequestHandler):
@@ -179,152 +128,233 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Upgrade", "websocket")
         self.end_headers()
         if not upgrade:
-            self.wfile.write(json.dumps({"name": os.environ["NAME"], "path": self.path, "headers": dict(self.headers)}).encode())
+            self.wfile.write(json.dumps({"name": os.environ.get("SELKIES_SUBFOLDER", "landing"), "path": self.path, "headers": dict(self.headers)}).encode())
     def log_message(self, *args):
         pass
-ThreadingHTTPServer(("0.0.0.0", int(os.environ["PORT"])), Handler).serve_forever()
+ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Handler).serve_forever()
 """
-            for name, backend_port in (
-                ("landing", 8000),
-                ("player01", 8080),
-                ("player02", 8080),
-            ):
-                config["services"][name] = {
-                    "image": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
-                    "networks": config["services"][name]["networks"],
-                    "environment": {"NAME": name, "PORT": str(backend_port)},
-                    "command": ["python3", "-u", "-c", backend],
-                }
-            config["services"]["probe"] = {
-                "image": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
-                "networks": {"traefik": None},
-                "command": ["python3", "-c", "import time; time.sleep(3600)"],
-            }
+        try:
             with tempfile.TemporaryDirectory() as directory:
-                path = Path(directory) / "compose.json"
-                path.write_text(json.dumps(router.fixed_slots.escape_compose(config)))
-                command = ["docker", "compose", "-f", str(path)]
+                root = Path(directory)
+                (root / "app.py").write_text(backend)
+                (root / "Dockerfile").write_text(
+                    f'FROM {os.environ["GATEWAY_TEST_BACKEND_IMAGE"]}\nCOPY app.py /app.py\nCMD ["python3", "-u", "/app.py"]\n'
+                )
+                build = subprocess.run(
+                    ["docker", "build", "-t", fixture_image, str(root)],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(build.returncode, 0, build.stderr)
+                overrides = {
+                    "services": {
+                        "landing": {
+                            "entrypoint": ["python3", "-u", "-c", backend],
+                            "environment": {"FIXTURE_PORT": "8000"},
+                            "healthcheck": {"disable": True},
+                        },
+                        "traefik": {
+                            "image": os.environ["GATEWAY_TEST_TRAEFIK_IMAGE"],
+                            "networks": ["edge"],
+                            "volumes": ["/var/run/docker.sock:/var/run/docker.sock:ro"],
+                            "command": [
+                                "--providers.docker=true",
+                                "--providers.docker.exposedbydefault=false",
+                                f"--providers.docker.constraints=Label(`com.docker.compose.project`,`{project}`)",
+                                "--entrypoints.https.address=:8443",
+                            ],
+                        },
+                        "probe": {
+                            "image": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
+                            "networks": ["edge"],
+                            "command": [
+                                "python3",
+                                "-c",
+                                "import time; time.sleep(3600)",
+                            ],
+                        },
+                    }
+                }
+                override = root / "override.json"
+                override.write_text(json.dumps(overrides))
+                command = ["docker", "compose", "-f", str(COMPOSE), "-f", str(override)]
                 try:
                     up = subprocess.run(
-                        [*command, "up", "-d"],
+                        [*command, "up", "-d", "--build"],
+                        env=env,
                         capture_output=True,
                         text=True,
-                        env=self.env,
                     )
                     self.assertEqual(up.returncode, 0, up.stderr)
-                    for _ in range(60):
-                        response = self.request(command, alias, "/LGplayer01/")
-                        if response.returncode == 0:
-                            data = json.loads(response.stdout)
-                            if (
-                                data["status"] == 200
-                                and data["body"]["name"] == "player01"
-                            ):
-                                break
-                        time.sleep(0.2)
-                    else:
-                        logs = subprocess.run(
-                            [*command, "logs", "--no-color", "router"],
-                            capture_output=True,
-                            text=True,
-                            env=self.env,
-                        )
-                        self.fail(
-                            f"Router did not start: {response.stderr}\n{logs.stdout}"
-                        )
-                    for _ in range(60):
-                        response = self.request(command, alias, "/", traefik=True)
-                        if response.returncode == 0:
-                            data = json.loads(response.stdout)
-                            if (
-                                data["status"] == 200
-                                and data["body"]["name"] == "landing"
-                            ):
-                                break
-                        time.sleep(0.2)
-                    else:
-                        logs = subprocess.run(
-                            [*command, "logs", "--no-color", "traefik"],
-                            capture_output=True,
-                            text=True,
-                            env=self.env,
-                        )
-                        self.fail(
-                            f"Traefik did not route: {response.stderr}\n{logs.stdout}"
-                        )
-                    for path, target in (
-                        ("/", "landing"),
-                        ("/LGplayer01/assets/client.js", "player01"),
-                        ("/LGplayer02/api/websockets?view=1", "player02"),
-                    ):
-                        response = self.request(
-                            command, alias, path, sensitive=True, traefik=True
-                        )
-                        self.assertEqual(response.returncode, 0, response.stderr)
-                        data = json.loads(response.stdout)
-                        self.assertEqual(data["status"], 200)
-                        self.assertEqual(
-                            (data["body"]["name"], data["body"]["path"]), (target, path)
-                        )
-                        for header in (
-                            "Cookie",
-                            "Authorization",
-                            "Cf-Access-Jwt-Assertion",
-                        ):
-                            self.assertNotIn(header, data["body"]["headers"])
-                    response = self.request(
-                        command,
-                        alias,
-                        "/LGplayer02/api/websockets",
-                        websocket=True,
-                        traefik=True,
-                    )
-                    self.assertEqual(response.returncode, 0, response.stderr)
-                    self.assertEqual(json.loads(response.stdout)["status"], 101)
-                    isolation = subprocess.run(
+                    self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
+                    self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
+                    for number in (1, 2):
+                        path = f"/LGplayer{number:02}/api/websockets"
+                        result = self.request(command, env, path, True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(json.loads(result.stdout)["status"], 101)
+                    player = f"{project}-player02"
+                    subprocess.run(
                         [
-                            *command,
+                            "docker",
                             "exec",
-                            "-T",
-                            "player01",
-                            "python3",
+                            player,
+                            "sh",
                             "-c",
-                            "import socket; socket.create_connection(('router', 8080), timeout=2)",
+                            "echo retained > /home/ubuntu/.wine/marker",
                         ],
-                        capture_output=True,
+                        env=env,
+                        check=True,
+                    )
+                    first = f"{project}-player01"
+                    original_id = subprocess.check_output(
+                        ["docker", "inspect", "-f", "{{.Id}}", first],
+                        env=env,
                         text=True,
-                        env=self.env,
+                    ).strip()
+                    env["GATEWAY_SLOT_COUNT"] = "1"
+                    up = subprocess.run(
+                        [*command, "up", "-d"], env=env, capture_output=True, text=True
                     )
-                    self.assertNotEqual(
-                        isolation.returncode, 0, "A player can reach the router"
+                    self.assertEqual(up.returncode, 0, up.stderr)
+                    for _ in range(100):
+                        check = subprocess.run(
+                            ["docker", "inspect", player], env=env, capture_output=True
+                        )
+                        if check.returncode != 0:
+                            break
+                        time.sleep(0.2)
+                    else:
+                        self.fail("Manager did not remove the extra player")
+                    self.assertEqual(
+                        subprocess.check_output(
+                            ["docker", "inspect", "-f", "{{.Id}}", first],
+                            env=env,
+                            text=True,
+                        ).strip(),
+                        original_id,
                     )
+                    volume = subprocess.run(
+                        ["docker", "volume", "inspect", f"{player}-wine"],
+                        env=env,
+                        capture_output=True,
+                    )
+                    self.assertEqual(volume.returncode, 0)
+                    env["GATEWAY_SLOT_COUNT"] = "2"
+                    up = subprocess.run(
+                        [*command, "up", "-d"], env=env, capture_output=True, text=True
+                    )
+                    self.assertEqual(up.returncode, 0, up.stderr)
+                    self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
+                    marker = subprocess.check_output(
+                        ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
+                        env=env,
+                        text=True,
+                    )
+                    self.assertEqual(marker.strip(), "retained")
+                    subprocess.run(
+                        ["docker", "stop", first],
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                    )
+                    self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
+                    unrelated = f"{project}-player03"
+                    subprocess.run(
+                        ["docker", "run", "-d", "--name", unrelated, fixture_image],
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                    )
+                    env["GATEWAY_SLOT_COUNT"] = "3"
+                    up = subprocess.run(
+                        [*command, "up", "-d"], env=env, capture_output=True, text=True
+                    )
+                    self.assertEqual(up.returncode, 0, up.stderr)
+                    for _ in range(100):
+                        logs = subprocess.run(
+                            [*command, "logs", "--no-color", "manager"],
+                            env=env,
+                            capture_output=True,
+                            text=True,
+                        )
+                        if (
+                            f"Refusing to modify unowned container {unrelated}"
+                            in logs.stdout
+                        ):
+                            break
+                        time.sleep(0.2)
+                    else:
+                        self.fail(
+                            f"Manager did not reject name collision: {logs.stdout}"
+                        )
+                    state = subprocess.check_output(
+                        ["docker", "inspect", "-f", "{{.State.Running}}", unrelated],
+                        env=env,
+                        text=True,
+                    )
+                    self.assertEqual(state.strip(), "true")
                 finally:
                     subprocess.run(
                         [*command, "down", "--volumes", "--remove-orphans"],
+                        env=env,
                         capture_output=True,
-                        check=False,
-                        env=self.env,
                     )
+                    for number in (1, 2, 3):
+                        player = f"{project}-player{number:02}"
+                        subprocess.run(
+                            ["docker", "rm", "-f", player], env=env, capture_output=True
+                        )
+                        subprocess.run(
+                            [
+                                "docker",
+                                "volume",
+                                "rm",
+                                f"{player}-wine",
+                                f"{player}-data",
+                            ],
+                            env=env,
+                            capture_output=True,
+                        )
         finally:
             subprocess.run(
-                ["docker", "network", "rm", network],
+                ["docker", "network", "rm", network], env=env, capture_output=True
+            )
+            subprocess.run(
+                ["docker", "image", "rm", fixture_image, f"{project}-manager"],
+                env=env,
                 capture_output=True,
-                check=False,
-                env=self.env,
             )
 
-    def request(
-        self, command, alias, path, sensitive=False, websocket=False, traefik=False
-    ):
+    def wait_for_route(self, command, env, path, expected):
+        for _ in range(100):
+            result = self.request(command, env, path)
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                if data["status"] == 200 and data["body"]["name"] == expected:
+                    for header in (
+                        "Cookie",
+                        "Authorization",
+                        "Cf-Access-Jwt-Assertion",
+                    ):
+                        self.assertNotIn(header, data["body"]["headers"])
+                    return
+            time.sleep(0.2)
+        logs = subprocess.run(
+            [*command, "logs", "--no-color", "manager", "router", "traefik"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.fail(f"Route {path} unavailable: {result.stderr}\n{logs.stdout}")
+
+    @staticmethod
+    def request(command, env, path, websocket=False):
         code = """
 import http.client, json, os, ssl
-if os.environ["TRAEFIK"] == "1":
-    conn = http.client.HTTPSConnection("traefik", 8443, context=ssl._create_unverified_context(), timeout=2)
-else:
-    conn = http.client.HTTPConnection(os.environ["ALIAS"], 8080, timeout=2)
-headers = {"Host": "play.example.org"}
-if os.environ["SENSITIVE"] == "1":
-    headers.update({"Cookie": "secret=1", "Authorization": "Bearer secret", "Cf-Access-Jwt-Assertion": "secret"})
+conn = http.client.HTTPSConnection("traefik", 8443, context=ssl._create_unverified_context(), timeout=2)
+headers = {"Host": "play.example.org", "Cookie": "secret=1", "Authorization": "Bearer secret", "Cf-Access-Jwt-Assertion": "secret"}
 if os.environ["WEBSOCKET"] == "1":
     headers.update({"Connection": "Upgrade", "Upgrade": "websocket"})
 conn.request("GET", os.environ["PATH_TO_CHECK"], headers=headers)
@@ -339,25 +369,15 @@ conn.close()
                 "exec",
                 "-T",
                 "-e",
-                f"ALIAS={alias}",
-                "-e",
                 f"PATH_TO_CHECK={path}",
                 "-e",
-                f"SENSITIVE={int(sensitive)}",
-                "-e",
                 f"WEBSOCKET={int(websocket)}",
-                "-e",
-                f"TRAEFIK={int(traefik)}",
                 "probe",
                 "python3",
                 "-c",
                 code,
             ],
+            env=env,
             capture_output=True,
             text=True,
-            env=self.env,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()
