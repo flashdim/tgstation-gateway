@@ -1,5 +1,8 @@
+import ctypes
 import os
 from pathlib import Path
+import select
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -9,6 +12,137 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DesktopSessionTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("Xvfb"), "Xvfb is unavailable")
+    def test_x11_tray_readiness_requires_a_live_selection_owner(self):
+        read_fd, write_fd = os.pipe()
+        server = subprocess.Popen(
+            ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", "800x600x24"],
+            pass_fds=(write_fd,),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        os.close(write_fd)
+        try:
+            self.assertTrue(
+                select.select([read_fd], [], [], 5)[0], "Xvfb did not start"
+            )
+            display_name = f":{os.read(read_fd, 32).decode().strip()}"
+            env = {**os.environ, "DISPLAY": display_name}
+            env.pop("XAUTHORITY", None)
+            script = ROOT / "container/x11-tray-ready.py"
+
+            def readiness():
+                return subprocess.run(
+                    ["python3", str(script)], env=env, capture_output=True, timeout=5
+                ).returncode
+
+            self.assertNotEqual(readiness(), 0)
+            x11 = ctypes.CDLL("libX11.so.6")
+            x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+            x11.XOpenDisplay.restype = ctypes.c_void_p
+            x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+            x11.XDefaultRootWindow.restype = ctypes.c_ulong
+            x11.XCreateSimpleWindow.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint,
+                ctypes.c_uint,
+                ctypes.c_uint,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+            ]
+            x11.XCreateSimpleWindow.restype = ctypes.c_ulong
+            x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+            x11.XInternAtom.restype = ctypes.c_ulong
+            x11.XSetSelectionOwner.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+            ]
+            x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+            display = x11.XOpenDisplay(display_name.encode())
+            self.assertTrue(display)
+            try:
+                root = x11.XDefaultRootWindow(display)
+                window = x11.XCreateSimpleWindow(display, root, 0, 0, 1, 1, 0, 0, 0)
+                atom = x11.XInternAtom(display, b"_NET_SYSTEM_TRAY_S0", 0)
+                x11.XSetSelectionOwner(display, atom, window, 0)
+                x11.XSync(display, 0)
+                self.assertEqual(readiness(), 0)
+            finally:
+                x11.XCloseDisplay(display)
+            self.assertNotEqual(readiness(), 0)
+        finally:
+            os.close(read_fd)
+            server.terminate()
+            server.wait(timeout=5)
+
+    def test_plasma_readiness_marker_requires_stable_session(self):
+        for failure in (False, True):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                commands = root / "bin"
+                commands.mkdir()
+                for name, body in {
+                    "cat": 'echo "fixture script"',
+                    "sleep": "exit 0",
+                    "qdbus6": (
+                        'case "$3" in\n'
+                        "  org.freedesktop.DBus.GetId) echo bus-id ;;\n"
+                        "  org.freedesktop.DBus.GetNameOwner)\n"
+                        '    if [ "$FAIL_CONFIG" = 1 ]; then echo :1.9; '
+                        'elif [ ! -f "$SEEN_OWNER" ]; then touch "$SEEN_OWNER"; echo :1.8; '
+                        "else echo :1.9; fi ;;\n"
+                        "  org.kde.PlasmaShell.evaluateScript)\n"
+                        '    echo evaluation >> "$EVAL_LOG"\n'
+                        '    if [ "$FAIL_CONFIG" = 1 ]; then echo waiting; else echo configured; fi ;;\n'
+                        "  *) exit 1 ;;\n"
+                        "esac"
+                    ),
+                }.items():
+                    path = commands / name
+                    path.write_text(f"#!/bin/sh\n{body}\n")
+                    path.chmod(0o755)
+                marker = root / "byond-plasma-ready"
+                marker.write_text("old-bus\n:1.2\n")
+                args = {
+                    "env": {
+                        **os.environ,
+                        "PATH": f"{commands}:{os.environ['PATH']}",
+                        "XDG_RUNTIME_DIR": str(root),
+                        "FAIL_CONFIG": "1" if failure else "0",
+                        "SEEN_OWNER": str(root / "seen-owner"),
+                        "EVAL_LOG": str(root / "evaluations"),
+                    },
+                    "capture_output": True,
+                    "text": True,
+                }
+                if failure:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        subprocess.run(
+                            ["sh", str(ROOT / "container/configure-plasma.sh")],
+                            timeout=2,
+                            **args,
+                        )
+                    self.assertEqual(marker.read_text(), "old-bus\n:1.2\n")
+                else:
+                    result = subprocess.run(
+                        ["sh", str(ROOT / "container/configure-plasma.sh")],
+                        timeout=10,
+                        **args,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(marker.read_text(), "bus-id\n:1.9\n")
+                    self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+                    self.assertEqual((root / "evaluations").read_text().count("\n"), 2)
+
     def test_plasma_task_manager_and_tray_are_configured_at_login(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         layout = (ROOT / "container/plasma-layout.js").read_text()

@@ -680,9 +680,12 @@ does not prove login or gameplay.
 ## Customize the session
 
 The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
-supervised client can restart. Each service launch first stops the Wine
-server for its prefix, then terminates and checks for remaining BYOND and
-WebView2 processes owned by the container user. This also covers processes reparented
+supervised client can restart. Before starting BYOND, the service waits for
+the current Plasma session's panel configuration, the registered tray host,
+and an X11 tray selection owner. If they do not become ready, the service
+logs a timeout and retries under supervision. Each service launch first stops
+the Wine server for its prefix, then terminates and checks for remaining
+BYOND and WebView2 processes owned by the container user. This also covers processes reparented
 after a client exits. Cleanup is serialized, and the launcher refuses to
 start BYOND if it cannot confirm shutdown. Because the process cleanup is
 user-wide rather than prefix-specific, do not run unrelated BYOND or WebView2

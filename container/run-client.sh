@@ -80,6 +80,37 @@ until display_ready; do
     sleep 1
 done
 
+desktop_ready() (
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/selkies-session-bus"
+    local marker="$XDG_RUNTIME_DIR/byond-plasma-ready" bus owner
+    [ -r "$marker" ] &&
+        { IFS= read -r bus && IFS= read -r owner; } <"$marker" &&
+        [ -n "$bus" ] && [ -n "$owner" ] &&
+        [ "$(timeout 2 qdbus6 org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.GetId 2>/dev/null)" = "$bus" ] &&
+        [ "$(timeout 2 qdbus6 org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.GetNameOwner org.kde.plasmashell 2>/dev/null)" = "$owner" ] &&
+        [ "$(timeout 2 qdbus6 org.kde.StatusNotifierWatcher /StatusNotifierWatcher \
+            org.kde.StatusNotifierWatcher.IsStatusNotifierHostRegistered 2>/dev/null)" = true ] &&
+        timeout 2 python3 /usr/local/bin/x11-tray-ready.py
+)
+
+desktop_is_ready=false
+for attempt in {1..120}; do
+    if desktop_ready; then
+        desktop_is_ready=true
+        break
+    fi
+    if [ "$attempt" -eq 1 ]; then
+        echo "Waiting for Plasma panel and system tray before starting BYOND" >&2
+    fi
+    sleep 1
+done
+if [ "$desktop_is_ready" != true ]; then
+    echo "Timed out waiting for Plasma panel and system tray; refusing to launch BYOND" >&2
+    exit 1
+fi
+
 if ! bash -c 'status=0; timeout --kill-after=1s 30s "$@" 9>&- || status=$?; exit "$status"' \
     _ wine reg add 'HKCU\Software\Dantom\BYOND' /v userpath /t REG_SZ \
     /d 'C:\users\steamuser\Documents\BYOND\' /f >/dev/null; then

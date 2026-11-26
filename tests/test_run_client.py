@@ -36,6 +36,8 @@ class RunClientTest(unittest.TestCase):
         password=None,
         existing_config=None,
         bad_config_directory=False,
+        desktop_failure=None,
+        desktop_delay=False,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -71,6 +73,23 @@ class RunClientTest(unittest.TestCase):
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 1\n'
                     'printf "  dimensions: %s pixels\\n" "$DISPLAY_DIMENSIONS"'
                 ),
+                "qdbus6": (
+                    'test "$DBUS_SESSION_BUS_ADDRESS" = "unix:path=$XDG_RUNTIME_DIR/selkies-session-bus" || exit 1\n'
+                    'case "$3" in\n'
+                    "  org.freedesktop.DBus.GetId) echo current-bus ;;\n"
+                    "  org.freedesktop.DBus.GetNameOwner) echo :1.23 ;;\n"
+                    "  org.kde.StatusNotifierWatcher.IsStatusNotifierHostRegistered)\n"
+                    '    if [ "$DESKTOP_DELAY" = 1 ] && [ ! -f "$DESKTOP_SEEN" ]; '
+                    'then touch "$DESKTOP_SEEN"; echo false; else echo true; fi ;;\n'
+                    "  *) exit 1 ;;\n"
+                    "esac"
+                ),
+                "python3": (
+                    'test "$1" = /usr/local/bin/x11-tray-ready.py || exit 1\n'
+                    'if [ "$DESKTOP_FAILURE" = tray ]; then exit 1; fi\n'
+                    'if [ "$DESKTOP_DELAY" = 1 ]; then test -f "$DESKTOP_SEEN" || exit 1; fi\n'
+                    'touch "$DESKTOP_READY"'
+                ),
                 "wine": (
                     'case "$PATH" in /opt/wine-proton/bin:*) ;; '
                     '*) echo "Wrong Wine runtime path" >&2; exit 98;; esac\n'
@@ -83,6 +102,7 @@ class RunClientTest(unittest.TestCase):
                     "  exit 97\n"
                     "fi\n"
                     'if [ "$1" = reg ]; then\n'
+                    '  test -f "$DESKTOP_READY" || exit 91\n'
                     '  test ! -e "/proc/$$/fd/9" || exit 93\n'
                     '  if flock -n "$XDG_RUNTIME_DIR/byond-cleanup.lock" '
                     "true; then exit 92; fi\n"
@@ -137,12 +157,20 @@ class RunClientTest(unittest.TestCase):
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
                 "DISPLAY_DIMENSIONS": dimensions,
                 "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
+                "DESKTOP_FAILURE": desktop_failure or "",
+                "DESKTOP_DELAY": "1" if desktop_delay else "0",
+                "DESKTOP_SEEN": str(root / "desktop-seen"),
+                "DESKTOP_READY": str(root / "desktop-ready"),
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_PASSWORD_FILE", None)
             env.pop("BYOND_ACCOUNT", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
             env.pop("XAUTHORITY", None)
+            (runtime / "byond-plasma-ready").write_text(
+                f"{'old-bus' if desktop_failure == 'stale-bus' else 'current-bus'}\n"
+                f"{':1.99' if desktop_failure == 'stale-owner' else ':1.23'}\n"
+            )
             if password:
                 password_file.write_bytes(password)
             layout = (
@@ -311,6 +339,28 @@ class RunClientTest(unittest.TestCase):
             result.stdout.splitlines(),
             [":7", str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe")],
         )
+
+    def test_waits_until_plasma_tray_host_is_registered(self):
+        for wayland in (False, True):
+            with self.subTest(wayland=wayland):
+                result, _, registry, events, _, _ = self.run_client(
+                    wayland=wayland, desktop_delay=True
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(registry, BYOND_REGISTRY)
+                self.assertEqual(events, ["launch"])
+                self.assertIn("Waiting for Plasma panel", result.stderr)
+
+    def test_rejects_stale_plasma_session_or_missing_x11_tray(self):
+        for failure in ("stale-bus", "stale-owner", "tray"):
+            with self.subTest(failure=failure):
+                result, _, registry, events, _, _ = self.run_client(
+                    desktop_failure=failure
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(registry, [])
+                self.assertEqual(events, [])
+                self.assertIn("Timed out waiting for Plasma", result.stderr)
 
     def test_launches_byond_after_loading_session_environment(self):
         for server in (None, ""):
