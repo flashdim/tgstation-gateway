@@ -53,6 +53,17 @@ jobs:
           docker pull "$GATEWAY_DOCKER_TEST_IMAGE"
           python3 -m unittest discover -s tests -p test_fixed_slots.py -v
 
+      - name: Test Traefik slot routing
+        env:
+          GATEWAY_TEST_ROUTER_IMAGE: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+          GATEWAY_TEST_BACKEND_IMAGE: python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+          GATEWAY_TEST_TRAEFIK_IMAGE: traefik:v3.8.0@sha256:00c9734983e74ae35a1fc18eaee9e9da13f3dde95c4e45b3b8c3b60e0dbd2d17
+        run: |
+          docker pull "$GATEWAY_TEST_ROUTER_IMAGE"
+          docker pull "$GATEWAY_TEST_BACKEND_IMAGE"
+          docker pull "$GATEWAY_TEST_TRAEFIK_IMAGE"
+          python3 -m unittest discover -s tests -p test_slot_router.py -v
+
       - name: Check runtime BYOND key provisioning
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_byond_key }}
         env:

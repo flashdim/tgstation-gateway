@@ -46,6 +46,10 @@ count and prefix changes, unrelated projects and volume retention/cleanup using
 a pinned Alpine fixture. This does not test daemon or host restarts, the player
 image, authenticated routing, Selkies disconnect behavior or gameplay.
 
+CI also tests the generated Traefik slot router with pinned Traefik and Caddy
+images and mock backends, including HTTPS routes, WebSocket upgrades and
+isolation from player networks. This does not exercise Cloudflare or live gameplay.
+
 For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
 mocked launcher provisioning check using the complete pager-generated key file
 stored as the `BYOND_TEST_KEY` Actions secret. The key is written to a

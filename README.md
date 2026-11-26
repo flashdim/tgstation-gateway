@@ -20,8 +20,9 @@ The repository currently provides an experimental single-player BYOND image and 
 flowchart LR
     Browser["Player browser"] -->|"opens page"| Landing["Landing page<br/>(slot links)"]
     Landing -.->|"selected slot URL<br/>(browser follows link)"| Proxy["Operator proxy<br/>(access control, TLS)"]
-    Proxy -->|"slot 1 path"| Selkies1
-    Proxy -->|"slot N path"| SelkiesN
+    Proxy --> Router["Optional slot router"]
+    Router -->|"slot 1 path"| Selkies1
+    Router -->|"slot N path"| SelkiesN
     subgraph Players["Player containers (one per slot)"]
         subgraph Player1["Player container: slot 1"]
             Selkies1["Selkies streaming<br/>(video, audio, input)"] --> Desktop1["KDE Plasma<br/>(KWin, Wayland or X11)"]
@@ -39,12 +40,13 @@ flowchart LR
     ClientN -->|"BYOND protocol"| Server
 ```
 
-The proxy and the game server are outside this repository; access control and
-TLS are the operator's responsibility. The optional landing page returns slot
-URLs; the dashed arrow shows the browser following a selected URL to the proxy.
-The page does not forward the player connection. The proxy routes each slot path
-to its player container. Its status query is separate from gameplay, and the
-player image works without the landing page.
+The game server is outside this repository. The optional landing page returns
+slot URLs; the dashed arrow shows the browser following a selected URL to the
+proxy. The page does not forward the player connection. The proxy routes each
+slot path to its player container. Its status query is separate from gameplay,
+and the player image works without the landing page. The optional slot router
+can route behind Traefik; alternatively, an operator proxy can route slots
+directly. Access control and TLS remain the operator's responsibility.
 
 ## Run the player
 
@@ -156,8 +158,8 @@ digits, `_` or `-`. Paths permit ASCII letters, digits, `.`, `_`, `~`, `/`, `-`
 and the two placeholders; `.` and `..` segments, repeated slashes, percent
 encoding, query strings and fragments are rejected. These checks validate the
 landing configuration, not requests to the proxy. The landing page only builds
-these links; the operator's reverse proxy must route each path to the
-corresponding player container. The example Compose file runs one player, so
+these links; a proxy must route each path to the corresponding player
+container. The example Compose file runs one player, so
 only a single-slot configuration reaches a working player without additional
 routing. Fixed deployments require paths ending in `/`. Invalid values stop
 the landing container at startup with an error naming the variable. Startup
@@ -213,6 +215,72 @@ account volumes. `down -v` deletes volumes declared in the current configuration
 but not necessarily orphan volumes from earlier configurations. Deletion is not
 secure erasure. Treat volumes, container layers and backups as sensitive.
 
+#### Optional Traefik slot router
+
+`examples/slot-router.py` generates the fixed deployment with a Caddy router
+behind an existing Traefik Docker provider. Traefik terminates HTTPS; the
+router forwards HTTP and WebSocket requests to the landing page or the
+matching player container. No landing, player or router ports are published.
+The router listens only on the Traefik-facing network, not on the individual
+player networks. The standalone player and external-proxy deployments are
+unchanged.
+
+**The router does not authenticate or authorize users.** Anyone who reaches it
+can view and control every slot, including its persistent account data. A
+Cloudflare proxy alone does not provide authentication. Restrict who may
+access the site using your existing external boundary, and prevent direct
+access to Traefik and the origin from bypassing it. Only trusted containers
+should join the Traefik network; Docker and host administrators can also
+reach internal networks. The connection from Traefik to the router is HTTP.
+Use Cloudflare Full (strict) with a valid Traefik certificate to protect the
+Cloudflare-to-origin connection.
+
+Create the shared Traefik network beforehand and use Docker Compose 2.23.1 or
+newer. With the example Traefik network `public`, HTTPS entrypoint `https` and
+domain `www.lazorgator.party`, generate the configuration from the repository
+root:
+
+```sh
+export GATEWAY_PLAY_HOST=www.lazorgator.party
+export GATEWAY_TRAEFIK_NETWORK=public GATEWAY_TRAEFIK_ENTRYPOINT=https
+export GATEWAY_DEPLOYMENT_ID=my-gateway GATEWAY_SLOT_COUNT=2
+export BYOND_SERVER=game.example.org:1337
+umask 077
+tmp=$(mktemp /tmp/gateway-router-compose.XXXXXXXX)
+if python3 examples/slot-router.py > "$tmp" &&
+  mv "$tmp" /tmp/gateway-router-compose.json; then
+  docker compose -f /tmp/gateway-router-compose.json up -d --remove-orphans
+else
+  rm -f -- "$tmp"
+  echo "Generation failed; existing deployment was not changed." >&2
+fi
+```
+
+The generated router carries Traefik Docker labels for the configured host,
+HTTPS entrypoint and network, with backend port 8080. Remove the old
+`tgstation-landing` router/service labels from the separately deployed landing
+container before enabling the new route: two routers for the same host may
+conflict. Move any additional middleware, certificate resolver or other custom
+labels to the generated router using a Compose override. Traefik must be
+allowed to discover the router and its shared network. Existing certificates
+and HTTPS redirects remain Traefik's responsibility.
+
+The generator defaults to `GATEWAY_SLOT_PATH=/{account}/`, requires HTTPS
+landing URLs and `SELKIES_MODE=websockets`, and preserves custom non-root slot
+paths except those under `/assets/`. It reuses the fixed deployment's BYOND,
+GPU and key-file settings; `GATEWAY_PORT` and `GATEWAY_LANDING_PORT` are
+ignored because backends are not published. Re-generate after changing settings
+or slot count, and keep `GATEWAY_DEPLOYMENT_ID` stable to retain account volumes. Like the
+fixed deployment, `--remove-orphans` affects the entire named Compose project;
+never reuse its project name for unrelated services.
+
+The router strips cookies, authorization headers and Cloudflare Access headers
+before forwarding to backends. It does not validate those headers. The
+integration test checks generated Traefik routing, WebSocket upgrades and
+player-network isolation with mock backends, not Cloudflare, live media or gameplay.
+Before sharing access, verify your actual Cloudflare/Traefik authorization,
+direct-origin restrictions, both slot routes, WebSocket reconnects and gameplay.
+
 #### Recovery and operator cleanup
 
 Use the same Docker context, deployment ID, account prefix and other settings
@@ -267,9 +335,9 @@ by the fixture tests. For the latter, disconnect and reconnect an authenticated
 browser on a test deployment and check the same container and BYOND process
 remain; record the result separately from startup or gameplay checks.
 
-The landing page lists configured account links, not occupancy or health. The
-operator must configure a reverse proxy to route each generated path to the
-matching loopback port and enforce authenticated ownership **before** routing,
+The landing page lists configured account links, not occupancy or health. With
+the external-proxy deployment, the operator must route each generated path to
+the matching loopback port and enforce authenticated ownership **before** routing,
 including WebSockets and any viewer access. An account name or path alone is
 not proof of ownership. Protect the landing page and direct player ports; do
 not expose Docker or unauthenticated streams to players.
@@ -342,8 +410,8 @@ deployment after changing Selkies, proxy or transport settings.
 
 #### External boundary verification
 
-Before granting player access, the operator must select and configure an
-external TLS and authorization boundary. Bind player and landing ports only
+Before granting player access using an external proxy, the operator must select
+and configure a TLS and authorization boundary. Bind player and landing ports only
 to loopback, restrict host and Docker access, and ensure the boundary is the
 only player-accessible route. Loopback does not protect against other users or
 processes on the Docker host. The boundary must authenticate every request,
