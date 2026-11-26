@@ -1,0 +1,11 @@
+services:
+  manager:
+    environment:
+      GATEWAY_MANAGER_GPU: "true"
+    volumes:
+      - type: bind
+        source: /dev/dri
+        target: /dev/dri
+        read_only: true
+        bind:
+          create_host_path: false

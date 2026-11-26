@@ -88,6 +88,34 @@ class ComposeTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
 
+    def test_gpu_override_mounts_metadata_only_in_manager(self):
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(COMPOSE),
+                "-f",
+                str(ROOT / "examples/compose.traefik.gpu.yaml"),
+                "config",
+                "--format",
+                "json",
+            ],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        services = json.loads(result.stdout)["services"]
+        manager = services["manager"]
+        self.assertEqual(manager["environment"]["GATEWAY_MANAGER_GPU"], "true")
+        mount = next(v for v in manager["volumes"] if v["target"] == "/dev/dri")
+        self.assertEqual(mount["source"], "/dev/dri")
+        self.assertTrue(mount["read_only"])
+        self.assertFalse(mount["bind"].get("create_host_path", False))
+        self.assertNotIn("devices", manager)
+        self.assertNotIn("/dev/dri", json.dumps(services["landing"]))
+
     def test_manager_rejects_invalid_values_before_using_docker(self):
         for key, value in (
             ("GATEWAY_SLOT_COUNT", "0"),
@@ -99,7 +127,6 @@ class ComposeTest(unittest.TestCase):
             ("GATEWAY_TRAEFIK_ENTRYPOINT", "https,other"),
             ("GATEWAY_TRAEFIK_NETWORK", "bad network"),
             ("GATEWAY_MANAGER_GPU", "invalid"),
-            ("GATEWAY_MANAGER_GPU", "true"),
         ):
             result = subprocess.run(
                 ["sh", str(ROOT / "examples/slot-manager.sh")],
@@ -118,6 +145,7 @@ class ComposeTest(unittest.TestCase):
                 "/run/gateway-lock/manager.lock", str(root / "lock")
             )
             script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            script = script.replace("/dev/dri/renderD", str(root / "renderD"))
             (root / "manager.sh").write_text(script)
             (root / "seccomp").write_text("{}")
             docker = root / "docker"
@@ -175,6 +203,42 @@ class ComposeTest(unittest.TestCase):
                 )
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("DRI_RENDER_GID", result.stderr)
+            node = root / "renderD128"
+            node.symlink_to("/dev/null")
+            env = {
+                **self.env,
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "ARGUMENTS": str(root / "arguments"),
+                "GATEWAY_MANAGER_GPU": "true",
+            }
+            result = subprocess.run(
+                ["sh", str(root / "manager.sh")],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 23, result.stderr)
+            arguments = (root / "arguments").read_text().splitlines()
+            self.assertEqual(
+                arguments[arguments.index("--group-add") + 1],
+                str(os.stat("/dev/null").st_gid),
+            )
+            (root / "renderD129").symlink_to("/dev/null")
+            result = subprocess.run(
+                ["sh", str(root / "manager.sh")],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Cannot auto-detect DRI_RENDER_GID", result.stderr)
+            result = subprocess.run(
+                ["sh", str(root / "manager.sh")],
+                env={**env, "DRI_RENDER_GID": "123"},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 23, result.stderr)
 
 
 @unittest.skipUnless(

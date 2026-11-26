@@ -50,6 +50,15 @@ case "$wayland" in
 esac
 case "$gpu" in
     true)
+        if [ -z "$render_gid" ]; then
+            set -- /dev/dri/renderD*
+            if [ "$#" -ne 1 ] || [ ! -c "$1" ]; then
+                echo "Cannot auto-detect DRI_RENDER_GID: mount /dev/dri read-only into the manager with exactly one render node, or set DRI_RENDER_GID explicitly" >&2
+                exit 1
+            fi
+            render_gid="$(stat -Lc '%g' "$1")"
+            echo "Detected DRI_RENDER_GID=$render_gid from $1"
+        fi
         if ! printf '%s' "$render_gid" | grep -Eq '^[0-9]{1,10}$' || [ "$render_gid" -gt 4294967294 ]; then
             echo "DRI_RENDER_GID must be a numeric host render-node group ID when GATEWAY_MANAGER_GPU=true" >&2
             exit 1

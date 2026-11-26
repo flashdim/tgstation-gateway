@@ -300,20 +300,27 @@ resource limits; this deployment does not provision per-account BYOND key
 files. Container startup does not establish playable sessions.
 
 For an Intel/AMD GPU available through `/dev/dri` on the Docker daemon host,
-enable optional player GPU access in the shell or Compose `.env` file:
+enable optional player GPU access with the GPU Compose override:
 
 ```sh
-export GATEWAY_MANAGER_GPU=true
-export DRI_RENDER_GID="$(stat -c '%g' /dev/dri/renderD128)"
-docker compose -f examples/compose.traefik.yaml up -d
+docker compose -f examples/compose.traefik.yaml \
+  -f examples/compose.traefik.gpu.yaml up -d
 ```
 
-Use the render node for your intended GPU when determining its numeric group
-ID. The manager passes `/dev/dri:/dev/dri` and that supplementary group to
-every player, not to the manager or landing container. GPU access is disabled
+The override enables `GATEWAY_MANAGER_GPU` and bind-mounts `/dev/dri` read-only
+into the manager for group-ID detection; it does not grant the manager GPU
+device permissions. With exactly one render node, `DRI_RENDER_GID` is detected
+automatically. If no render node or multiple render nodes are present,
+the manager exits with an explicit error unless you set `DRI_RENDER_GID`
+in the shell or Compose `.env` file. Obtain that override with
+`stat -c '%g' /dev/dri/renderD128`, using your intended GPU's render node.
+The manager passes `/dev/dri:/dev/dri` and that supplementary group to
+every player, not to the landing container. GPU access is disabled
 by default. Changing the GPU setting or group ID recreates owned players while
 retaining their volumes. Enabling it requires `/dev/dri` on the daemon host;
-Docker reports an error if it is absent. This exposes all host DRI devices to
+Compose refuses a missing bind-mount source rather than creating it.
+Use both Compose files for subsequent GPU deployment commands.
+This exposes all host DRI devices to
 players and increases their access to the host graphics driver. It does not
 provide NVIDIA Container Toolkit support or guarantee DXVK compatibility;
 check player logs and health after enabling it.
