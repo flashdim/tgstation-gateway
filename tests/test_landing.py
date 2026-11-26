@@ -853,6 +853,8 @@ process.stdout.write(JSON.stringify({list, error}));
         self.assertEqual(first["href"], "https://gateway.example/player/1?x=1")
         self.assertEqual(second["href"], "https://player.example/2?x=1#old")
         for card in (first, second):
+            self.assertEqual(card["target"], "_blank")
+            self.assertEqual(card["rel"], "noopener noreferrer")
             self.assertEqual(
                 card["children"][1]["children"][0]["textContent"], "ACCOUNT SLOT"
             )

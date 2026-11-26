@@ -25,6 +25,8 @@
       const card = document.createElement("a");
       card.className = "slot";
       card.href = url.href;
+      card.target = "_blank";
+      card.rel = "noopener noreferrer";
 
       const icon = document.createElement("span");
       icon.className = "slot-icon";
