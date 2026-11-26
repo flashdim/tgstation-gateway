@@ -251,6 +251,108 @@ class ComposeTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 23)
             self.assertIn("readable by container UID 1000", result.stderr)
 
+    def test_manager_restarts_existing_players_only_on_startup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            (root / "manager.sh").write_text(script)
+            (root / "seccomp").write_text("{}")
+            docker = root / "docker"
+            docker.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$*" >> "$STATE/events"\n'
+                'case "$1 $2" in\n'
+                '  "image inspect") echo fixture-image ;;\n'
+                '  "container ls")\n'
+                '    case "$*" in *--no-trunc*)\n'
+                '      [ ! -f "$STATE/exists" ] || echo fixture-id ;;\n'
+                "    esac ;;\n"
+                '  "inspect --format")\n'
+                '    case "$3" in\n'
+                "      *project*) echo tgstation-gateway ;;\n"
+                "      *deployment*) echo gatewaytest ;;\n"
+                '      *role*) echo "${ROLE:-player}" ;;\n'
+                "      *slot*) echo 01 ;;\n"
+                '      *settings*) cat "$STATE/settings" ;;\n'
+                '      *Running*) cat "$STATE/running" ;;\n'
+                "    esac ;;\n"
+                '  "volume inspect") exit 1 ;;\n'
+                '  "run -d")\n'
+                '    for arg in "$@"; do\n'
+                '      case "$arg" in io.tgstation-gateway.settings=*)\n'
+                '        echo "${arg#*=}" > "$STATE/settings" ;;\n'
+                "      esac\n"
+                "    done\n"
+                '    touch "$STATE/exists"\n'
+                '    echo true > "$STATE/running" ;;\n'
+                '  "rm -f") rm "$STATE/exists" ;;\n'
+                '  "restart fixture-id")\n'
+                '    [ "${FAIL_RESTART:-false}" != true ] || exit 42\n'
+                '    echo true > "$STATE/running" ;;\n'
+                "esac\n"
+            )
+            docker.chmod(0o755)
+            sleep = root / "sleep"
+            sleep.write_text(
+                "#!/bin/sh\n"
+                'if [ -f "$STATE/slept" ]; then exit 23; fi\n'
+                'touch "$STATE/slept"\n'
+            )
+            sleep.chmod(0o755)
+            env = {
+                **self.env,
+                "GATEWAY_SLOT_COUNT": "1",
+                "STATE": str(root),
+                "PATH": f"{root}:{os.environ['PATH']}",
+            }
+
+            def run(**overrides):
+                (root / "events").write_text("")
+                (root / "slept").unlink(missing_ok=True)
+                result = subprocess.run(
+                    ["sh", str(root / "manager.sh")],
+                    env={**env, **overrides},
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                return result, (root / "events").read_text().splitlines()
+
+            result, events = run()
+            self.assertEqual(result.returncode, 23, result.stderr)
+            self.assertFalse(any(event.startswith("restart ") for event in events))
+            settings = (root / "settings").read_text()
+            for running in ("true", "false"):
+                with self.subTest(running=running):
+                    (root / "running").write_text(running)
+                    result, events = run()
+                    self.assertEqual(result.returncode, 23, result.stderr)
+                    self.assertEqual(events.count("restart fixture-id"), 1)
+                    self.assertFalse(
+                        any(
+                            event.startswith(("rm ", "run ", "start "))
+                            for event in events
+                        )
+                    )
+            result, events = run(FAIL_RESTART="true")
+            self.assertEqual(result.returncode, 42)
+            self.assertEqual(events.count("restart fixture-id"), 1)
+            result, events = run(ROLE="landing")
+            self.assertNotEqual(result.returncode, 23)
+            self.assertIn("Refusing to modify unowned container", result.stderr)
+            self.assertNotIn("restart fixture-id", events)
+            (root / "settings").write_text("outdated")
+            result, events = run()
+            self.assertEqual(result.returncode, 23, result.stderr)
+            self.assertIn("rm -f fixture-id", events)
+            self.assertTrue(any(event.startswith("run -d ") for event in events))
+            self.assertNotIn("restart fixture-id", events)
+            self.assertEqual((root / "settings").read_text(), settings)
+
     def test_manager_gpu_arguments_and_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -605,6 +707,50 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         env=env,
                         text=True,
                     ).strip()
+
+                    def player_state():
+                        return json.loads(
+                            subprocess.check_output(
+                                ["docker", "inspect", first, player],
+                                env=env,
+                                text=True,
+                            )
+                        )
+
+                    before = player_state()
+                    subprocess.run(
+                        [*command, "restart", "manager"],
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                    )
+                    for _ in range(100):
+                        after = player_state()
+                        if all(
+                            old["State"]["StartedAt"] != new["State"]["StartedAt"]
+                            and new["State"]["Running"]
+                            for old, new in zip(before, after)
+                        ):
+                            break
+                        time.sleep(0.2)
+                    else:
+                        self.fail("Manager startup did not restart both players")
+                    for old, new in zip(before, after):
+                        self.assertEqual(old["Id"], new["Id"])
+                        self.assertEqual(old["Mounts"], new["Mounts"])
+                    self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
+                    self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
+                    time.sleep(12)
+                    self.assertEqual(
+                        [state["State"]["StartedAt"] for state in player_state()],
+                        [state["State"]["StartedAt"] for state in after],
+                    )
+                    marker = subprocess.check_output(
+                        ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
+                        env=env,
+                        text=True,
+                    )
+                    self.assertEqual(marker.strip(), "retained")
                     env["GATEWAY_SLOT_COUNT"] = "1"
                     up = subprocess.run(
                         [*command, "up", "-d"], env=env, capture_output=True, text=True

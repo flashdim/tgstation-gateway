@@ -190,6 +190,9 @@ reconcile() {
                 echo "Recreating player $name with updated settings"
                 docker rm -f "$id" >/dev/null
                 id=""
+            elif [ "$restart_players" = true ]; then
+                echo "Restarting player $name after manager startup"
+                docker restart "$id" >/dev/null
             else
                 running="$(docker inspect --format '{{.State.Running}}' "$id")"
                 if [ "$running" != true ]; then
@@ -250,7 +253,9 @@ reconcile() {
     done
 }
 
+restart_players=true
 while :; do
     reconcile
+    restart_players=false
     sleep 10
 done

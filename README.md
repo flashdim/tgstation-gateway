@@ -295,6 +295,11 @@ refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
 To update an existing image tag, pull it first and restart the manager.
+Every manager startup restarts existing owned players once, including stopped
+containers, interrupting active sessions while retaining container IDs and
+their Wine and data volumes. Players with changed settings are recreated instead;
+new players start normally. Subsequent reconciliation passes only start stopped
+players or recreate missing or changed ones.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
 resource limits. Container startup does not establish playable sessions.
 
