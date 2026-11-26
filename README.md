@@ -297,7 +297,26 @@ the affected player containers.
 To update an existing image tag, pull it first and restart the manager.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
 resource limits; this deployment does not provision per-account BYOND key
-files or GPU devices. Container startup does not establish playable sessions.
+files. Container startup does not establish playable sessions.
+
+For an Intel/AMD GPU available through `/dev/dri` on the Docker daemon host,
+enable optional player GPU access in the shell or Compose `.env` file:
+
+```sh
+export GATEWAY_MANAGER_GPU=true
+export DRI_RENDER_GID="$(stat -c '%g' /dev/dri/renderD128)"
+docker compose -f examples/compose.traefik.yaml up -d
+```
+
+Use the render node for your intended GPU when determining its numeric group
+ID. The manager passes `/dev/dri:/dev/dri` and that supplementary group to
+every player, not to the manager or landing container. GPU access is disabled
+by default. Changing the GPU setting or group ID recreates owned players while
+retaining their volumes. Enabling it requires `/dev/dri` on the daemon host;
+Docker reports an error if it is absent. This exposes all host DRI devices to
+players and increases their access to the host graphics driver. It does not
+provide NVIDIA Container Toolkit support or guarantee DXVK compatibility;
+check player logs and health after enabling it.
 
 The manager-created player containers and their named volumes are **not**
 Compose services or Compose-managed volumes. `docker compose down` stops the

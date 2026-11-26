@@ -9,6 +9,8 @@ host="${GATEWAY_PLAY_HOST:?GATEWAY_PLAY_HOST is required}"
 image="${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}"
 server="${BYOND_SERVER:?BYOND_SERVER is required}"
 wayland="${SELKIES_WAYLAND:-true}"
+gpu="${GATEWAY_MANAGER_GPU:-false}"
+render_gid="${DRI_RENDER_GID:-}"
 
 if ! printf '%s' "$deployment" | grep -Eq '^[a-z0-9][a-z0-9_-]{0,47}$'; then
     echo "GATEWAY_DEPLOYMENT_ID must be 1-48 lowercase letters, digits, _ or -" >&2
@@ -46,6 +48,19 @@ case "$wayland" in
         exit 1
         ;;
 esac
+case "$gpu" in
+    true)
+        if ! printf '%s' "$render_gid" | grep -Eq '^[0-9]{1,10}$' || [ "$render_gid" -gt 4294967294 ]; then
+            echo "DRI_RENDER_GID must be a numeric host render-node group ID when GATEWAY_MANAGER_GPU=true" >&2
+            exit 1
+        fi
+        ;;
+    false) render_gid="" ;;
+    *)
+        echo "GATEWAY_MANAGER_GPU must be true or false" >&2
+        exit 1
+        ;;
+esac
 
 exec 9>/run/gateway-lock/manager.lock
 if ! flock -n 9; then
@@ -59,7 +74,7 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 fi
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
-settings="$(printf '%s\n' v2 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" | sha256sum | cut -d ' ' -f 1)"
+settings="$(printf '%s\n' v2 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" | sha256sum | cut -d ' ' -f 1)"
 
 owner_label="io.tgstation-gateway.deployment"
 role_label="io.tgstation-gateway.role"
@@ -139,7 +154,12 @@ reconcile() {
             ensure_volume "$wine" wine
             ensure_volume "$data" data
             echo "Starting player $name"
+            set --
+            if [ "$gpu" = true ]; then
+                set -- --device /dev/dri:/dev/dri --group-add "$render_gid"
+            fi
             docker run -d --name "$name" --platform linux/amd64 --init \
+                "$@" \
                 --restart unless-stopped --network "$network" \
                 --memory 4g --cpus 2 --pids-limit 512 --shm-size 2g \
                 --security-opt seccomp=/opt/gateway/seccomp.json \

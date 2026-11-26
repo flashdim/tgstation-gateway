@@ -51,6 +51,8 @@ services:
       GATEWAY_IMAGE: ${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}
       BYOND_SERVER: ${BYOND_SERVER:?Set BYOND_SERVER to your game server host and port}
       SELKIES_WAYLAND: ${SELKIES_WAYLAND:-true}
+      GATEWAY_MANAGER_GPU: ${GATEWAY_MANAGER_GPU:-false}
+      DRI_RENDER_GID: ${DRI_RENDER_GID:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - manager_lock:/run/gateway-lock

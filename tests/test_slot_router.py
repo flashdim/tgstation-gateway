@@ -23,9 +23,12 @@ class ComposeTest(unittest.TestCase):
             "GATEWAY_SLOT_COUNT": "4",
             "BYOND_SERVER": "tgstation:1337",
             "GATEWAY_MANAGER_IMAGE": "ghcr.io/flashdim/tgstation-gateway-manager:latest",
+            "GATEWAY_MANAGER_GPU": "false",
+            "DRI_RENDER_GID": "",
         }
 
     def test_compose_uses_one_manager_and_no_static_players(self):
+        self.env.update(GATEWAY_MANAGER_GPU="true", DRI_RENDER_GID="123")
         result = subprocess.run(
             ["docker", "compose", "-f", str(COMPOSE), "config", "--format", "json"],
             env=self.env,
@@ -65,6 +68,12 @@ class ComposeTest(unittest.TestCase):
         self.assertEqual(
             services["manager"]["environment"]["GATEWAY_TRAEFIK_ENTRYPOINT"], "https"
         )
+        self.assertEqual(
+            services["manager"]["environment"]["GATEWAY_MANAGER_GPU"], "true"
+        )
+        self.assertEqual(services["manager"]["environment"]["DRI_RENDER_GID"], "123")
+        self.assertNotIn("devices", services["manager"])
+        self.assertNotIn("devices", services["landing"])
 
     def test_required_configuration(self):
         for key in ("GATEWAY_PLAY_HOST", "BYOND_SERVER"):
@@ -89,6 +98,8 @@ class ComposeTest(unittest.TestCase):
             ("GATEWAY_PLAY_HOST", "example.org`) || PathPrefix(`/"),
             ("GATEWAY_TRAEFIK_ENTRYPOINT", "https,other"),
             ("GATEWAY_TRAEFIK_NETWORK", "bad network"),
+            ("GATEWAY_MANAGER_GPU", "invalid"),
+            ("GATEWAY_MANAGER_GPU", "true"),
         ):
             result = subprocess.run(
                 ["sh", str(ROOT / "examples/slot-manager.sh")],
@@ -98,6 +109,72 @@ class ComposeTest(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
+
+    def test_manager_gpu_arguments_and_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            (root / "manager.sh").write_text(script)
+            (root / "seccomp").write_text("{}")
+            docker = root / "docker"
+            docker.write_text(
+                "#!/bin/sh\n"
+                'case "$1 $2" in\n'
+                '  "image inspect") echo fixture-image ;;\n'
+                '  "volume inspect") exit 1 ;;\n'
+                '  "run -d") printf "%s\\n" "$@" > "$ARGUMENTS"; exit 23 ;;\n'
+                "esac\n"
+            )
+            docker.chmod(0o755)
+            settings = []
+            for gpu, gid in (("false", ""), ("true", "123"), ("true", "456")):
+                result = subprocess.run(
+                    ["sh", str(root / "manager.sh")],
+                    env={
+                        **self.env,
+                        "PATH": f"{root}:{os.environ['PATH']}",
+                        "ARGUMENTS": str(root / "arguments"),
+                        "GATEWAY_MANAGER_GPU": gpu,
+                        "DRI_RENDER_GID": gid,
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 23, result.stderr)
+                arguments = (root / "arguments").read_text().splitlines()
+                if gpu == "true":
+                    self.assertEqual(
+                        arguments[arguments.index("--device") + 1], "/dev/dri:/dev/dri"
+                    )
+                    self.assertEqual(arguments[arguments.index("--group-add") + 1], gid)
+                else:
+                    self.assertNotIn("--device", arguments)
+                    self.assertNotIn("--group-add", arguments)
+                settings.append(
+                    next(
+                        arg
+                        for arg in arguments
+                        if arg.startswith("io.tgstation-gateway.settings=")
+                    )
+                )
+            self.assertEqual(len(set(settings)), 3)
+            for gid in ("", "-1", "render", "4294967295"):
+                result = subprocess.run(
+                    ["sh", str(root / "manager.sh")],
+                    env={
+                        **self.env,
+                        "GATEWAY_MANAGER_GPU": "true",
+                        "DRI_RENDER_GID": gid,
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("DRI_RENDER_GID", result.stderr)
 
 
 @unittest.skipUnless(
@@ -127,6 +204,8 @@ class ManagerDockerTest(unittest.TestCase):
             "GATEWAY_IMAGE": fixture_image,
             "GATEWAY_LANDING_IMAGE": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
             "GATEWAY_MANAGER_IMAGE": os.environ["GATEWAY_TEST_MANAGER_IMAGE"],
+            "GATEWAY_MANAGER_GPU": "false",
+            "DRI_RENDER_GID": "",
         }
         created = subprocess.run(
             ["docker", "network", "create", network],
