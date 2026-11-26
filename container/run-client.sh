@@ -90,10 +90,10 @@ fi
 cfg_dir="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/cfg"
 mkdir -p "$cfg_dir"
 set_byond_option() {
-    local file="$1" option="$2" temporary
+    local file="$1" option="$2" value="$3" temporary
     temporary="$(mktemp "$file.XXXXXX")"
     if { [ ! -e "$file" ] || awk -v option="$option" '$1 != option { print }' "$file"; } >"$temporary" &&
-        printf '%s on\n' "$option" >>"$temporary" &&
+        printf '%s %s\n' "$option" "$value" >>"$temporary" &&
         mv -f -- "$temporary" "$file"; then
         return 0
     fi
@@ -101,8 +101,8 @@ set_byond_option() {
     echo "Failed to configure BYOND settings" >&2
     exit 1
 }
-set_byond_option "$cfg_dir/pager.txt" auto-login
-set_byond_option "$cfg_dir/seeker.txt" graphics-hwmode
+set_byond_option "$cfg_dir/seeker.txt" graphics-hwmode on
+set_byond_option "$cfg_dir/seeker.txt" guest-login off
 
 dimensions="$(xdpyinfo -display "$DISPLAY" | awk '$1 == "dimensions:" { print $2; exit }')"
 if [[ ! "$dimensions" =~ ^([0-9]+)x([0-9]+)$ ]]; then

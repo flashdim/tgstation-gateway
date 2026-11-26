@@ -185,22 +185,25 @@ class RunClientTest(unittest.TestCase):
                 timeout=5,
             )
             if result.returncode == 0:
-                for name, option in (
-                    ("pager.txt", "auto-login"),
-                    ("seeker.txt", "graphics-hwmode"),
-                ):
-                    lines = (cfg / name).read_text().splitlines()
+                pager = cfg / "pager.txt"
+                if "pager.txt" in (existing_config or {}):
+                    self.assertEqual(pager.read_text(), existing_config["pager.txt"])
+                else:
+                    self.assertFalse(pager.exists())
+                lines = (cfg / "seeker.txt").read_text().splitlines()
+                options = {"graphics-hwmode": "on", "guest-login": "off"}
+                for option, value in options.items():
                     self.assertEqual(
                         [
                             line
                             for line in lines
                             if line.split() and line.split()[0] == option
                         ],
-                        [f"{option} on"],
+                        [f"{option} {value}"],
                     )
-                    for line in (existing_config or {}).get(name, "").splitlines():
-                        if line.split() and line.split()[0] != option:
-                            self.assertIn(line, lines)
+                for line in (existing_config or {}).get("seeker.txt", "").splitlines():
+                    if line.split() and line.split()[0] not in options:
+                        self.assertIn(line, lines)
             log = root / "wine-log"
             events = root / "event-log"
             cleanup = root / "cleanup-log"
@@ -248,7 +251,10 @@ class RunClientTest(unittest.TestCase):
     def test_updates_settings_without_discarding_other_preferences(self):
         config = {
             "pager.txt": "other-setting yes\nauto-login off\n  auto-login on\n",
-            "seeker.txt": "graphics-hwmode off\nother-setting no\n",
+            "seeker.txt": (
+                "graphics-hwmode off\nguest-login on\n  guest-login off\n"
+                "other-setting no\n"
+            ),
         }
         result, _, _, events, _, _ = self.run_client(existing_config=config)
         self.assertEqual(result.returncode, 0, result.stderr)

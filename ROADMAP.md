@@ -111,8 +111,8 @@ corrected-DPI goal in their setup. If the first instance does not close within
 relaunching; it does not start a second client if Wine shutdown cannot be
 confirmed. This confirms the reported DPI behavior for that setup, not general
 gameplay or rendering compatibility. The current launcher instead starts the
-BYOND pager with the server URL and enables auto-login and hardware graphics
-in its configuration; that path and its DPI behavior remain unverified.
+BYOND pager with the server URL, enables hardware graphics, and disables guest
+login in its configuration; that path and its DPI behavior remain unverified.
 
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
