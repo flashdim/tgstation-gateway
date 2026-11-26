@@ -40,7 +40,7 @@ class SmokeContainerTest(unittest.TestCase):
                 "      sh)\n"
                 '        case "$5" in\n'
                 '          *"BYOND userpath registry value"*) '
-                '[ "${WRONG_USERPATH:-0}" = 0 ] ;;\n'
+                'sh -ec "$5" ;;\n'
                 "          *'readConfig(\"FillMode\", -1)'*) "
                 '[ "${WRONG_WALLPAPER:-0}" = 0 ] ;;\n'
                 '          *) [ "${WRONG_DISPLAY:-0}" = 0 ] ;;\n'
@@ -53,6 +53,11 @@ class SmokeContainerTest(unittest.TestCase):
             ),
             "curl": '[ "${FAIL_HEALTH:-0}" != 1 ]',
             "sleep": "exit 0",
+            "wine": (
+                'test "$*" = "reg query HKCU\\Software\\Dantom\\BYOND /v userpath" || exit 1\n'
+                'printf "%s" "$REGISTRY_OUTPUT"\n'
+                'exit "${REGISTRY_STATUS:-0}"'
+            ),
         }
         for name, body in commands.items():
             path = self.bin / name
@@ -67,6 +72,11 @@ class SmokeContainerTest(unittest.TestCase):
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "DOCKER_LOG": str(self.log),
                 "SERVICE_STOPPED": str(self.root / "stopped"),
+                "REGISTRY_OUTPUT": (
+                    "\r\nHKEY_CURRENT_USER\\Software\\Dantom\\BYOND\r\n"
+                    "    userpath    REG_SZ    "
+                    "C:\\users\\steamuser\\Documents\\BYOND\\\r\n"
+                ),
                 **extra_env,
             },
             capture_output=True,
@@ -123,14 +133,36 @@ class SmokeContainerTest(unittest.TestCase):
         )
         self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
 
-    def test_rejects_wrong_byond_registry_userpath(self):
-        result = self.smoke(WRONG_USERPATH="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertNotIn(
-            "exec test-container s6-svc -d /etc/service/byond",
-            self.log.read_text().splitlines(),
+    def test_accepts_lf_registry_output(self):
+        result = self.smoke(
+            REGISTRY_OUTPUT="    userpath    REG_SZ    C:\\users\\steamuser\\Documents\\BYOND\\\n"
         )
-        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_wrong_byond_registry_userpath(self):
+        for output, status in (
+            ("    userpath    REG_SZ    C:\\wrong\\\r\n", "0"),
+            ("", "0"),
+            ("    userpath    REG_DWORD    0x0\r\n", "0"),
+            (
+                "    userpath    REG_SZ    C:\\users\\steamuser\\Documents\\BYOND\\ extra\r\n",
+                "0",
+            ),
+            (
+                "    userpath    REG_SZ    C:\\users\\steamuser\\Documents\\BYOND\\\r\n",
+                "1",
+            ),
+        ):
+            with self.subTest(output=output, status=status):
+                result = self.smoke(REGISTRY_OUTPUT=output, REGISTRY_STATUS=status)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn(
+                    "exec test-container s6-svc -d /etc/service/byond",
+                    self.log.read_text().splitlines(),
+                )
+                self.assertEqual(
+                    self.log.read_text().splitlines()[-1], "rm -f test-container"
+                )
 
     def test_reports_logs_and_removes_exited_container(self):
         result = self.smoke(FAIL_HEALTH="1")

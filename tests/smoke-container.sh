@@ -44,8 +44,9 @@ for _ in {1..120}; do
             fi
             docker exec "$container" /usr/local/bin/healthcheck
             docker exec "$container" sh -ec '
-                value="$(wine reg query '"'"'HKCU\Software\Dantom\BYOND'"'"' /v userpath |
-                    awk '"'"'$1 == "userpath" && $2 == "REG_SZ" { print $3 }'"'"')"
+                output="$(wine reg query '"'"'HKCU\Software\Dantom\BYOND'"'"' /v userpath)"
+                value="$(printf "%s\n" "$output" |
+                    awk '"'"'{ sub(/\r$/, "") } $1 == "userpath" && $2 == "REG_SZ" && NF == 3 { print $3 }'"'"')"
                 if [ "$value" != '"'"'C:\users\steamuser\Documents\BYOND\'"'"' ]; then
                     echo "BYOND userpath registry value does not match the key directory" >&2
                     exit 1
