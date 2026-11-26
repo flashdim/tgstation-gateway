@@ -251,7 +251,7 @@ class ComposeTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 23)
             self.assertIn("readable by container UID 1000", result.stderr)
 
-    def test_manager_restarts_existing_players_only_on_startup(self):
+    def test_manager_resets_players_and_volumes_only_on_startup(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = (ROOT / "examples/slot-manager.sh").read_text()
@@ -280,7 +280,22 @@ class ComposeTest(unittest.TestCase):
                 '      *settings*) cat "$STATE/settings" ;;\n'
                 '      *Running*) cat "$STATE/running" ;;\n'
                 "    esac ;;\n"
-                '  "volume inspect") exit 1 ;;\n'
+                '  "volume inspect")\n'
+                '    if [ "$3" = --format ]; then\n'
+                '      case "$4" in\n'
+                '        *deployment*) echo "${VOLUME_OWNER:-gatewaytest}" ;;\n'
+                '        *slot*) echo "${VOLUME_SLOT:-01}" ;;\n'
+                '        *role*) case "$5" in *-wine) echo wine;; *) echo data;; esac ;;\n'
+                "      esac\n"
+                "    else\n"
+                '      test -f "$STATE/$3"\n'
+                "    fi ;;\n"
+                '  "volume create")\n'
+                '    for arg in "$@"; do volume="$arg"; done\n'
+                '    touch "$STATE/$volume" ;;\n'
+                '  "volume rm")\n'
+                '    [ "${FAIL_VOLUME_REMOVE:-false}" != true ] || exit 43\n'
+                '    rm "$STATE/$3" ;;\n'
                 '  "run -d")\n'
                 '    for arg in "$@"; do\n'
                 '      case "$arg" in io.tgstation-gateway.settings=*)\n'
@@ -289,10 +304,9 @@ class ComposeTest(unittest.TestCase):
                 "    done\n"
                 '    touch "$STATE/exists"\n'
                 '    echo true > "$STATE/running" ;;\n'
-                '  "rm -f") rm "$STATE/exists" ;;\n'
-                '  "restart fixture-id")\n'
-                '    [ "${FAIL_RESTART:-false}" != true ] || exit 42\n'
-                '    echo true > "$STATE/running" ;;\n'
+                '  "rm -f")\n'
+                '    [ "${FAIL_REMOVE:-false}" != true ] || exit 42\n'
+                '    rm "$STATE/exists" ;;\n'
                 "esac\n"
             )
             docker.chmod(0o755)
@@ -324,27 +338,52 @@ class ComposeTest(unittest.TestCase):
 
             result, events = run()
             self.assertEqual(result.returncode, 23, result.stderr)
-            self.assertFalse(any(event.startswith("restart ") for event in events))
+            self.assertFalse(
+                any(event.startswith(("rm ", "volume rm ")) for event in events)
+            )
             settings = (root / "settings").read_text()
-            for running in ("true", "false"):
-                with self.subTest(running=running):
+            for running in ("true", "false", "missing"):
+                with self.subTest(container=running):
                     (root / "running").write_text(running)
+                    if running == "missing":
+                        (root / "exists").unlink()
                     result, events = run()
                     self.assertEqual(result.returncode, 23, result.stderr)
-                    self.assertEqual(events.count("restart fixture-id"), 1)
-                    self.assertFalse(
-                        any(
-                            event.startswith(("rm ", "run ", "start "))
-                            for event in events
-                        )
+                    self.assertEqual(
+                        events.count("rm -f fixture-id"), int(running != "missing")
                     )
-            result, events = run(FAIL_RESTART="true")
+                    for role in ("wine", "data"):
+                        removal = f"volume rm gatewaytest-player01-{role}"
+                        self.assertEqual(events.count(removal), 1)
+                        self.assertLess(
+                            events.index(removal),
+                            next(
+                                index
+                                for index, event in enumerate(events)
+                                if event.startswith("run -d ")
+                            ),
+                        )
+                    self.assertEqual(
+                        sum(event.startswith("run -d ") for event in events), 1
+                    )
+            result, events = run(FAIL_REMOVE="true")
             self.assertEqual(result.returncode, 42)
-            self.assertEqual(events.count("restart fixture-id"), 1)
+            self.assertFalse(any(event.startswith("volume rm ") for event in events))
             result, events = run(ROLE="landing")
             self.assertNotEqual(result.returncode, 23)
             self.assertIn("Refusing to modify unowned container", result.stderr)
-            self.assertNotIn("restart fixture-id", events)
+            self.assertNotIn("rm -f fixture-id", events)
+            for overrides in ({"VOLUME_OWNER": "other"}, {"VOLUME_SLOT": "02"}):
+                result, events = run(**overrides)
+                self.assertNotEqual(result.returncode, 23)
+                self.assertIn("Refusing to use unowned volume", result.stderr)
+                self.assertFalse(
+                    any(event.startswith(("volume rm ", "run -d ")) for event in events)
+                )
+            result, events = run(FAIL_VOLUME_REMOVE="true")
+            self.assertEqual(result.returncode, 43)
+            self.assertFalse(any(event.startswith("run -d ") for event in events))
+            (root / "exists").touch()
             (root / "settings").write_text("outdated")
             result, events = run()
             self.assertEqual(result.returncode, 23, result.stderr)
@@ -469,7 +508,7 @@ class ComposeTest(unittest.TestCase):
     "Set fixture images to run the Docker manager and routing test",
 )
 class ManagerDockerTest(unittest.TestCase):
-    def test_manager_creates_routes_reconciles_and_retains_volumes(self):
+    def test_manager_creates_routes_reconciles_and_resets_players(self):
         project = f"gatewaytest{uuid.uuid4().hex[:12]}"
         network = f"{project}-edge"
         fixture_image = f"{project}-fixture"
@@ -696,25 +735,39 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                             player,
                             "sh",
                             "-c",
-                            "echo retained > /home/ubuntu/.wine/marker",
+                            "echo stale > /home/ubuntu/.wine/marker; "
+                            "echo stale > /home/ubuntu/.local/share/marker",
                         ],
                         env=env,
                         check=True,
                     )
                     first = f"{project}-player01"
-                    original_id = subprocess.check_output(
-                        ["docker", "inspect", "-f", "{{.Id}}", first],
-                        env=env,
-                        text=True,
-                    ).strip()
 
                     def player_state():
-                        return json.loads(
-                            subprocess.check_output(
-                                ["docker", "inspect", first, player],
-                                env=env,
-                                text=True,
-                            )
+                        result = subprocess.run(
+                            ["docker", "inspect", first, player],
+                            env=env,
+                            text=True,
+                            capture_output=True,
+                        )
+                        return (
+                            json.loads(result.stdout) if result.returncode == 0 else []
+                        )
+
+                    def assert_clean_player():
+                        subprocess.run(
+                            [
+                                "docker",
+                                "exec",
+                                player,
+                                "sh",
+                                "-c",
+                                "test ! -e /home/ubuntu/.wine/marker && "
+                                "test ! -e /home/ubuntu/.local/share/marker",
+                            ],
+                            env=env,
+                            check=True,
+                            capture_output=True,
                         )
 
                     before = player_state()
@@ -726,18 +779,20 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     )
                     for _ in range(100):
                         after = player_state()
-                        if all(
-                            old["State"]["StartedAt"] != new["State"]["StartedAt"]
-                            and new["State"]["Running"]
+                        if len(after) == 2 and all(
+                            old["Id"] != new["Id"] and new["State"]["Running"]
                             for old, new in zip(before, after)
                         ):
                             break
                         time.sleep(0.2)
                     else:
-                        self.fail("Manager startup did not restart both players")
+                        self.fail("Manager startup did not recreate both players")
                     for old, new in zip(before, after):
-                        self.assertEqual(old["Id"], new["Id"])
-                        self.assertEqual(old["Mounts"], new["Mounts"])
+                        self.assertNotEqual(old["Id"], new["Id"])
+                        self.assertEqual(
+                            {mount["Destination"]: mount for mount in old["Mounts"]},
+                            {mount["Destination"]: mount for mount in new["Mounts"]},
+                        )
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
                     time.sleep(12)
@@ -745,12 +800,21 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         [state["State"]["StartedAt"] for state in player_state()],
                         [state["State"]["StartedAt"] for state in after],
                     )
-                    marker = subprocess.check_output(
-                        ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
+                    assert_clean_player()
+                    original_id = after[0]["Id"]
+                    subprocess.run(
+                        [
+                            "docker",
+                            "exec",
+                            player,
+                            "sh",
+                            "-c",
+                            "echo stale > /home/ubuntu/.wine/marker; "
+                            "echo stale > /home/ubuntu/.local/share/marker",
+                        ],
                         env=env,
-                        text=True,
+                        check=True,
                     )
-                    self.assertEqual(marker.strip(), "retained")
                     env["GATEWAY_SLOT_COUNT"] = "1"
                     up = subprocess.run(
                         [*command, "up", "-d"], env=env, capture_output=True, text=True
@@ -765,7 +829,8 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         time.sleep(0.2)
                     else:
                         self.fail("Manager did not remove the extra player")
-                    self.assertEqual(
+                    self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
+                    self.assertNotEqual(
                         subprocess.check_output(
                             ["docker", "inspect", "-f", "{{.Id}}", first],
                             env=env,
@@ -786,12 +851,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     )
                     self.assertEqual(up.returncode, 0, up.stderr)
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
-                    marker = subprocess.check_output(
-                        ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
-                        env=env,
-                        text=True,
-                    )
-                    self.assertEqual(marker.strip(), "retained")
+                    assert_clean_player()
                     env["GATEWAY_PLAY_HOST"] = "new.example.org"
                     up = subprocess.run(
                         [*command, "up", "-d"], env=env, capture_output=True, text=True
@@ -799,12 +859,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     self.assertEqual(up.returncode, 0, up.stderr)
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
-                    marker = subprocess.check_output(
-                        ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
-                        env=env,
-                        text=True,
-                    )
-                    self.assertEqual(marker.strip(), "retained")
+                    assert_clean_player()
                     subprocess.run(
                         ["docker", "stop", first],
                         env=env,

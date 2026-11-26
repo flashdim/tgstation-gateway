@@ -290,16 +290,20 @@ orphan services in that project. Inspect them before using it.
 
 Set `GATEWAY_SLOT_COUNT` to 1–99 and rerun `docker compose ... up -d` after
 changing it. The manager removes extra owned containers but retains their Wine
-and data volumes; increasing the count restores those account volumes. It
+and data volumes until those slots are configured again. It
 refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
 To update an existing image tag, pull it first and restart the manager.
-Every manager startup restarts existing owned players once, including stopped
-containers, interrupting active sessions while retaining container IDs and
-their Wine and data volumes. Players with changed settings are recreated instead;
-new players start normally. Subsequent reconciliation passes only start stopped
-players or recreate missing or changed ones.
+**Every manager startup removes and recreates all configured owned players and
+erases their Wine and data volumes**, including volumes left behind by missing
+containers. This interrupts active sessions and permanently deletes saved
+logins, settings and player data. It also applies to automatic manager restarts
+after failures and host/daemon restarts; a failed startup can leave a partially
+reset deployment. Host key files are read-only and are not erased. Unowned
+containers and volumes are rejected, not deleted. Subsequent reconciliation
+passes only start stopped players or recreate missing or changed ones, retaining
+their volumes until the next manager startup.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
 resource limits. Container startup does not establish playable sessions.
 
@@ -329,15 +333,15 @@ separate operator validation. Protect the directory and its parents against
 untrusted modification; validation and Docker mounting are not atomic.
 Docker metadata exposes host paths. Do not log, publish or cache credentials.
 
-The launcher copies the file byte-for-byte into the player's persistent Wine
+The launcher copies the file byte-for-byte into the player's Wine
 prefix at startup. Changing the directory setting recreates players, but changing
 a file in place does not automatically recreate them. To rotate a key, stop
-the manager, stop and remove only the intended player container, replace its
-host key file, then start the manager with the same Compose overrides; it
-recreates that player with its existing volumes. Do not delete the volumes
-unless intentionally removing account data. Disabling key provisioning does
-not erase the key already copied into a persistent prefix. Treat that prefix
-and its backups as sensitive. Actual BYOND key portability and automatic
+the manager, replace the intended host key file, then start the manager with
+the same Compose overrides; it recreates all configured players with clean
+volumes and copies their current keys. Disabling key provisioning and restarting
+the manager also erases those players' saved logins. Treat running Wine prefixes
+and any backups as sensitive; backups and out-of-range slot volumes are not
+erased automatically. Actual BYOND key portability and automatic
 login have not been verified; inspect login interactively without exposing the
 key, and record results separately from startup tests.
 
@@ -364,8 +368,9 @@ in the shell or Compose `.env` file. Obtain that override with
 `stat -c '%g' /dev/dri/renderD128`, using your intended GPU's render node.
 The manager passes `/dev/dri:/dev/dri` and that supplementary group to
 every player, not to the landing container. GPU access is disabled
-by default. Changing the GPU setting or group ID recreates owned players while
-retaining their volumes. Enabling it requires `/dev/dri` on the daemon host;
+by default. Changing the GPU setting or group ID requires a manager restart,
+which recreates configured players and erases their volumes as described above.
+Enabling it requires `/dev/dri` on the daemon host;
 Compose refuses a missing bind-mount source rather than creating it.
 Use both Compose files for subsequent GPU deployment commands.
 This exposes all host DRI devices to

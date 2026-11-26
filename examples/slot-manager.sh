@@ -139,10 +139,14 @@ ensure_volume() {
             echo "Refusing to use unowned volume $volume" >&2
             exit 1
         fi
-    else
-        docker volume create --label "$owner_label=$deployment" --label "$slot_label=$slot" \
-            --label "$role_label=$2" "$volume" >/dev/null
+        if [ "$reset_players" != true ]; then
+            return
+        fi
+        echo "Erasing player volume $volume after manager startup"
+        docker volume rm "$volume" >/dev/null
     fi
+    docker volume create --label "$owner_label=$deployment" --label "$slot_label=$slot" \
+        --label "$role_label=$2" "$volume" >/dev/null
 }
 
 reconcile() {
@@ -186,13 +190,14 @@ reconcile() {
                 exit 1
             fi
             old_settings="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.settings"}}' "$id")"
-            if [ "$old_settings" != "$settings" ]; then
+            if [ "$reset_players" = true ]; then
+                echo "Recreating player $name with clean data after manager startup"
+                docker rm -f "$id" >/dev/null
+                id=""
+            elif [ "$old_settings" != "$settings" ]; then
                 echo "Recreating player $name with updated settings"
                 docker rm -f "$id" >/dev/null
                 id=""
-            elif [ "$restart_players" = true ]; then
-                echo "Restarting player $name after manager startup"
-                docker restart "$id" >/dev/null
             else
                 running="$(docker inspect --format '{{.State.Running}}' "$id")"
                 if [ "$running" != true ]; then
@@ -253,9 +258,9 @@ reconcile() {
     done
 }
 
-restart_players=true
+reset_players=true
 while :; do
     reconcile
-    restart_players=false
+    reset_players=false
     sleep 10
 done
