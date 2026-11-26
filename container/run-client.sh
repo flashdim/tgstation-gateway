@@ -105,6 +105,13 @@ seed_byond_key() {
 
 seed_byond_key
 
+if ! bash -c 'status=0; timeout --kill-after=1s 30s "$@" 9>&- || status=$?; exit "$status"' \
+    _ wine reg add 'HKCU\Software\Dantom\BYOND' /v userpath /t REG_SZ \
+    /d 'C:\users\steamuser\Documents\BYOND\' /f >/dev/null; then
+    echo "Failed to configure BYOND userpath" >&2
+    exit 1
+fi
+
 cfg_dir="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/cfg"
 mkdir -p "$cfg_dir"
 set_byond_option() {

@@ -1,7 +1,8 @@
 # GitHub Actions workflows
 
 `ci.yml` runs formatting, image builds, unit tests, Compose validation, smoke
-tests for both display modes, and Wine runtime checks. After formatting passes,
+tests for both display modes, and Wine runtime checks. The X11 player smoke test
+also queries Wine's BYOND `userpath` registry value. After formatting passes,
 unit tests run in a separate job in parallel with the image build and development
 image push. Unit-test failures fail the workflow but do not block that push.
 CI publishes `dev` for main and `dev-pr<number>` for pull requests from this

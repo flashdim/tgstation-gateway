@@ -334,7 +334,9 @@ untrusted modification; validation and Docker mounting are not atomic.
 Docker metadata exposes host paths. Do not log, publish or cache credentials.
 
 The launcher copies the file byte-for-byte into the player's Wine
-prefix at startup. Changing the directory setting recreates players, but changing
+prefix at startup and sets the BYOND `userpath` registry value to
+`C:\users\steamuser\Documents\BYOND\` before launching the pager.
+Changing the directory setting recreates players, but changing
 a file in place does not automatically recreate them. To rotate a key, stop
 the manager, replace the intended host key file, then start the manager with
 the same Compose overrides; it recreates all configured players with clean

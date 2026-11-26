@@ -8,6 +8,18 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BYOND_REGISTRY = [
+    "reg",
+    "add",
+    r"HKCU\Software\Dantom\BYOND",
+    "/v",
+    "userpath",
+    "/t",
+    "REG_SZ",
+    "/d",
+    "C:\\users\\steamuser\\Documents\\BYOND\\",
+    "/f",
+]
 
 
 class RunClientTest(unittest.TestCase):
@@ -76,8 +88,8 @@ class RunClientTest(unittest.TestCase):
                     '  test ! -e "/proc/$$/fd/9" || exit 93\n'
                     '  if flock -n "$XDG_RUNTIME_DIR/byond-cleanup.lock" '
                     "true; then exit 92; fi\n"
-                    '  printf "%s\\n" "$@" > "$WINE_LOG"\n'
-                    '  [ "${FAIL_REGISTRY:-0}" = 0 ]\n'
+                    '  printf "%s\\n" "$@" >> "$WINE_LOG"\n'
+                    '  [ "${FAIL_REGISTRY:-}" != "$3" ]\n'
                     "  exit $?\n"
                     "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
@@ -119,7 +131,7 @@ class RunClientTest(unittest.TestCase):
                 "PGREP_SEEN": str(root / "pgrep-seen"),
                 "CLEANUP_FAILURE": cleanup_failure or "",
                 "EXPECTED_PREFIX": str(prefix),
-                "FAIL_REGISTRY": "1" if fail_registry else "0",
+                "FAIL_REGISTRY": fail_registry or "",
                 "LD_PRELOAD": "libm.so.6",
                 "EXPECTED_DISPLAY": ":7" if wayland else ":42",
                 "EXPECTED_XAUTHORITY": str(authority) if wayland else "",
@@ -219,11 +231,12 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(events, ["launch"])
 
     def test_seeds_key_and_launches_pager_with_direct_server(self):
-        result, _, _, events, _, _ = self.run_client(
+        result, _, registry, events, _, _ = self.run_client(
             server="example.org:1337",
             key_content=b"BEGIN KEY TestAccount\r\n $`\\'\"!\t\x80\x00\r\nEND KEY\r\n",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(registry, BYOND_REGISTRY)
         self.assertEqual(events, ["launch"])
         self.assertTrue(result.stdout.endswith("byond://example.org:1337\n"))
 
@@ -321,7 +334,7 @@ class RunClientTest(unittest.TestCase):
             with self.subTest(server=server):
                 result, prefix, registry, events, _, _ = self.run_client(server)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(registry, [])
+                self.assertEqual(registry, BYOND_REGISTRY)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(
                     result.stdout.splitlines(),
@@ -373,7 +386,8 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(events, ["launch"])
         self.assertEqual(
             registry,
-            [
+            BYOND_REGISTRY
+            + [
                 "reg",
                 "add",
                 r"HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments",
@@ -397,17 +411,27 @@ class RunClientTest(unittest.TestCase):
         )
 
     def test_fails_without_launch_when_registry_update_fails(self):
-        result, _, registry, events, _, _ = self.run_client(gpu="1", fail_registry=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertTrue(registry)
-        self.assertEqual(events, [])
-        self.assertIn("Failed to configure WebView2", result.stderr)
-        self.assertEqual(result.stdout, "")
+        for key, message in (
+            (r"HKCU\Software\Dantom\BYOND", "Failed to configure BYOND userpath"),
+            (
+                r"HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments",
+                "Failed to configure WebView2",
+            ),
+        ):
+            with self.subTest(key=key):
+                result, _, registry, events, _, _ = self.run_client(
+                    gpu="1", fail_registry=key
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertTrue(registry)
+                self.assertEqual(events, [])
+                self.assertIn(message, result.stderr)
+                self.assertEqual(result.stdout, "")
 
     def test_rejects_invalid_webview2_gpu_setting(self):
         result, _, registry, events, _, _ = self.run_client(gpu="yes")
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(registry, [])
+        self.assertEqual(registry, BYOND_REGISTRY)
         self.assertEqual(events, [])
         self.assertIn("Invalid BYOND_WEBVIEW2_GPU", result.stderr)
         self.assertEqual(result.stdout, "")

@@ -39,6 +39,8 @@ class SmokeContainerTest(unittest.TestCase):
                 'test ! -f "$SERVICE_STOPPED" || [ "${BROKEN_HEALTH:-0}" = 1 ] ;;\n'
                 "      sh)\n"
                 '        case "$5" in\n'
+                '          *"BYOND userpath registry value"*) '
+                '[ "${WRONG_USERPATH:-0}" = 0 ] ;;\n'
                 "          *'readConfig(\"FillMode\", -1)'*) "
                 '[ "${WRONG_WALLPAPER:-0}" = 0 ] ;;\n'
                 '          *) [ "${WRONG_DISPLAY:-0}" = 0 ] ;;\n'
@@ -114,6 +116,15 @@ class SmokeContainerTest(unittest.TestCase):
 
     def test_rejects_wrong_wallpaper_configuration(self):
         result = self.smoke(WRONG_WALLPAPER="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(
+            "exec test-container s6-svc -d /etc/service/byond",
+            self.log.read_text().splitlines(),
+        )
+        self.assertEqual(self.log.read_text().splitlines()[-1], "rm -f test-container")
+
+    def test_rejects_wrong_byond_registry_userpath(self):
+        result = self.smoke(WRONG_USERPATH="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn(
             "exec test-container s6-svc -d /etc/service/byond",
