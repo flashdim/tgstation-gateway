@@ -18,21 +18,33 @@ The repository currently provides an experimental single-player BYOND image and 
 
 ```mermaid
 flowchart LR
-    Browser["Player browser"] -->|"HTTP(S), WebSocket"| Proxy["Operator proxy<br/>(access control, TLS)"]
-    Proxy -.->|"optional"| Landing["Landing page<br/>(slot links)"]
-    Proxy --> Selkies
-    subgraph Player["Player container"]
-        Selkies["Selkies streaming<br/>(video, audio, input)"] --> Desktop["KDE Plasma<br/>(KWin, Wayland or X11)"]
-        Desktop --> Wine["Proton Wine 10.0-4<br/>+ DXVK"]
-        Wine --> Client["BYOND client<br/>(Dream Seeker)"]
+    Browser["Player browser"] -->|"opens page"| Landing["Landing page<br/>(slot links)"]
+    Landing -.->|"selected slot URL<br/>(browser follows link)"| Proxy["Operator proxy<br/>(access control, TLS)"]
+    Proxy -->|"slot 1 path"| Selkies1
+    Proxy -->|"slot N path"| SelkiesN
+    subgraph Players["Player containers (one per slot)"]
+        subgraph Player1["Player container: slot 1"]
+            Selkies1["Selkies streaming<br/>(video, audio, input)"] --> Desktop1["KDE Plasma<br/>(KWin, Wayland or X11)"]
+            Desktop1 --> Wine1["Proton Wine 10.0-4<br/>+ DXVK"]
+            Wine1 --> Client1["BYOND client<br/>(Dream Seeker)"]
+        end
+        subgraph PlayerN["Player container: slot N"]
+            SelkiesN["Selkies streaming<br/>(video, audio, input)"] --> DesktopN["KDE Plasma<br/>(KWin, Wayland or X11)"]
+            DesktopN --> WineN["Proton Wine 10.0-4<br/>+ DXVK"]
+            WineN --> ClientN["BYOND client<br/>(Dream Seeker)"]
+        end
     end
     Landing -.->|"optional status query"| Server
-    Client -->|"BYOND protocol"| Server["Operator-configured<br/>BYOND game server"]
+    Client1 -->|"BYOND protocol"| Server["Operator-configured<br/>BYOND game server"]
+    ClientN -->|"BYOND protocol"| Server
 ```
 
 The proxy and the game server are outside this repository; access control and
-TLS are the operator's responsibility. The dashed landing page is optional and
-the player image works without it.
+TLS are the operator's responsibility. The optional landing page returns slot
+URLs; the dashed arrow shows the browser following a selected URL to the proxy.
+The page does not forward the player connection. The proxy routes each slot path
+to its player container. Its status query is separate from gameplay, and the
+player image works without the landing page.
 
 ## Run the player
 
