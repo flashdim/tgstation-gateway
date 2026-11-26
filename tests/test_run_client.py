@@ -214,7 +214,7 @@ class RunClientTest(unittest.TestCase):
             )
             if result.returncode == 0:
                 for name, options in (
-                    ("pager.txt", {"auto-login": "off"}),
+                    ("pager.txt", {"auto-login": "on"}),
                     ("seeker.txt", {"graphics-hwmode": "on", "guest-login": "off"}),
                 ):
                     lines = (cfg / name).read_text().splitlines()

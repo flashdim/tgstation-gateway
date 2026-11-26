@@ -23,28 +23,6 @@ static BOOL assign(HWND *control, HWND candidate)
     return TRUE;
 }
 
-struct pager_window_search {
-    DWORD pid;
-    BOOL shown;
-};
-
-static BOOL CALLBACK show_pager_window(HWND window, LPARAM arg)
-{
-    struct pager_window_search *search = (struct pager_window_search *)arg;
-    DWORD pid = 0;
-    wchar_t title[32];
-    GetWindowThreadProcessId(window, &pid);
-    if (pid != search->pid || GetWindow(window, GW_OWNER) ||
-        !GetWindowTextW(window, title, 32) || wcscmp(title, L"BYOND") != 0)
-        return TRUE;
-    if (!IsWindowVisible(window) || IsIconic(window)) {
-        ShowWindow(window, IsIconic(window) ? SW_RESTORE : SW_SHOWNORMAL);
-        SetForegroundWindow(window);
-        search->shown = TRUE;
-    }
-    return FALSE;
-}
-
 static BOOL find_dialog(HWND window, DWORD pager, struct dialog *match)
 {
     DWORD pid = 0;
@@ -185,15 +163,9 @@ int wmain(int argc, wchar_t **argv)
     CloseHandle(process.hThread);
     if (have_password) {
         ULONGLONG deadline = GetTickCount64() + 30000;
-        BOOL submitted = FALSE, reported_window = FALSE;
+        BOOL submitted = FALSE;
         while (GetTickCount64() < deadline &&
                WaitForSingleObject(process.hProcess, 200) == WAIT_TIMEOUT) {
-            struct pager_window_search pager_window = { .pid = process.dwProcessId };
-            EnumWindows(show_pager_window, (LPARAM)&pager_window);
-            if (pager_window.shown && !reported_window) {
-                fputs("Showing hidden BYOND pager window\n", stderr);
-                reported_window = TRUE;
-            }
             struct search search = { .pid = process.dwProcessId };
             EnumWindows(find_login, (LPARAM)&search);
             if (search.matches == 1) {
@@ -202,7 +174,7 @@ int wmain(int argc, wchar_t **argv)
             }
         }
         if (!submitted)
-            fputs("BYOND login automation did not submit; use the pager to log in manually\n", stderr);
+            fputs("BYOND login automation did not submit; if not already signed in, use the pager to log in manually\n", stderr);
     } else {
         fputs("Invalid BYOND password file; use the pager to log in manually\n", stderr);
     }

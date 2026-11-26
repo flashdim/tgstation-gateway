@@ -344,11 +344,12 @@ the account and password, checks **Save password** and **Automatically login
 when program starts**, and submits at most once per pager launch. An
 initial Guest selection may disable password controls; the helper enters the
 configured account before checking that those controls are enabled. It does
-not log out an existing Guest session automatically. If the pager's main
-`BYOND` window starts hidden, the helper restores it so it can be used
-interactively or its login dialog can be detected. An
-unrecognized dialog or rejected login needs manual intervention. Real BYOND
-login has not been verified. Treat Wine prefixes and backups as sensitive.
+not log out an existing Guest session or open the dialog automatically.
+If BYOND has already signed in using saved credentials, no dialog submission
+is needed. An unrecognized dialog or rejected login needs manual intervention.
+The user has observed saved-credential login in one local test; automated
+credential submission has not been verified against real BYOND. Treat Wine
+prefixes and backups as sensitive.
 To rotate a password, stop the manager, replace the file, and start the manager
 with the same overrides. This resets all configured player volumes.
 
@@ -669,7 +670,7 @@ To request a connection to a server through the BYOND pager, provide its address
 BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
-At each client startup, the launcher sets `auto-login off` in BYOND's
+At each client startup, the launcher sets `auto-login on` in BYOND's
 `cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
 `cfg/seeker.txt`, retaining other settings. It starts the pager with the server
 URL; the pager is expected to log in and launch Dream Seeker. Without a configured
