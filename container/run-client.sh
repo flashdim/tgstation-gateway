@@ -101,6 +101,7 @@ set_byond_option() {
     echo "Failed to configure BYOND settings" >&2
     exit 1
 }
+set_byond_option "$cfg_dir/pager.txt" auto-login off
 set_byond_option "$cfg_dir/seeker.txt" graphics-hwmode on
 set_byond_option "$cfg_dir/seeker.txt" guest-login off
 

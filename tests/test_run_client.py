@@ -185,25 +185,23 @@ class RunClientTest(unittest.TestCase):
                 timeout=5,
             )
             if result.returncode == 0:
-                pager = cfg / "pager.txt"
-                if "pager.txt" in (existing_config or {}):
-                    self.assertEqual(pager.read_text(), existing_config["pager.txt"])
-                else:
-                    self.assertFalse(pager.exists())
-                lines = (cfg / "seeker.txt").read_text().splitlines()
-                options = {"graphics-hwmode": "on", "guest-login": "off"}
-                for option, value in options.items():
-                    self.assertEqual(
-                        [
-                            line
-                            for line in lines
-                            if line.split() and line.split()[0] == option
-                        ],
-                        [f"{option} {value}"],
-                    )
-                for line in (existing_config or {}).get("seeker.txt", "").splitlines():
-                    if line.split() and line.split()[0] not in options:
-                        self.assertIn(line, lines)
+                for name, options in (
+                    ("pager.txt", {"auto-login": "off"}),
+                    ("seeker.txt", {"graphics-hwmode": "on", "guest-login": "off"}),
+                ):
+                    lines = (cfg / name).read_text().splitlines()
+                    for option, value in options.items():
+                        self.assertEqual(
+                            [
+                                line
+                                for line in lines
+                                if line.split() and line.split()[0] == option
+                            ],
+                            [f"{option} {value}"],
+                        )
+                    for line in (existing_config or {}).get(name, "").splitlines():
+                        if line.split() and line.split()[0] not in options:
+                            self.assertIn(line, lines)
             log = root / "wine-log"
             events = root / "event-log"
             cleanup = root / "cleanup-log"

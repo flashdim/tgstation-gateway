@@ -664,10 +664,10 @@ To request a connection to a server through the BYOND pager, provide its address
 BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 ```
 
-At each client startup, the launcher sets `graphics-hwmode on` and
-`guest-login off` in BYOND's `cfg/seeker.txt`, retaining other settings. It
-does not modify `cfg/pager.txt`. It starts the pager with the server URL; the
-pager is expected to log in and launch Dream Seeker. Without a configured
+At each client startup, the launcher sets `auto-login off` in BYOND's
+`cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
+`cfg/seeker.txt`, retaining other settings. It starts the pager with the server
+URL; the pager is expected to log in and launch Dream Seeker. Without a configured
 password, BYOND may require interactive pager login. A BYOND account or
 server-side authentication may still be required. Automatic login and joining
 through the pager have not yet been verified against a real server. In
