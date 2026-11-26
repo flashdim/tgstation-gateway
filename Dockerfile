@@ -20,8 +20,11 @@ RUN --mount=type=tmpfs,target=/tmp/login-test set -eu; \
     mkdir -p "$pager"; \
     x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror \
       /tmp/byond-login-dialog.c -o "$pager/byond.exe"; \
-    printf '%s\r\n' "fixture \$\`\\'\"!" | timeout 60s xvfb-run -a \
-      wine /byond-login.exe LGplayer02
+    for guest in 0 1; do \
+      export BYOND_LOGIN_TEST_GUEST="$guest"; \
+      printf '%s\r\n' "fixture \$\`\\'\"!" | timeout 60s xvfb-run -a \
+        wine /byond-login.exe LGplayer02; \
+    done
 
 # Latest Ubuntu 26.04 Plasma image as of 2026-11-19 (Selkies 2.2.1).
 FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04@sha256:cee92447ae1445c0af4c26a73e32caa7d7cf31aed51b5c5e6549d94cc8fa8c9e

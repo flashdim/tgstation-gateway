@@ -63,8 +63,7 @@ static BOOL find_dialog(HWND window, DWORD pager, struct dialog *match)
         }
     }
     if (!dialog.account || !dialog.password || !dialog.save || !dialog.automatic || !dialog.login ||
-        !IsWindowEnabled(dialog.account) || !IsWindowEnabled(dialog.password) ||
-        !IsWindowEnabled(dialog.save) || !IsWindowEnabled(dialog.automatic))
+        !IsWindowEnabled(dialog.account))
         return FALSE;
     *match = dialog;
     return TRUE;
@@ -97,6 +96,8 @@ static BOOL submit(struct dialog *dialog, const wchar_t *account, const wchar_t 
     if (!send(dialog->account, WM_SETTEXT, 0, (LPARAM)account, &result) || !result ||
         !send(dialog->window, WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(combo), CBN_EDITCHANGE),
               (LPARAM)combo, &result) ||
+        !IsWindowEnabled(dialog->password) || !IsWindowEnabled(dialog->save) ||
+        !IsWindowEnabled(dialog->automatic) ||
         !send(dialog->save, BM_SETCHECK, BST_CHECKED, 0, &result) ||
         !send(dialog->automatic, BM_SETCHECK, BST_CHECKED, 0, &result) ||
         !send(dialog->save, BM_GETCHECK, 0, 0, &result) || result != BST_CHECKED ||

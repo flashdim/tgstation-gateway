@@ -17,6 +17,7 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog, UINT message, WPARAM wparam, LP
     (void)lparam;
     switch (message) {
     case WM_INITDIALOG:
+    {
         SetWindowTextW(dialog, L"Login");
         control(dialog, ACCOUNT, L"ComboBox", L"", CBS_DROPDOWN, 10);
         control(dialog, PASSWORD, L"Edit", L"", ES_PASSWORD, 40);
@@ -24,12 +25,27 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog, UINT message, WPARAM wparam, LP
         control(dialog, AUTOMATIC, L"Button", L"Automatically login when program starts",
                 BS_AUTOCHECKBOX, 100);
         control(dialog, LOGIN, L"Button", L"Login", BS_OWNERDRAW | WS_DISABLED, 130);
+        wchar_t guest[2];
+        if (GetEnvironmentVariableW(L"BYOND_LOGIN_TEST_GUEST", guest, 2) == 1 && guest[0] == L'1') {
+            SetDlgItemTextW(dialog, ACCOUNT, L"Guest");
+            EnableWindow(GetDlgItem(dialog, PASSWORD), FALSE);
+            EnableWindow(GetDlgItem(dialog, SAVE), FALSE);
+        }
         SetTimer(dialog, 1, 15000, NULL);
         return TRUE;
+    }
     case WM_TIMER:
         EndDialog(dialog, 4);
         return TRUE;
     case WM_COMMAND:
+        if (LOWORD(wparam) == ACCOUNT && HIWORD(wparam) == CBN_EDITCHANGE) {
+            wchar_t account[64];
+            GetDlgItemTextW(dialog, ACCOUNT, account, 64);
+            BOOL enabled = wcscmp(account, L"LGplayer02") == 0;
+            EnableWindow(GetDlgItem(dialog, PASSWORD), enabled);
+            EnableWindow(GetDlgItem(dialog, SAVE), enabled);
+            return TRUE;
+        }
         if (LOWORD(wparam) == PASSWORD && HIWORD(wparam) == EN_CHANGE) {
             EnableWindow(GetDlgItem(dialog, LOGIN), GetWindowTextLengthW(GetDlgItem(dialog, PASSWORD)) > 0);
             return TRUE;
