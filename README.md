@@ -299,6 +299,12 @@ Managed players use WebSocket mode, the project's seccomp profile, and fixed
 resource limits; this deployment does not provision per-account BYOND key
 files. Container startup does not establish playable sessions.
 
+For managed players, Docker health checks the Selkies endpoint, not Dream
+Seeker. This lets Traefik route to the desktop even if the BYOND pager needs
+interactive login or the game client has stopped. A healthy slot does not
+prove that BYOND has launched or connected. If Selkies becomes unhealthy,
+Traefik may route the slot URL to the landing page's 404 instead.
+
 For an Intel/AMD GPU available through `/dev/dri` on the Docker daemon host,
 enable optional player GPU access with the GPU Compose override:
 

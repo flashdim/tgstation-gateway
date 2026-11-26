@@ -83,7 +83,7 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 fi
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
-settings="$(printf '%s\n' v2 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" | sha256sum | cut -d ' ' -f 1)"
+settings="$(printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" | sha256sum | cut -d ' ' -f 1)"
 
 owner_label="io.tgstation-gateway.deployment"
 role_label="io.tgstation-gateway.role"
@@ -172,6 +172,8 @@ reconcile() {
                 --restart unless-stopped --network "$network" \
                 --memory 4g --cpus 2 --pids-limit 512 --shm-size 2g \
                 --security-opt seccomp=/opt/gateway/seccomp.json \
+                --health-cmd "curl -fsS --max-time 2 -o /dev/null http://localhost:8080/LGplayer$slot/api/health" \
+                --health-interval 5s --health-timeout 5s --health-start-period 60s --health-retries 3 \
                 --label "io.tgstation-gateway.project=tgstation-gateway" \
                 --label "$owner_label=$deployment" --label "$role_label=player" \
                 --label "$slot_label=$slot" \

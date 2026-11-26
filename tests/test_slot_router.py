@@ -283,6 +283,13 @@ import json, os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path.endswith("/api/health"):
+            if self.path != os.environ.get("SELKIES_SUBFOLDER", "/") + "api/health":
+                self.send_response(404)
+            else:
+                self.send_response(503 if os.path.exists("/tmp/health-down") else 200)
+            self.end_headers()
+            return
         upgrade = self.headers.get("Upgrade")
         self.send_response(101 if upgrade else 200)
         if upgrade:
@@ -299,8 +306,15 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "app.py").write_text(backend)
+                (root / "curl").write_text(
+                    "#!/usr/bin/env python3\n"
+                    "import sys, urllib.request\n"
+                    "urllib.request.urlopen(sys.argv[-1], timeout=2).close()\n"
+                )
                 (root / "Dockerfile").write_text(
-                    f'FROM {os.environ["GATEWAY_TEST_BACKEND_IMAGE"]}\nCOPY app.py /app.py\nCMD ["python3", "-u", "/app.py"]\n'
+                    f"FROM {os.environ['GATEWAY_TEST_BACKEND_IMAGE']}\n"
+                    "COPY app.py /app.py\nCOPY --chmod=755 curl /usr/local/bin/curl\n"
+                    'HEALTHCHECK CMD exit 1\nCMD ["python3", "-u", "/app.py"]\n'
                 )
                 build = subprocess.run(
                     ["docker", "build", "-t", fixture_image, str(root)],
@@ -373,6 +387,22 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
                     self.wait_for_route(command, env, "/", "landing")
+                    first = f"{project}-player01"
+                    self.wait_for_health(env, first, "healthy")
+                    subprocess.run(
+                        ["docker", "exec", first, "touch", "/tmp/health-down"],
+                        env=env,
+                        check=True,
+                    )
+                    self.wait_for_health(env, first, "unhealthy")
+                    self.wait_for_route(command, env, "/LGplayer01/", "landing")
+                    subprocess.run(
+                        ["docker", "exec", first, "rm", "/tmp/health-down"],
+                        env=env,
+                        check=True,
+                    )
+                    self.wait_for_health(env, first, "healthy")
+                    self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     labels = json.loads(
                         subprocess.check_output(
                             [
@@ -562,6 +592,18 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
             text=True,
         )
         self.fail(f"Route {path} unavailable: {result.stderr}\n{logs.stdout}")
+
+    def wait_for_health(self, env, player, expected):
+        for _ in range(150):
+            status = subprocess.check_output(
+                ["docker", "inspect", "-f", "{{.State.Health.Status}}", player],
+                env=env,
+                text=True,
+            ).strip()
+            if status == expected:
+                return
+            time.sleep(0.2)
+        self.fail(f"{player} health is {status}, expected {expected}")
 
     @staticmethod
     def request(command, env, path, websocket=False):
