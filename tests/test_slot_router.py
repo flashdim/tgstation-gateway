@@ -180,6 +180,8 @@ class ComposeTest(unittest.TestCase):
             second = keys / "LGplayer02_key.txt"
             first.write_bytes(b"synthetic $`\\'\r\n")
             second.write_bytes(b"other key")
+            first.chmod(0o644)
+            second.chmod(0o644)
             script = (ROOT / "examples/slot-manager.sh").read_text()
             script = script.replace(
                 "/run/gateway-lock/manager.lock", str(root / "lock")
