@@ -221,7 +221,7 @@ class RunClientTest(unittest.TestCase):
     def test_seeds_key_and_launches_pager_with_direct_server(self):
         result, _, _, events, _, _ = self.run_client(
             server="example.org:1337",
-            key_content=b"BEGIN KEY TestAccount\r\nsynthetic-key-for-unit-test\r\n`\r\nEND KEY\r\n",
+            key_content=b"BEGIN KEY TestAccount\r\n $`\\'\"!\t\x80\x00\r\nEND KEY\r\n",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch"])

@@ -1,0 +1,11 @@
+services:
+  manager:
+    environment:
+      GATEWAY_SECRET_DIRECTORY: ${GATEWAY_SECRET_DIRECTORY:?Set GATEWAY_SECRET_DIRECTORY to an absolute host directory}
+    volumes:
+      - type: bind
+        source: ${GATEWAY_SECRET_DIRECTORY:?Set GATEWAY_SECRET_DIRECTORY to an absolute host directory}
+        target: ${GATEWAY_SECRET_DIRECTORY:?Set GATEWAY_SECRET_DIRECTORY to an absolute host directory}
+        read_only: true
+        bind:
+          create_host_path: false

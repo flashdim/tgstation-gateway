@@ -296,8 +296,45 @@ BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
 To update an existing image tag, pull it first and restart the manager.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
-resource limits; this deployment does not provision per-account BYOND key
-files. Container startup does not establish playable sessions.
+resource limits. Container startup does not establish playable sessions.
+
+To provision optional BYOND pager keys, place the **complete, unmodified**
+pager-generated key file for each account in a protected host directory, named
+`LGplayer01_key.txt`, `LGplayer02_key.txt`, and so on. Do not put key contents
+in environment variables or Compose files. For example:
+
+```sh
+export GATEWAY_SECRET_DIRECTORY=/absolute/host/path/to/byond-keys
+docker compose -f examples/compose.traefik.yaml \
+  -f examples/compose.traefik.keys.yaml up -d
+```
+
+Use the keys override for subsequent Compose commands (and the GPU override
+too, if enabled). The directory is mounted read-only into the manager at the
+same absolute path; Docker resolves each player bind mount on the daemon host.
+Use a local daemon and keep the path identical there; the path cannot contain
+commas, double quotes or newlines. The manager validates all
+configured files before reconciling, then mounts only the matching file
+read-only into each player and sets `BYOND_KEY_FILE` to that mount. Files must
+be nonempty regular files, not final symlinks or hard links, and readable by
+container UID 1000; owner UID 1000 and mode `0400` is one option. For another
+owner, validation requires both group and other read bits. Directory traversal
+permissions, ACLs, user namespace remapping and remote daemons need
+separate operator validation. Protect the directory and its parents against
+untrusted modification; validation and Docker mounting are not atomic.
+Docker metadata exposes host paths. Do not log, publish or cache credentials.
+
+The launcher copies the file byte-for-byte into the player's persistent Wine
+prefix at startup. Changing the directory setting recreates players, but changing
+a file in place does not automatically recreate them. To rotate a key, stop
+the manager, stop and remove only the intended player container, replace its
+host key file, then start the manager with the same Compose overrides; it
+recreates that player with its existing volumes. Do not delete the volumes
+unless intentionally removing account data. Disabling key provisioning does
+not erase the key already copied into a persistent prefix. Treat that prefix
+and its backups as sensitive. Actual BYOND key portability and automatic
+login have not been verified; inspect login interactively without exposing the
+key, and record results separately from startup tests.
 
 For managed players, Docker health checks the Selkies endpoint, not Dream
 Seeker. This lets Traefik route to the desktop even if the BYOND pager needs

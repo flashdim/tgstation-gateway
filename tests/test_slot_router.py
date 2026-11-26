@@ -25,6 +25,7 @@ class ComposeTest(unittest.TestCase):
             "GATEWAY_MANAGER_IMAGE": "ghcr.io/flashdim/tgstation-gateway-manager:latest",
             "GATEWAY_MANAGER_GPU": "false",
             "DRI_RENDER_GID": "",
+            "GATEWAY_SECRET_DIRECTORY": "",
         }
 
     def test_compose_uses_one_manager_and_no_static_players(self):
@@ -116,6 +117,36 @@ class ComposeTest(unittest.TestCase):
         self.assertNotIn("devices", manager)
         self.assertNotIn("/dev/dri", json.dumps(services["landing"]))
 
+    def test_key_override_mounts_directory_only_in_manager(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(COMPOSE),
+                    "-f",
+                    str(ROOT / "examples/compose.traefik.keys.yaml"),
+                    "config",
+                    "--format",
+                    "json",
+                ],
+                env={**self.env, "GATEWAY_SECRET_DIRECTORY": directory},
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            services = json.loads(result.stdout)["services"]
+            manager = services["manager"]
+            self.assertEqual(
+                manager["environment"]["GATEWAY_SECRET_DIRECTORY"], directory
+            )
+            mount = next(v for v in manager["volumes"] if v["target"] == directory)
+            self.assertEqual(mount["source"], directory)
+            self.assertTrue(mount["read_only"])
+            self.assertFalse(mount["bind"].get("create_host_path", False))
+            self.assertNotIn(directory, json.dumps(services["landing"]))
+
     def test_manager_rejects_invalid_values_before_using_docker(self):
         for key, value in (
             ("GATEWAY_SLOT_COUNT", "0"),
@@ -127,6 +158,9 @@ class ComposeTest(unittest.TestCase):
             ("GATEWAY_TRAEFIK_ENTRYPOINT", "https,other"),
             ("GATEWAY_TRAEFIK_NETWORK", "bad network"),
             ("GATEWAY_MANAGER_GPU", "invalid"),
+            ("GATEWAY_SECRET_DIRECTORY", "relative"),
+            ("GATEWAY_SECRET_DIRECTORY", "/path,other"),
+            ("GATEWAY_SECRET_DIRECTORY", '/path"other'),
         ):
             result = subprocess.run(
                 ["sh", str(ROOT / "examples/slot-manager.sh")],
@@ -136,6 +170,84 @@ class ComposeTest(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
+
+    def test_manager_key_mount_and_invalid_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            keys = root / "keys with spaces"
+            keys.mkdir()
+            first = keys / "LGplayer01_key.txt"
+            second = keys / "LGplayer02_key.txt"
+            first.write_bytes(b"synthetic $`\\'\r\n")
+            second.write_bytes(b"other key")
+            script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            (root / "manager.sh").write_text(script)
+            (root / "seccomp").write_text("{}")
+            docker = root / "docker"
+            docker.write_text(
+                "#!/bin/sh\n"
+                'case "$1 $2" in\n'
+                '  "image inspect") echo fixture-image ;;\n'
+                '  "volume inspect") exit 1 ;;\n'
+                '  "run -d") printf "%s\\n" "$@" > "$ARGUMENTS"; exit 23 ;;\n'
+                "esac\n"
+            )
+            docker.chmod(0o755)
+            env = {
+                **self.env,
+                "GATEWAY_SLOT_COUNT": "2",
+                "GATEWAY_SECRET_DIRECTORY": str(keys),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "ARGUMENTS": str(root / "arguments"),
+            }
+
+            def run():
+                return subprocess.run(
+                    ["sh", str(root / "manager.sh")],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+
+            result = run()
+            self.assertEqual(result.returncode, 23, result.stderr)
+            arguments = (root / "arguments").read_text().splitlines()
+            self.assertIn(
+                f"type=bind,src={first},dst=/run/secrets/byond_key.txt,readonly",
+                arguments,
+            )
+            self.assertIn("BYOND_KEY_FILE=/run/secrets/byond_key.txt", arguments)
+            self.assertNotIn(str(second), "\n".join(arguments))
+            self.assertNotIn("synthetic", result.stdout + result.stderr)
+
+            for kind in ("missing", "empty", "symlink", "hardlink"):
+                with self.subTest(kind=kind):
+                    second.unlink()
+                    if kind == "empty":
+                        second.touch()
+                    elif kind == "symlink":
+                        second.symlink_to(first)
+                    elif kind == "hardlink":
+                        os.link(first, second)
+                    result = run()
+                    self.assertNotEqual(result.returncode, 23)
+                    invalid_slot = "01" if kind == "hardlink" else "02"
+                    self.assertIn(
+                        f"Missing or invalid key file for LGplayer{invalid_slot}",
+                        result.stderr,
+                    )
+                    if kind == "missing":
+                        second.write_bytes(b"other key")
+            second.unlink(missing_ok=True)
+            second.write_bytes(b"other key")
+            second.chmod(0)
+            result = run()
+            self.assertNotEqual(result.returncode, 23)
+            self.assertIn("readable by container UID 1000", result.stderr)
 
     def test_manager_gpu_arguments_and_settings(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -270,6 +382,7 @@ class ManagerDockerTest(unittest.TestCase):
             "GATEWAY_MANAGER_IMAGE": os.environ["GATEWAY_TEST_MANAGER_IMAGE"],
             "GATEWAY_MANAGER_GPU": "false",
             "DRI_RENDER_GID": "",
+            "GATEWAY_SECRET_DIRECTORY": "",
         }
         created = subprocess.run(
             ["docker", "network", "create", network],
@@ -305,6 +418,14 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
         try:
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
+                root.chmod(0o755)
+                keys = root / "keys"
+                keys.mkdir(mode=0o755)
+                for number in (1, 2):
+                    key = keys / f"LGplayer{number:02}_key.txt"
+                    key.write_bytes(f"fixture {number} $`\\'\r\n".encode())
+                    key.chmod(0o444)
+                env["GATEWAY_SECRET_DIRECTORY"] = str(keys)
                 (root / "app.py").write_text(backend)
                 (root / "curl").write_text(
                     "#!/usr/bin/env python3\n"
@@ -354,7 +475,16 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 }
                 override = root / "override.json"
                 override.write_text(json.dumps(overrides))
-                command = ["docker", "compose", "-f", str(COMPOSE), "-f", str(override)]
+                command = [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(COMPOSE),
+                    "-f",
+                    str(ROOT / "examples/compose.traefik.keys.yaml"),
+                    "-f",
+                    str(override),
+                ]
                 try:
                     up = subprocess.run(
                         [*command, "up", "-d", "--no-build", "--pull", "never"],
@@ -387,6 +517,35 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
                     self.wait_for_route(command, env, "/", "landing")
+                    for number in (1, 2):
+                        player = f"{project}-player{number:02}"
+                        content = subprocess.check_output(
+                            [
+                                "docker",
+                                "exec",
+                                player,
+                                "cat",
+                                "/run/secrets/byond_key.txt",
+                            ],
+                            env=env,
+                        )
+                        self.assertEqual(
+                            content,
+                            (keys / f"LGplayer{number:02}_key.txt").read_bytes(),
+                        )
+                        write = subprocess.run(
+                            [
+                                "docker",
+                                "exec",
+                                player,
+                                "sh",
+                                "-c",
+                                "echo changed > /run/secrets/byond_key.txt",
+                            ],
+                            env=env,
+                            capture_output=True,
+                        )
+                        self.assertNotEqual(write.returncode, 0)
                     first = f"{project}-player01"
                     self.wait_for_health(env, first, "healthy")
                     subprocess.run(

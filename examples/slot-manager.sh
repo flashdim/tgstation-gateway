@@ -11,6 +11,7 @@ server="${BYOND_SERVER:?BYOND_SERVER is required}"
 wayland="${SELKIES_WAYLAND:-true}"
 gpu="${GATEWAY_MANAGER_GPU:-false}"
 render_gid="${DRI_RENDER_GID:-}"
+secret_dir="${GATEWAY_SECRET_DIRECTORY:-}"
 
 if ! printf '%s' "$deployment" | grep -Eq '^[a-z0-9][a-z0-9_-]{0,47}$'; then
     echo "GATEWAY_DEPLOYMENT_ID must be 1-48 lowercase letters, digits, _ or -" >&2
@@ -71,6 +72,40 @@ case "$gpu" in
         ;;
 esac
 
+if [ -n "$secret_dir" ]; then
+    case "$secret_dir" in
+        /*) ;;
+        *)
+            echo "GATEWAY_SECRET_DIRECTORY must be an absolute host path" >&2
+            exit 1
+            ;;
+    esac
+    case "$secret_dir" in
+        *','* | *'"'* | *'
+'*)
+            echo "GATEWAY_SECRET_DIRECTORY cannot contain commas, double quotes or newlines" >&2
+            exit 1
+            ;;
+    esac
+    number=1
+    while [ "$number" -le "$count" ]; do
+        slot="$(printf '%02d' "$number")"
+        key="$secret_dir/LGplayer${slot}_key.txt"
+        if [ -L "$key" ] || [ ! -f "$key" ] || [ ! -s "$key" ] || [ "$(stat -c '%h' "$key")" != 1 ]; then
+            echo "Missing or invalid key file for LGplayer$slot" >&2
+            exit 1
+        fi
+        uid="$(stat -c '%u' "$key")"
+        mode="$(stat -c '%a' "$key")"
+        if ! { [ "$uid" -eq 1000 ] && [ $((0$mode & 0400)) -ne 0 ]; } &&
+            ! { [ "$uid" -ne 1000 ] && [ $((0$mode & 0044)) -eq 36 ]; }; then
+            echo "Key file for LGplayer$slot must be readable by container UID 1000" >&2
+            exit 1
+        fi
+        number=$((number + 1))
+    done
+fi
+
 exec 9>/run/gateway-lock/manager.lock
 if ! flock -n 9; then
     echo "Another manager already owns deployment $deployment" >&2
@@ -83,7 +118,12 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 fi
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
-settings="$(printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" | sha256sum | cut -d ' ' -f 1)"
+settings="$(
+    {
+        printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid"
+        [ -z "$secret_dir" ] || printf '%s\n' "$secret_dir"
+    } | sha256sum | cut -d ' ' -f 1
+)"
 
 owner_label="io.tgstation-gateway.deployment"
 role_label="io.tgstation-gateway.role"
@@ -166,6 +206,10 @@ reconcile() {
             set --
             if [ "$gpu" = true ]; then
                 set -- --device /dev/dri:/dev/dri --group-add "$render_gid"
+            fi
+            if [ -n "$secret_dir" ]; then
+                set -- "$@" --mount "type=bind,src=$secret_dir/LGplayer${slot}_key.txt,dst=/run/secrets/byond_key.txt,readonly" \
+                    -e BYOND_KEY_FILE=/run/secrets/byond_key.txt
             fi
             docker run -d --name "$name" --platform linux/amd64 --init \
                 "$@" \
