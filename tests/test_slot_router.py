@@ -423,7 +423,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 root.chmod(0o755)
                 keys = root / "keys"
                 keys.mkdir(mode=0o755)
-                for number in (1, 2):
+                for number in (1, 2, 3):
                     key = keys / f"LGplayer{number:02}_key.txt"
                     key.write_bytes(f"fixture {number} $`\\'\r\n".encode())
                     key.chmod(0o444)

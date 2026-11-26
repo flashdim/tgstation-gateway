@@ -51,6 +51,8 @@ image, authenticated routing, Selkies disconnect behavior or gameplay.
 Both workflows test the locally built manager image in the managed Traefik
 Compose deployment with pinned Traefik and mock backends, including HTTPS
 routes, WebSocket upgrades, slot-count reconciliation and retained volumes.
+It also verifies that each of two players receives only its own read-only key
+fixture without changing its bytes.
 The test verifies the running manager uses the image built for that job. This
 does not exercise Cloudflare or live gameplay.
 
