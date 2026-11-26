@@ -183,3 +183,69 @@ jobs:
             docker tag tgstation-gateway-landing:release "$tag"
             docker push "$tag"
           done <<< "$IMAGE_TAGS"
+
+  manager-image:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Generate manager image metadata
+        id: manager-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/${{ github.repository }}-manager
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build release manager image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: examples/manager.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: tgstation-gateway-manager:release
+          labels: ${{ steps.manager-meta.outputs.labels }}
+
+      - name: Test release manager image and Traefik slot routing
+        env:
+          GATEWAY_TEST_MANAGER_IMAGE: tgstation-gateway-manager:release
+          GATEWAY_TEST_BACKEND_IMAGE: python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+          GATEWAY_TEST_TRAEFIK_IMAGE: traefik:v3.8.0@sha256:00c9734983e74ae35a1fc18eaee9e9da13f3dde95c4e45b3b8c3b60e0dbd2d17
+        run: |
+          docker pull "$GATEWAY_TEST_BACKEND_IMAGE"
+          docker pull "$GATEWAY_TEST_TRAEFIK_IMAGE"
+          python3 -m unittest discover -s tests -p test_slot_router.py -v
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish tested manager image
+        env:
+          IMAGE_TAGS: ${{ steps.manager-meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          if [ -z "$IMAGE_TAGS" ]; then
+            echo "No release manager image tags were generated" >&2
+            exit 1
+          fi
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag tgstation-gateway-manager:release "$tag"
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"

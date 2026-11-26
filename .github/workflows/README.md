@@ -8,17 +8,19 @@ CI publishes `dev` for main and `dev-pr<number>` for pull requests from this
 repository immediately after the build, before Compose validation, smoke tests,
 and runtime checks. These tags may therefore point to images that fail
 validation.
-The player image (`image` job) and the landing image (`landing-image` job) are
-built, published and tested in separate jobs that run in parallel after
-formatting; a failure in one does not cancel the other. Compose validation runs
-in the player job. The same development tags are published for the separate
-`ghcr.io/<owner>/<repository>-landing` image.
-`publish.yml` runs unit tests first, then builds, smoke-tests and publishes the
-player image (`player-image`) and landing image (`landing-image`) in parallel
-jobs. Each image is published only after its own checks pass, but neither job
-waits for the other: if one fails, the other image may already be published for
-that release. Re-run the failed job for transient failures; otherwise fix the
-cause in a new release.
+The player image (`image` job), landing image (`landing-image` job) and manager
+image (`manager-image` job) are built, published and tested in separate jobs
+that run in parallel after formatting; a failure in one does not cancel the
+others. Compose validation runs in the player job. The same development tags
+are published for `ghcr.io/<owner>/<repository>-landing` and
+`ghcr.io/<owner>/<repository>-manager`. CI publishes the development manager
+image before its integration test, so a development tag can point to an image
+that fails validation.
+`publish.yml` runs unit tests first, then builds, tests and publishes the
+player, landing and manager images in parallel jobs. Each image is published
+only after its own checks pass, but jobs do not wait for each other: if one
+fails, other images may already be published for that release. Re-run the
+failed job for transient failures; otherwise fix the cause in a new release.
 After unit tests pass, `landing-screenshot` renders the landing page with five
 slots in Chromium and uploads a desktop `landing-desktop.png` as an unzipped
 artifact, downloadable from the run summary. It is a
@@ -46,10 +48,11 @@ count and prefix changes, unrelated projects and volume retention/cleanup using
 a pinned Alpine fixture. This does not test daemon or host restarts, the player
 image, authenticated routing, Selkies disconnect behavior or gameplay.
 
-CI also tests the managed Traefik Compose deployment with pinned Traefik and
-Caddy images and mock backends, including HTTPS routes, WebSocket upgrades,
-slot-count reconciliation and retained volumes. This does not exercise
-Cloudflare or live gameplay.
+Both workflows test the locally built manager image in the managed Traefik
+Compose deployment with pinned Traefik and mock backends, including HTTPS
+routes, WebSocket upgrades, slot-count reconciliation and retained volumes.
+The test verifies the running manager uses the image built for that job. This
+does not exercise Cloudflare or live gameplay.
 
 For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
 mocked launcher provisioning check using the complete pager-generated key file

@@ -22,6 +22,7 @@ class ComposeTest(unittest.TestCase):
             "GATEWAY_TRAEFIK_ENTRYPOINT": "https",
             "GATEWAY_SLOT_COUNT": "4",
             "BYOND_SERVER": "tgstation:1337",
+            "GATEWAY_MANAGER_IMAGE": "ghcr.io/flashdim/tgstation-gateway-manager:latest",
         }
 
     def test_compose_uses_one_manager_and_no_static_players(self):
@@ -34,26 +35,36 @@ class ComposeTest(unittest.TestCase):
         )
         config = json.loads(result.stdout)
         services = config["services"]
-        self.assertEqual(set(services), {"landing", "router", "manager"})
+        self.assertEqual(set(services), {"landing", "manager"})
         self.assertEqual(services["landing"]["environment"]["GATEWAY_SLOT_COUNT"], "4")
         self.assertEqual(services["manager"]["environment"]["GATEWAY_SLOT_COUNT"], "4")
+        self.assertEqual(
+            services["manager"]["image"],
+            "ghcr.io/flashdim/tgstation-gateway-manager:latest",
+        )
+        self.assertNotIn("build", services["manager"])
         self.assertEqual(config["networks"]["edge"]["name"], "public")
         self.assertEqual(
-            services["router"]["labels"]["traefik.http.routers.gatewaytest.rule"],
+            services["landing"]["labels"][
+                "traefik.http.routers.gatewaytest-landing.rule"
+            ],
             "Host(`play.example.org`)",
         )
         self.assertEqual(
-            services["router"]["labels"][
-                "traefik.http.services.gatewaytest.loadbalancer.server.port"
+            services["landing"]["labels"][
+                "traefik.http.services.gatewaytest-landing.loadbalancer.server.port"
             ],
-            "8080",
+            "8000",
         )
         self.assertNotIn("ports", services["landing"])
-        self.assertNotIn("ports", services["router"])
-        self.assertNotIn("/var/run/docker.sock", json.dumps(services["router"]))
         self.assertNotIn("/var/run/docker.sock", json.dumps(services["landing"]))
         self.assertIn("/var/run/docker.sock", json.dumps(services["manager"]))
-        self.assertIn("path_regexp slot", config["configs"]["router_config"]["content"])
+        self.assertEqual(
+            services["manager"]["environment"]["GATEWAY_PLAY_HOST"], "play.example.org"
+        )
+        self.assertEqual(
+            services["manager"]["environment"]["GATEWAY_TRAEFIK_ENTRYPOINT"], "https"
+        )
 
     def test_required_configuration(self):
         for key in ("GATEWAY_PLAY_HOST", "BYOND_SERVER"):
@@ -75,6 +86,9 @@ class ComposeTest(unittest.TestCase):
             ("GATEWAY_DEPLOYMENT_ID", "bad/name"),
             ("BYOND_SERVER", "tgstation:0"),
             ("SELKIES_WAYLAND", "invalid"),
+            ("GATEWAY_PLAY_HOST", "example.org`) || PathPrefix(`/"),
+            ("GATEWAY_TRAEFIK_ENTRYPOINT", "https,other"),
+            ("GATEWAY_TRAEFIK_NETWORK", "bad network"),
         ):
             result = subprocess.run(
                 ["sh", str(ROOT / "examples/slot-manager.sh")],
@@ -89,7 +103,11 @@ class ComposeTest(unittest.TestCase):
 @unittest.skipUnless(
     all(
         os.environ.get(key)
-        for key in ("GATEWAY_TEST_BACKEND_IMAGE", "GATEWAY_TEST_TRAEFIK_IMAGE")
+        for key in (
+            "GATEWAY_TEST_MANAGER_IMAGE",
+            "GATEWAY_TEST_BACKEND_IMAGE",
+            "GATEWAY_TEST_TRAEFIK_IMAGE",
+        )
     ),
     "Set fixture images to run the Docker manager and routing test",
 )
@@ -108,6 +126,7 @@ class ManagerDockerTest(unittest.TestCase):
             "BYOND_SERVER": "tgstation:1337",
             "GATEWAY_IMAGE": fixture_image,
             "GATEWAY_LANDING_IMAGE": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
+            "GATEWAY_MANAGER_IMAGE": os.environ["GATEWAY_TEST_MANAGER_IMAGE"],
         }
         created = subprocess.run(
             ["docker", "network", "create", network],
@@ -161,7 +180,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                             "command": [
                                 "--providers.docker=true",
                                 "--providers.docker.exposedbydefault=false",
-                                f"--providers.docker.constraints=Label(`com.docker.compose.project`,`{project}`)",
+                                f"--providers.docker.constraints=Label(`io.tgstation-gateway.deployment`,`{project}`)",
                                 "--entrypoints.https.address=:8443",
                             ],
                         },
@@ -181,14 +200,53 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 command = ["docker", "compose", "-f", str(COMPOSE), "-f", str(override)]
                 try:
                     up = subprocess.run(
-                        [*command, "up", "-d", "--build"],
+                        [*command, "up", "-d", "--no-build", "--pull", "never"],
                         env=env,
                         capture_output=True,
                         text=True,
                     )
                     self.assertEqual(up.returncode, 0, up.stderr)
+                    manager_id = subprocess.check_output(
+                        [*command, "ps", "-q", "manager"], env=env, text=True
+                    ).strip()
+                    actual_image = subprocess.check_output(
+                        ["docker", "inspect", "-f", "{{.Image}}", manager_id],
+                        env=env,
+                        text=True,
+                    ).strip()
+                    expected_image = subprocess.check_output(
+                        [
+                            "docker",
+                            "image",
+                            "inspect",
+                            "-f",
+                            "{{.Id}}",
+                            env["GATEWAY_MANAGER_IMAGE"],
+                        ],
+                        env=env,
+                        text=True,
+                    ).strip()
+                    self.assertEqual(actual_image, expected_image)
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
+                    self.wait_for_route(command, env, "/", "landing")
+                    labels = json.loads(
+                        subprocess.check_output(
+                            [
+                                "docker",
+                                "inspect",
+                                "-f",
+                                "{{json .Config.Labels}}",
+                                f"{project}-player01",
+                            ],
+                            env=env,
+                            text=True,
+                        )
+                    )
+                    self.assertEqual(
+                        labels[f"traefik.http.routers.{project}-player01.rule"],
+                        "Host(`play.example.org`) && PathPrefix(`/LGplayer01/`)",
+                    )
                     for number in (1, 2):
                         path = f"/LGplayer{number:02}/api/websockets"
                         result = self.request(command, env, path, True)
@@ -241,12 +299,26 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         capture_output=True,
                     )
                     self.assertEqual(volume.returncode, 0)
+                    self.wait_for_route(command, env, "/LGplayer02/", "landing")
                     env["GATEWAY_SLOT_COUNT"] = "2"
                     up = subprocess.run(
                         [*command, "up", "-d"], env=env, capture_output=True, text=True
                     )
                     self.assertEqual(up.returncode, 0, up.stderr)
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
+                    marker = subprocess.check_output(
+                        ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
+                        env=env,
+                        text=True,
+                    )
+                    self.assertEqual(marker.strip(), "retained")
+                    env["GATEWAY_PLAY_HOST"] = "new.example.org"
+                    up = subprocess.run(
+                        [*command, "up", "-d"], env=env, capture_output=True, text=True
+                    )
+                    self.assertEqual(up.returncode, 0, up.stderr)
+                    self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
+                    self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     marker = subprocess.check_output(
                         ["docker", "exec", player, "cat", "/home/ubuntu/.wine/marker"],
                         env=env,
@@ -322,9 +394,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 ["docker", "network", "rm", network], env=env, capture_output=True
             )
             subprocess.run(
-                ["docker", "image", "rm", fixture_image, f"{project}-manager"],
-                env=env,
-                capture_output=True,
+                ["docker", "image", "rm", fixture_image], env=env, capture_output=True
             )
 
     def wait_for_route(self, command, env, path, expected):
@@ -337,12 +407,13 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         "Cookie",
                         "Authorization",
                         "Cf-Access-Jwt-Assertion",
+                        "Cf-Access-Client-Secret",
                     ):
                         self.assertNotIn(header, data["body"]["headers"])
                     return
             time.sleep(0.2)
         logs = subprocess.run(
-            [*command, "logs", "--no-color", "manager", "router", "traefik"],
+            [*command, "logs", "--no-color", "manager", "landing", "traefik"],
             env=env,
             capture_output=True,
             text=True,
@@ -354,7 +425,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
         code = """
 import http.client, json, os, ssl
 conn = http.client.HTTPSConnection("traefik", 8443, context=ssl._create_unverified_context(), timeout=2)
-headers = {"Host": "play.example.org", "Cookie": "secret=1", "Authorization": "Bearer secret", "Cf-Access-Jwt-Assertion": "secret"}
+headers = {"Host": os.environ["HOST_TO_CHECK"], "Cookie": "secret=1", "Authorization": "Bearer secret", "Cf-Access-Jwt-Assertion": "secret", "Cf-Access-Client-Secret": "secret"}
 if os.environ["WEBSOCKET"] == "1":
     headers.update({"Connection": "Upgrade", "Upgrade": "websocket"})
 conn.request("GET", os.environ["PATH_TO_CHECK"], headers=headers)
@@ -372,6 +443,8 @@ conn.close()
                 f"PATH_TO_CHECK={path}",
                 "-e",
                 f"WEBSOCKET={int(websocket)}",
+                "-e",
+                f"HOST_TO_CHECK={env['GATEWAY_PLAY_HOST']}",
                 "probe",
                 "python3",
                 "-c",

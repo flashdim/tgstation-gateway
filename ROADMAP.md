@@ -11,7 +11,7 @@ game server and tgstation-server separate; neither is managed by this project.
 The current repository provides a single-player BYOND image, an optional
 landing-page prototype with validated slot configuration, a Compose generator
 for fixed account containers, an optional two-account nginx boundary example,
-and a fixed-slot manager with a Traefik router. The manager starts persistent
+and a fixed-slot manager with direct Traefik routes. The manager starts persistent
 players but does not assign or authorize users. Landing links do not establish
 authenticated ownership or report container health. Routing and lifecycle
 fixtures use mock backends; a complete authenticated gameplay session and the

@@ -4,6 +4,8 @@ set -eu
 deployment="${GATEWAY_DEPLOYMENT_ID:-tgportals}"
 count="${GATEWAY_SLOT_COUNT:-4}"
 network="${GATEWAY_TRAEFIK_NETWORK:-public}"
+entrypoint="${GATEWAY_TRAEFIK_ENTRYPOINT:-https}"
+host="${GATEWAY_PLAY_HOST:?GATEWAY_PLAY_HOST is required}"
 image="${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}"
 server="${BYOND_SERVER:?BYOND_SERVER is required}"
 wayland="${SELKIES_WAYLAND:-true}"
@@ -14,6 +16,18 @@ if ! printf '%s' "$deployment" | grep -Eq '^[a-z0-9][a-z0-9_-]{0,47}$'; then
 fi
 if ! printf '%s' "$count" | grep -Eq '^[1-9][0-9]?$'; then
     echo "GATEWAY_SLOT_COUNT must be between 1 and 99" >&2
+    exit 1
+fi
+if [ "${#host}" -gt 253 ] || ! printf '%s' "$host" | grep -Eq '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'; then
+    echo "GATEWAY_PLAY_HOST must be a DNS name without a port" >&2
+    exit 1
+fi
+if ! printf '%s' "$entrypoint" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$'; then
+    echo "GATEWAY_TRAEFIK_ENTRYPOINT must name one Traefik entrypoint" >&2
+    exit 1
+fi
+if ! printf '%s' "$network" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'; then
+    echo "GATEWAY_TRAEFIK_NETWORK must name one Docker network" >&2
     exit 1
 fi
 if ! printf '%s' "$server" | grep -Eq '^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):[0-9]{1,5}$'; then
@@ -45,7 +59,7 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 fi
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
-settings="$(printf '%s\n' v1 "$image_id" "$server" "$network" "$wayland" "$profile_hash" | sha256sum | cut -d ' ' -f 1)"
+settings="$(printf '%s\n' v2 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" | sha256sum | cut -d ' ' -f 1)"
 
 owner_label="io.tgstation-gateway.deployment"
 role_label="io.tgstation-gateway.role"
@@ -134,6 +148,21 @@ reconcile() {
                 --label "$slot_label=$slot" \
                 --label "io.tgstation-gateway.account=LGplayer$slot" \
                 --label "io.tgstation-gateway.settings=$settings" \
+                --label traefik.enable=true \
+                --label "traefik.docker.network=$network" \
+                --label "traefik.http.routers.$name.rule=Host(\`$host\`) && PathPrefix(\`/LGplayer$slot/\`)" \
+                --label "traefik.http.routers.$name.entrypoints=$entrypoint" \
+                --label "traefik.http.routers.$name.priority=100" \
+                --label "traefik.http.routers.$name.tls=true" \
+                --label "traefik.http.routers.$name.service=$name" \
+                --label "traefik.http.routers.$name.middlewares=$name-sanitize" \
+                --label "traefik.http.services.$name.loadbalancer.server.port=8080" \
+                --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cookie=" \
+                --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Authorization=" \
+                --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Jwt-Assertion=" \
+                --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Authenticated-User-Email=" \
+                --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Id=" \
+                --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Secret=" \
                 -e "BYOND_SERVER=$server" -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
                 -e "SELKIES_MODE=websockets" -e "SELKIES_WAYLAND=$wayland" \
                 -e SELKIES_GAMEPAD_ENABLED=false -e SELKIES_MICROPHONE_ENABLED=false \
