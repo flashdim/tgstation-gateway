@@ -344,7 +344,9 @@ the account and password, checks **Save password** and **Automatically login
 when program starts**, and submits at most once per pager launch. An
 initial Guest selection may disable password controls; the helper enters the
 configured account before checking that those controls are enabled. It does
-not open the login dialog or log out a Guest session automatically. An
+not log out an existing Guest session automatically. If the pager's main
+`BYOND` window starts hidden, the helper restores it so it can be used
+interactively or its login dialog can be detected. An
 unrecognized dialog or rejected login needs manual intervention. Real BYOND
 login has not been verified. Treat Wine prefixes and backups as sensitive.
 To rotate a password, stop the manager, replace the file, and start the manager

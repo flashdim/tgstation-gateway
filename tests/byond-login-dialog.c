@@ -4,6 +4,8 @@
 
 enum { ACCOUNT = 100, PASSWORD, SAVE, AUTOMATIC, LOGIN };
 
+static HWND pager_window;
+
 static void control(HWND dialog, int id, const wchar_t *class, const wchar_t *title,
                     DWORD style, int y)
 {
@@ -31,6 +33,8 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog, UINT message, WPARAM wparam, LP
             EnableWindow(GetDlgItem(dialog, PASSWORD), FALSE);
             EnableWindow(GetDlgItem(dialog, SAVE), FALSE);
         }
+        if (!IsWindowVisible(pager_window))
+            ExitProcess(6);
         SetTimer(dialog, 1, 15000, NULL);
         return TRUE;
     }
@@ -66,6 +70,30 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog, UINT message, WPARAM wparam, LP
 
 int main(void)
 {
+    WNDCLASSW pager_class = {
+        .lpfnWndProc = DefWindowProcW,
+        .hInstance = GetModuleHandleW(NULL),
+        .lpszClassName = L"BYOND_TEST_PAGER",
+    };
+    if (!RegisterClassW(&pager_class))
+        return 2;
+    pager_window = CreateWindowW(pager_class.lpszClassName, L"BYOND", WS_OVERLAPPEDWINDOW,
+                                CW_USEDEFAULT, CW_USEDEFAULT, 640, 480, NULL, NULL,
+                                pager_class.hInstance, NULL);
+    if (!pager_window)
+        return 2;
+    ULONGLONG deadline = GetTickCount64() + 10000;
+    while (!IsWindowVisible(pager_window) && GetTickCount64() < deadline) {
+        MSG message;
+        while (PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+        Sleep(20);
+    }
+    if (!IsWindowVisible(pager_window))
+        return 2;
+
     const struct {
         DLGTEMPLATE header;
         WORD menu, class, title;
