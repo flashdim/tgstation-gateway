@@ -1,0 +1,66 @@
+name: ${GATEWAY_DEPLOYMENT_ID:-tgportals}
+
+services:
+  landing:
+    image: ${GATEWAY_LANDING_IMAGE:-ghcr.io/flashdim/tgstation-gateway-landing:latest}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:?Set GATEWAY_PLAY_HOST to your Traefik hostname}
+      GATEWAY_PLAY_SCHEME: https
+      GATEWAY_SLOT_COUNT: ${GATEWAY_SLOT_COUNT:-4}
+      GATEWAY_ACCOUNT_PREFIX: LGplayer
+      GATEWAY_SLOT_PATH: /{account}/
+      GATEWAY_QUERY_HOST: ${GATEWAY_QUERY_HOST:-}
+      GATEWAY_QUERY_PORT: ${GATEWAY_QUERY_PORT:-}
+    networks: [edge]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${GATEWAY_TRAEFIK_NETWORK:-public}
+      - io.tgstation-gateway.deployment=${GATEWAY_DEPLOYMENT_ID:-tgportals}
+      - traefik.http.routers.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.rule=Host(`${GATEWAY_PLAY_HOST:?Set GATEWAY_PLAY_HOST to your Traefik hostname}`)
+      - traefik.http.routers.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.entrypoints=${GATEWAY_TRAEFIK_ENTRYPOINT:-https}
+      - traefik.http.routers.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.priority=1
+      - traefik.http.routers.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.tls=true
+      - traefik.http.routers.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.service=${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing
+      - traefik.http.routers.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.middlewares=${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize
+      - traefik.http.services.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing.loadbalancer.server.port=8000
+      - traefik.http.middlewares.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize.headers.customrequestheaders.Cookie=
+      - traefik.http.middlewares.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize.headers.customrequestheaders.Authorization=
+      - traefik.http.middlewares.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize.headers.customrequestheaders.Cf-Access-Jwt-Assertion=
+      - traefik.http.middlewares.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize.headers.customrequestheaders.Cf-Access-Authenticated-User-Email=
+      - traefik.http.middlewares.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize.headers.customrequestheaders.Cf-Access-Client-Id=
+      - traefik.http.middlewares.${GATEWAY_DEPLOYMENT_ID:-tgportals}-landing-sanitize.headers.customrequestheaders.Cf-Access-Client-Secret=
+
+  manager:
+    image: ${GATEWAY_MANAGER_IMAGE:-ghcr.io/flashdim/tgstation-gateway-manager:latest}
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      GATEWAY_DEPLOYMENT_ID: ${GATEWAY_DEPLOYMENT_ID:-tgportals}
+      GATEWAY_SLOT_COUNT: ${GATEWAY_SLOT_COUNT:-4}
+      GATEWAY_TRAEFIK_NETWORK: ${GATEWAY_TRAEFIK_NETWORK:-public}
+      GATEWAY_TRAEFIK_ENTRYPOINT: ${GATEWAY_TRAEFIK_ENTRYPOINT:-https}
+      GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:?Set GATEWAY_PLAY_HOST to your Traefik hostname}
+      GATEWAY_IMAGE: ${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}
+      BYOND_SERVER: ${BYOND_SERVER:?Set BYOND_SERVER to your game server host and port}
+      SELKIES_WAYLAND: ${SELKIES_WAYLAND:-true}
+      GATEWAY_MANAGER_GPU: ${GATEWAY_MANAGER_GPU:-false}
+      DRI_RENDER_GID: ${DRI_RENDER_GID:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - manager_lock:/run/gateway-lock
+
+networks:
+  edge:
+    external: true
+    name: ${GATEWAY_TRAEFIK_NETWORK:-public}
+
+volumes:
+  manager_lock:

@@ -11,7 +11,7 @@
   <a href="https://github.com/Kron4ek/Wine-Builds"><img src="https://img.shields.io/badge/Proton%20Wine-10.0--4-722F37?style=flat-square&amp;logo=wine&amp;logoColor=white" alt="Proton Wine 10.0-4"></a>
 </p>
 
-The repository currently provides an experimental single-player BYOND image and an optional landing-page prototype. The player streams the screen and audio; it does not host a game server or manage player sessions, and a complete authenticated gameplay session has not been verified.
+The repository currently provides an experimental single-player BYOND image, an optional landing-page prototype and a fixed-slot manager. The player streams the screen and audio; it does not host a game server or dynamically assign browser sessions, and a complete authenticated gameplay session has not been verified.
 <img src="docs/landing-desktop.png" alt="Landing page rendered by the CI landing-screenshot job">
 
 ## Architecture
@@ -39,12 +39,13 @@ flowchart LR
     ClientN -->|"BYOND protocol"| Server
 ```
 
-The proxy and the game server are outside this repository; access control and
-TLS are the operator's responsibility. The optional landing page returns slot
-URLs; the dashed arrow shows the browser following a selected URL to the proxy.
-The page does not forward the player connection. The proxy routes each slot path
-to its player container. Its status query is separate from gameplay, and the
-player image works without the landing page.
+The game server is outside this repository. The optional landing page returns
+slot URLs; the dashed arrow shows the browser following a selected URL to the
+proxy. The page does not forward the player connection. The proxy routes each
+slot path to its player container. Its status query is separate from gameplay,
+and the player image works without the landing page. The optional slot manager
+registers routes with Traefik; alternatively, an operator proxy can route slots
+directly. Access control and TLS remain the operator's responsibility.
 
 ## Run the player
 
@@ -156,8 +157,8 @@ digits, `_` or `-`. Paths permit ASCII letters, digits, `.`, `_`, `~`, `/`, `-`
 and the two placeholders; `.` and `..` segments, repeated slashes, percent
 encoding, query strings and fragments are rejected. These checks validate the
 landing configuration, not requests to the proxy. The landing page only builds
-these links; the operator's reverse proxy must route each path to the
-corresponding player container. The example Compose file runs one player, so
+these links; a proxy must route each path to the corresponding player
+container. The example Compose file runs one player, so
 only a single-slot configuration reaches a working player without additional
 routing. Fixed deployments require paths ending in `/`. Invalid values stop
 the landing container at startup with an error naming the variable. Startup
@@ -213,6 +214,136 @@ account volumes. `down -v` deletes volumes declared in the current configuration
 but not necessarily orphan volumes from earlier configurations. Deletion is not
 secure erasure. Treat volumes, container layers and backups as sensitive.
 
+#### Managed slots behind Traefik
+
+`examples/compose.traefik.yaml` starts the landing page and a slot manager.
+The manager creates one persistent player container per slot, registers its
+route using Traefik Docker labels, and reconciles missing or stopped
+containers. Traefik terminates HTTPS and routes `/LGplayer01/` and subsequent
+slot paths directly to their corresponding players. No gateway ports are
+published. Players start asynchronously; check manager logs and player health
+before use.
+
+**The generated Traefik routes do not authenticate or authorize users.**
+Anyone who reaches them can control every slot and access its persistent
+data. Cloudflare proxying alone is not authentication. Protect every landing
+and player route with an external access boundary and prevent direct-origin
+bypasses. A middleware on the landing route alone does not protect player
+routes; apply the boundary to all paths, for example on the Traefik
+entrypoint. This example connects the landing and player containers to the
+existing `public` network so they can resolve
+`tgstation`. **Any container on that network can also connect directly to
+player streams**, bypassing Traefik. Use it only with trusted containers and
+operators; Docker and host administrators can also reach the backends.
+Traefik-to-backend traffic is HTTP. For Cloudflare-to-origin protection, use
+Full (strict) with a valid Traefik certificate.
+
+**The manager has unrestricted Docker daemon access**, equivalent to host root.
+It is a privileged component, not a player-accessible API. Only the manager
+mounts the Docker socket; the landing page and player containers do
+not. Do not mount that socket in other services or use this deployment on an
+untrusted Docker host.
+
+From a repository checkout, with Docker Compose 2.23.1 or newer and an existing
+`public` network shared by Traefik and the BYOND server:
+
+```sh
+export GATEWAY_PLAY_HOST=www.lazorgator.party
+export GATEWAY_TRAEFIK_NETWORK=public GATEWAY_TRAEFIK_ENTRYPOINT=https
+export GATEWAY_DEPLOYMENT_ID=tgportals
+export GATEWAY_SLOT_COUNT=4
+export BYOND_SERVER=tgstation:1337
+export GATEWAY_QUERY_HOST=tgstation GATEWAY_QUERY_PORT=1337
+# Use the development tags if a latest release is not available.
+export GATEWAY_IMAGE=ghcr.io/flashdim/tgstation-gateway:dev
+export GATEWAY_LANDING_IMAGE=ghcr.io/flashdim/tgstation-gateway-landing:dev
+export GATEWAY_MANAGER_IMAGE=ghcr.io/flashdim/tgstation-gateway-manager:dev
+docker compose -f examples/compose.traefik.yaml up -d
+docker compose -f examples/compose.traefik.yaml ps --all
+docker compose -f examples/compose.traefik.yaml logs manager
+docker ps -a --filter label=io.tgstation-gateway.deployment=tgportals
+```
+
+`GATEWAY_QUERY_HOST` and `GATEWAY_QUERY_PORT` are optional and control the
+landing page's status panel. Set the image variables to the desired release or
+PR development tags. Keep `GATEWAY_DEPLOYMENT_ID` unique and stable: it names
+the Compose project, Traefik route and persistent account volumes. It must
+contain 1–48 lowercase letters, digits, underscores or hyphens and start with
+a letter or digit. Do not override the Compose project name with `-p` or
+`COMPOSE_PROJECT_NAME`, run multiple managers for the same deployment, or
+reuse a project belonging to another deployment. The manager defaults to
+`ghcr.io/flashdim/tgstation-gateway-manager:latest`; select `:dev` or
+`:dev-pr83` for a development build. To update an existing tag, pull the
+manager image and recreate the manager container. Set these variables in the
+shell or a Compose `.env` file, not just in the landing container's environment.
+
+Remove the old `tgstation-landing` Traefik labels or stop that deployment
+before enabling the new routes: two routes for the same host can conflict.
+Traefik's Docker provider must discover the landing and player containers on
+the shared network. Its certificate, HTTPS redirects and access-control
+middleware remain operator responsibilities. If updating a previous PR
+version that ran a Caddy router, stop and remove that old router container;
+otherwise its orphaned route can intercept landing traffic. For a dedicated
+Compose project, `docker compose -f examples/compose.traefik.yaml up -d
+--remove-orphans` removes the old Compose router, but can also remove other
+orphan services in that project. Inspect them before using it.
+
+Set `GATEWAY_SLOT_COUNT` to 1–99 and rerun `docker compose ... up -d` after
+changing it. The manager removes extra owned containers but retains their Wine
+and data volumes; increasing the count restores those account volumes. It
+refuses containers or volumes with conflicting ownership labels. Changing the
+BYOND server, player image, network, hostname or Traefik entrypoint recreates
+the affected player containers.
+To update an existing image tag, pull it first and restart the manager.
+Managed players use WebSocket mode, the project's seccomp profile, and fixed
+resource limits; this deployment does not provision per-account BYOND key
+files. Container startup does not establish playable sessions.
+
+For managed players, Docker health checks the Selkies endpoint, not Dream
+Seeker. This lets Traefik route to the desktop even if the BYOND pager needs
+interactive login or the game client has stopped. A healthy slot does not
+prove that BYOND has launched or connected. If Selkies becomes unhealthy,
+Traefik may route the slot URL to the landing page's 404 instead.
+
+For an Intel/AMD GPU available through `/dev/dri` on the Docker daemon host,
+enable optional player GPU access with the GPU Compose override:
+
+```sh
+docker compose -f examples/compose.traefik.yaml \
+  -f examples/compose.traefik.gpu.yaml up -d
+```
+
+The override enables `GATEWAY_MANAGER_GPU` and bind-mounts `/dev/dri` read-only
+into the manager for group-ID detection; it does not grant the manager GPU
+device permissions. With exactly one render node, `DRI_RENDER_GID` is detected
+automatically. If no render node or multiple render nodes are present,
+the manager exits with an explicit error unless you set `DRI_RENDER_GID`
+in the shell or Compose `.env` file. Obtain that override with
+`stat -c '%g' /dev/dri/renderD128`, using your intended GPU's render node.
+The manager passes `/dev/dri:/dev/dri` and that supplementary group to
+every player, not to the landing container. GPU access is disabled
+by default. Changing the GPU setting or group ID recreates owned players while
+retaining their volumes. Enabling it requires `/dev/dri` on the daemon host;
+Compose refuses a missing bind-mount source rather than creating it.
+Use both Compose files for subsequent GPU deployment commands.
+This exposes all host DRI devices to
+players and increases their access to the host graphics driver. It does not
+provide NVIDIA Container Toolkit support or guarantee DXVK compatibility;
+check player logs and health after enabling it.
+
+The manager-created player containers and their named volumes are **not**
+Compose services or Compose-managed volumes. `docker compose down` stops the
+manager and landing page but does **not** stop or remove the players; `down -v` does
+not delete their data. Inspect and deliberately stop/remove them and their
+volumes separately when no longer needed. Their volume names differ from the
+`fixed-slots.py` deployment; no account data is migrated automatically.
+
+The generated Traefik middleware strips cookies, authorization and known
+Cloudflare Access credential headers before forwarding, but does not validate
+them. Before sharing access, verify your external authorization, direct-origin
+restrictions, all slot routes, WebSocket reconnects and gameplay. Integration
+tests use mock backends; real Cloudflare, media and gameplay remain unverified.
+
 #### Recovery and operator cleanup
 
 Use the same Docker context, deployment ID, account prefix and other settings
@@ -267,9 +398,9 @@ by the fixture tests. For the latter, disconnect and reconnect an authenticated
 browser on a test deployment and check the same container and BYOND process
 remain; record the result separately from startup or gameplay checks.
 
-The landing page lists configured account links, not occupancy or health. The
-operator must configure a reverse proxy to route each generated path to the
-matching loopback port and enforce authenticated ownership **before** routing,
+The landing page lists configured account links, not occupancy or health. With
+the external-proxy deployment, the operator must route each generated path to
+the matching loopback port and enforce authenticated ownership **before** routing,
 including WebSockets and any viewer access. An account name or path alone is
 not proof of ownership. Protect the landing page and direct player ports; do
 not expose Docker or unauthenticated streams to players.
@@ -342,8 +473,8 @@ deployment after changing Selkies, proxy or transport settings.
 
 #### External boundary verification
 
-Before granting player access, the operator must select and configure an
-external TLS and authorization boundary. Bind player and landing ports only
+Before granting player access using an external proxy, the operator must select
+and configure a TLS and authorization boundary. Bind player and landing ports only
 to loopback, restrict host and Docker access, and ensure the boundary is the
 only player-accessible route. Loopback does not protect against other users or
 processes on the Docker host. The boundary must authenticate every request,

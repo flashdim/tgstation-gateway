@@ -43,7 +43,7 @@ class WorkflowTest(unittest.TestCase):
 
     def test_ci_unit_tests_and_image_run_independently_after_formatting(self):
         jobs = workflow_jobs("ci.yml")
-        for job in ("unit-tests", "image", "landing-image"):
+        for job in ("unit-tests", "image", "landing-image", "manager-image"):
             with self.subTest(job=job):
                 self.assertEqual(
                     re.findall(r"^    needs: (.+)$", jobs[job], re.M), ["formatting"]
@@ -143,9 +143,11 @@ class WorkflowTest(unittest.TestCase):
 
     def test_release_smoke_tests_landing_image_before_publishing(self):
         jobs = workflow_jobs("publish.yml")
-        self.assertEqual(set(jobs), {"unit-tests", "player-image", "landing-image"})
+        self.assertEqual(
+            set(jobs), {"unit-tests", "player-image", "landing-image", "manager-image"}
+        )
         self.assertIn("python3 -m unittest discover -s tests -v", jobs["unit-tests"])
-        for job in ("player-image", "landing-image"):
+        for job in ("player-image", "landing-image", "manager-image"):
             with self.subTest(job=job):
                 self.assertIn(
                     "ref: refs/tags/${{ github.event.release.tag_name }}", jobs[job]
@@ -167,6 +169,37 @@ class WorkflowTest(unittest.TestCase):
         self.assertLess(
             login, workflow.index("docker tag tgstation-gateway-landing:release")
         )
+
+    def test_manager_image_is_published_and_the_same_image_is_tested(self):
+        ci = workflow_jobs("ci.yml")["manager-image"]
+        release = workflow_jobs("publish.yml")["manager-image"]
+        self.assertIn("file: examples/manager.Dockerfile", ci)
+        self.assertIn("tags: tgstation-gateway-manager:ci", ci)
+        self.assertIn("ghcr.io/${{ github.repository }}-manager:", ci)
+        self.assertIn("format('dev-pr{0}', github.event.pull_request.number)", ci)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository", ci
+        )
+        self.assertLess(
+            ci.index("docker tag tgstation-gateway-manager:ci"),
+            ci.index("GATEWAY_TEST_MANAGER_IMAGE: tgstation-gateway-manager:ci"),
+        )
+        self.assertIn("images: ghcr.io/${{ github.repository }}-manager", release)
+        self.assertIn("tags: tgstation-gateway-manager:release", release)
+        self.assertIn("labels: ${{ steps.manager-meta.outputs.labels }}", release)
+        self.assertIn("IMAGE_TAGS: ${{ steps.manager-meta.outputs.tags }}", release)
+        self.assertLess(
+            release.index(
+                "GATEWAY_TEST_MANAGER_IMAGE: tgstation-gateway-manager:release"
+            ),
+            release.index("docker tag tgstation-gateway-manager:release"),
+        )
+        for job in (ci, release):
+            self.assertIn("file: examples/manager.Dockerfile", job)
+            self.assertIn("load: true", job)
+            self.assertIn(
+                "python3 -m unittest discover -s tests -p test_slot_router.py -v", job
+            )
 
     def test_cached_prefix_requires_selected_runtime(self):
         dockerfile = (ROOT / "Dockerfile").read_text()

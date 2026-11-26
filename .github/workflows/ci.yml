@@ -174,6 +174,61 @@ jobs:
       - name: Smoke-test landing image
         run: bash tests/smoke-landing.sh tgstation-gateway-landing:ci
 
+  manager-image:
+    needs: formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build manager image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: examples/manager.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: tgstation-gateway-manager:ci
+
+      - name: Publish development manager image
+        if: >-
+          ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}-manager:${{ github.event_name == 'pull_request' && format('dev-pr{0}', github.event.pull_request.number) || 'dev' }}
+        run: |
+          docker tag tgstation-gateway-manager:ci "$IMAGE"
+          docker push "$IMAGE"
+
+      - name: Test manager image and Traefik slot routing
+        env:
+          GATEWAY_TEST_MANAGER_IMAGE: tgstation-gateway-manager:ci
+          GATEWAY_TEST_BACKEND_IMAGE: python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+          GATEWAY_TEST_TRAEFIK_IMAGE: traefik:v3.8.0@sha256:00c9734983e74ae35a1fc18eaee9e9da13f3dde95c4e45b3b8c3b60e0dbd2d17
+        run: |
+          docker pull "$GATEWAY_TEST_BACKEND_IMAGE"
+          docker pull "$GATEWAY_TEST_TRAEFIK_IMAGE"
+          python3 -m unittest discover -s tests -p test_slot_router.py -v
+
   image:
     needs: formatting
     runs-on: ubuntu-latest
