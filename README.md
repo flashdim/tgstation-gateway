@@ -672,7 +672,12 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 
 At each client startup, the launcher sets `auto-login on` in BYOND's
 `cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
-`cfg/seeker.txt`, retaining other settings. It starts the pager with the server
+`cfg/seeker.txt`, retaining other settings. When `BYOND_PASSWORD_FILE` is set,
+startup is login-only: the launcher does not pass the server URL, even if the
+password file is unreadable. It does not verify the logged-in account or
+automatically connect after login. Verify the intended account in the pager
+and connect manually; the healthcheck requires the pager, not Dream Seeker.
+Without password-file configuration, it starts the pager with the server
 URL; the pager is expected to log in and launch Dream Seeker. Without a configured
 password, BYOND may require interactive pager login. A BYOND account or
 server-side authentication may still be required. Automatic login and joining

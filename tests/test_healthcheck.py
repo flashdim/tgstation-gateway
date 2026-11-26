@@ -46,7 +46,13 @@ class HealthcheckTest(unittest.TestCase):
             "EXPECTED_PROCESS": PAGER_PROCESS,
             **extra_env,
         }
-        for key in ("SELKIES_SUBFOLDER", "SUBFOLDER", "SELKIES_PORT", "BYOND_SERVER"):
+        for key in (
+            "SELKIES_SUBFOLDER",
+            "SUBFOLDER",
+            "SELKIES_PORT",
+            "BYOND_SERVER",
+            "BYOND_PASSWORD_FILE",
+        ):
             if key not in extra_env:
                 env.pop(key, None)
         return subprocess.run(
@@ -83,6 +89,17 @@ class HealthcheckTest(unittest.TestCase):
         result = self.check(**env, PAGER_RUNNING="0")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Dream Seeker is not running", result.stderr)
+
+    def test_password_login_requires_pager_not_dreamseeker(self):
+        result = self.check(
+            BYOND_SERVER="example.org:1337",
+            BYOND_PASSWORD_FILE="/run/secrets/byond_password.txt",
+            HTTP_OK="1",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.log.read_text().splitlines()[0], f"pgrep -f {PAGER_PROCESS}"
+        )
 
     def test_http_fallback_uses_configured_port_and_prefix(self):
         result = self.check(

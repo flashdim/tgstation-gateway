@@ -262,16 +262,19 @@ class RunClientTest(unittest.TestCase):
                 ":42",
                 "/usr/local/lib/byond-login.exe",
                 "LGplayer02",
-                "byond://example.org:1337",
             ],
         )
+        self.assertIn("Automatic server connection disabled", result.stderr)
         self.assertNotIn(password.strip().decode(), result.stderr)
 
     def test_missing_password_file_falls_back_to_manual_login(self):
-        result, _, _, events, _, _ = self.run_client(password=b"")
+        result, _, _, events, _, _ = self.run_client(
+            password=b"", server="example.org:1337"
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("use the pager to log in manually", result.stderr)
         self.assertTrue(result.stdout.endswith("/BYOND/bin/byond.exe\n"))
+        self.assertNotIn("byond://", result.stdout)
         self.assertEqual(events, ["launch"])
 
     def test_updates_settings_without_discarding_other_preferences(self):
