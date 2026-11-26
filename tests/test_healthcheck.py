@@ -6,6 +6,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PAGER_PROCESS = r'(^|[\\/])byond[.]exe"?([[:space:]]|$)'
+DREAMSEEKER_PROCESS = r'(^|[\\/])dreamseeker[.]exe"?([[:space:]]|$)'
 
 
 class HealthcheckTest(unittest.TestCase):
@@ -19,7 +21,7 @@ class HealthcheckTest(unittest.TestCase):
         commands = {
             "pgrep": (
                 'printf "pgrep %s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'test "$1" = -f && test "$2" = "${EXPECTED_PROCESS:-/byond[.]exe([[:space:]]|$)}" && '
+                'test "$1" = -f && test "$2" = "$EXPECTED_PROCESS" && '
                 'test "${PAGER_RUNNING:-1}" = 1'
             ),
             "curl": (
@@ -41,6 +43,7 @@ class HealthcheckTest(unittest.TestCase):
             **os.environ,
             "PATH": f"{self.bin}:{os.environ['PATH']}",
             "COMMAND_LOG": str(self.log),
+            "EXPECTED_PROCESS": PAGER_PROCESS,
             **extra_env,
         }
         for key in ("SELKIES_SUBFOLDER", "SUBFOLDER", "SELKIES_PORT", "BYOND_SERVER"):
@@ -67,14 +70,14 @@ class HealthcheckTest(unittest.TestCase):
     def test_requires_dreamseeker_in_direct_mode(self):
         env = {
             "BYOND_SERVER": "example.org:1337",
-            "EXPECTED_PROCESS": "/dreamseeker[.]exe([[:space:]]|$)",
+            "EXPECTED_PROCESS": DREAMSEEKER_PROCESS,
             "HTTP_OK": "1",
         }
         result = self.check(**env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.log.read_text().splitlines()[0],
-            "pgrep -f /dreamseeker[.]exe([[:space:]]|$)",
+            f"pgrep -f {DREAMSEEKER_PROCESS}",
         )
 
         result = self.check(**env, PAGER_RUNNING="0")
@@ -89,7 +92,7 @@ class HealthcheckTest(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
-                "pgrep -f /byond[.]exe([[:space:]]|$)",
+                f"pgrep -f {PAGER_PROCESS}",
                 "curl -fs -k --max-time 2 -o /dev/null https://localhost:8081/player/api/health",
                 "curl -fsS --max-time 2 -o /dev/null http://localhost:8081/player/api/health",
             ],

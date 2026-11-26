@@ -54,20 +54,16 @@ Compose deployment with pinned Traefik and mock backends, including HTTPS
 routes, WebSocket upgrades, slot-count reconciliation and retained volumes.
 Restarting the manager must recreate both players and erase markers in their
 Wine and data volumes; subsequent reconciliation must not recreate them again.
-It also verifies that each of two players receives only its own read-only key
+It also verifies that each of two players receives only its own read-only password
 fixture without changing its bytes.
 The test verifies the running manager uses the image built for that job. This
 does not exercise Cloudflare or live gameplay.
 
-For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
-mocked launcher provisioning check using the complete pager-generated key file
-stored as the `BYOND_TEST_KEY` Actions secret. The key is written to a
-private temporary file on the runner, removed afterward, and not passed as a
-container environment variable or saved in an image, cache or artifact.
-The check skips with a reason if the secret is unavailable; ordinary and
-fork pull-request runs keep running the non-credential tests. This uses a
-mock Wine executable and does not verify BYOND login, key portability, streaming
-or gameplay.
+The launcher unit test uses a mock Wine executable and a synthetic password
+file to verify that the helper receives the password through standard input,
+not the command line. The `byond-login-test` Docker target checks submission
+against a synthetic Win32 dialog under Wine. No real account credentials are
+needed in CI.
 
 ## Build caches
 

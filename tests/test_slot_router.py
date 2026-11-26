@@ -117,7 +117,7 @@ class ComposeTest(unittest.TestCase):
         self.assertNotIn("devices", manager)
         self.assertNotIn("/dev/dri", json.dumps(services["landing"]))
 
-    def test_key_override_mounts_directory_only_in_manager(self):
+    def test_password_override_mounts_directory_only_in_manager(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
                 [
@@ -126,7 +126,7 @@ class ComposeTest(unittest.TestCase):
                     "-f",
                     str(COMPOSE),
                     "-f",
-                    str(ROOT / "examples/compose.traefik.keys.yaml"),
+                    str(ROOT / "examples/compose.traefik.passwords.yaml"),
                     "config",
                     "--format",
                     "json",
@@ -171,18 +171,21 @@ class ComposeTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
 
-    def test_manager_key_mount_and_invalid_files(self):
+    def test_manager_password_mount_and_invalid_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             keys = root / "keys with spaces"
             keys.mkdir()
-            first = keys / "LGplayer01_key.txt"
-            second = keys / "LGplayer02_key.txt"
+            first = keys / "LGplayer01_password.txt"
+            second = keys / "LGplayer02_password.txt"
             first.write_bytes(b"synthetic $`\\'\r\n")
             second.write_bytes(b"other key")
-            first.chmod(0o644)
-            second.chmod(0o644)
+            first.chmod(0o600)
+            second.chmod(0o400)
             script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "stat -c '%u' \"$password_file\"", 'printf %s "${FIXTURE_UID:-1000}"'
+            )
             script = script.replace(
                 "/run/gateway-lock/manager.lock", str(root / "lock")
             )
@@ -207,10 +210,10 @@ class ComposeTest(unittest.TestCase):
                 "ARGUMENTS": str(root / "arguments"),
             }
 
-            def run():
+            def run(**overrides):
                 return subprocess.run(
                     ["sh", str(root / "manager.sh")],
-                    env=env,
+                    env={**env, **overrides},
                     capture_output=True,
                     text=True,
                 )
@@ -219,10 +222,13 @@ class ComposeTest(unittest.TestCase):
             self.assertEqual(result.returncode, 23, result.stderr)
             arguments = (root / "arguments").read_text().splitlines()
             self.assertIn(
-                f"type=bind,src={first},dst=/run/secrets/byond_key.txt,readonly",
+                f"type=bind,src={first},dst=/run/secrets/byond_password.txt,readonly",
                 arguments,
             )
-            self.assertIn("BYOND_KEY_FILE=/run/secrets/byond_key.txt", arguments)
+            self.assertIn(
+                "BYOND_PASSWORD_FILE=/run/secrets/byond_password.txt", arguments
+            )
+            self.assertIn("BYOND_ACCOUNT=LGplayer01", arguments)
             self.assertNotIn(str(second), "\n".join(arguments))
             self.assertNotIn("synthetic", result.stdout + result.stderr)
 
@@ -239,17 +245,18 @@ class ComposeTest(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 23)
                     invalid_slot = "01" if kind == "hardlink" else "02"
                     self.assertIn(
-                        f"Missing or invalid key file for LGplayer{invalid_slot}",
+                        f"Missing or invalid password file for LGplayer{invalid_slot}",
                         result.stderr,
                     )
                     if kind == "missing":
                         second.write_bytes(b"other key")
             second.unlink(missing_ok=True)
             second.write_bytes(b"other key")
-            second.chmod(0)
-            result = run()
-            self.assertNotEqual(result.returncode, 23)
-            self.assertIn("readable by container UID 1000", result.stderr)
+            for mode, uid in ((0o644, "1000"), (0o400, "1001")):
+                second.chmod(mode)
+                result = run(FIXTURE_UID=uid)
+                self.assertNotEqual(result.returncode, 23)
+                self.assertIn("must be owned by UID 1000", result.stderr)
 
     def test_manager_resets_players_and_volumes_only_on_startup(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -565,23 +572,31 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 keys = root / "keys"
                 keys.mkdir(mode=0o755)
                 for number in (1, 2, 3):
-                    key = keys / f"LGplayer{number:02}_key.txt"
+                    key = keys / f"LGplayer{number:02}_password.txt"
                     key.write_bytes(f"fixture {number} $`\\'\r\n".encode())
-                    key.chmod(0o444)
+                    key.chmod(0o600)
+                    if os.getuid() == 0:
+                        os.chown(key, 1000, -1)
+                    elif os.getuid() != 1000:
+                        subprocess.run(
+                            ["sudo", "-n", "chown", "1000", str(key)], check=True
+                        )
                 env["GATEWAY_SECRET_DIRECTORY"] = str(keys)
-                (root / "app.py").write_text(backend)
-                (root / "curl").write_text(
+                context = root / "backend"
+                context.mkdir()
+                (context / "app.py").write_text(backend)
+                (context / "curl").write_text(
                     "#!/usr/bin/env python3\n"
                     "import sys, urllib.request\n"
                     "urllib.request.urlopen(sys.argv[-1], timeout=2).close()\n"
                 )
-                (root / "Dockerfile").write_text(
+                (context / "Dockerfile").write_text(
                     f"FROM {os.environ['GATEWAY_TEST_BACKEND_IMAGE']}\n"
                     "COPY app.py /app.py\nCOPY --chmod=755 curl /usr/local/bin/curl\n"
                     'HEALTHCHECK CMD exit 1\nCMD ["python3", "-u", "/app.py"]\n'
                 )
                 build = subprocess.run(
-                    ["docker", "build", "-t", fixture_image, str(root)],
+                    ["docker", "build", "-t", fixture_image, str(context)],
                     env=env,
                     capture_output=True,
                     text=True,
@@ -624,7 +639,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     "-f",
                     str(COMPOSE),
                     "-f",
-                    str(ROOT / "examples/compose.traefik.keys.yaml"),
+                    str(ROOT / "examples/compose.traefik.passwords.yaml"),
                     "-f",
                     str(override),
                 ]
@@ -668,13 +683,13 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                                 "exec",
                                 player,
                                 "cat",
-                                "/run/secrets/byond_key.txt",
+                                "/run/secrets/byond_password.txt",
                             ],
                             env=env,
                         )
                         self.assertEqual(
                             content,
-                            (keys / f"LGplayer{number:02}_key.txt").read_bytes(),
+                            f"fixture {number} $`\\'\r\n".encode(),
                         )
                         write = subprocess.run(
                             [
@@ -683,7 +698,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                                 player,
                                 "sh",
                                 "-c",
-                                "echo changed > /run/secrets/byond_key.txt",
+                                "echo changed > /run/secrets/byond_password.txt",
                             ],
                             env=env,
                             capture_output=True,

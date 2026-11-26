@@ -5,11 +5,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      check_byond_key:
-        description: Run the mocked runtime BYOND key provisioning check
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -46,33 +41,15 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
 
+      - name: Test BYOND login helper under Wine
+        run: docker build --target byond-login-test --output type=cacheonly .
+
       - name: Test fixed account isolation
         env:
           GATEWAY_DOCKER_TEST_IMAGE: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
         run: |
           docker pull "$GATEWAY_DOCKER_TEST_IMAGE"
           python3 -m unittest discover -s tests -p test_fixed_slots.py -v
-
-      - name: Check runtime BYOND key provisioning
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_byond_key }}
-        env:
-          BYOND_TEST_KEY: ${{ secrets.BYOND_TEST_KEY }}
-        run: |
-          set -eu
-          if [ -z "$BYOND_TEST_KEY" ]; then
-            echo "Skipping BYOND key provisioning check: test secrets unavailable."
-            exit 0
-          fi
-          umask 077
-          key_file="$RUNNER_TEMP/byond-test-key-$$"
-          set -C
-          : > "$key_file"
-          set +C
-          trap 'rm -f -- "$key_file"' EXIT
-          printf '%s' "$BYOND_TEST_KEY" > "$key_file"
-          unset BYOND_TEST_KEY
-          export BYOND_TEST_KEY_FILE="$key_file"
-          python3 -m unittest discover -s tests -p test_run_client.py -k test_provisions_runtime_secret_file -v
 
   landing-screenshot:
     needs: unit-tests

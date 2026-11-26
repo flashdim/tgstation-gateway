@@ -89,40 +89,37 @@ def compose_config(env):
                 {"type": "volume", "source": name, "target": target}
             )
         if secret_dir:
-            path = Path(secret_dir) / f"{slot.account}_key.txt"
+            path = Path(secret_dir) / f"{slot.account}_password.txt"
             try:
-                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                try:
-                    info = os.fstat(fd)
-                    valid = (
-                        stat.S_ISREG(info.st_mode)
-                        and info.st_size > 0
-                        and info.st_nlink == 1
-                        and (
-                            (info.st_uid == 1000 and info.st_mode & stat.S_IRUSR)
-                            or (
-                                info.st_uid != 1000
-                                and info.st_mode & stat.S_IRGRP
-                                and info.st_mode & stat.S_IROTH
-                            )
-                        )
-                    )
-                finally:
-                    os.close(fd)
-            except OSError:
+                info = path.lstat()
+            except (FileNotFoundError, PermissionError):
                 valid = False
+            else:
+                valid = (
+                    stat.S_ISREG(info.st_mode)
+                    and info.st_size > 0
+                    and info.st_nlink == 1
+                    and info.st_uid == 1000
+                    and stat.S_IMODE(info.st_mode) in (0o400, 0o600)
+                )
             if not valid:
-                raise ConfigError(f"Missing or invalid key file for {slot.account}")
+                raise ConfigError(
+                    f"Missing or invalid password file for {slot.account}; "
+                    "expected owner UID 1000 and mode 0400 or 0600"
+                )
             service["volumes"].append(
                 {
                     "type": "bind",
                     "source": str(path),
-                    "target": "/run/secrets/byond_key.txt",
+                    "target": "/run/secrets/byond_password.txt",
                     "read_only": True,
                     "bind": {"create_host_path": False},
                 }
             )
-            service["environment"]["BYOND_KEY_FILE"] = "/run/secrets/byond_key.txt"
+            service["environment"].update(
+                BYOND_ACCOUNT=slot.account,
+                BYOND_PASSWORD_FILE="/run/secrets/byond_password.txt",
+            )
         services[f"player{slot.number:02}"] = service
     if env.get("GATEWAY_FIXED_LANDING") == "1":
         landing = base["services"]["landing"]

@@ -33,9 +33,7 @@ class RunClientTest(unittest.TestCase):
         existing_layout=None,
         wine_exit_code=0,
         cleanup_failure=None,
-        key_content=None,
-        key_source=None,
-        expect_key=True,
+        password=None,
         existing_config=None,
         bad_config_directory=False,
     ):
@@ -92,6 +90,9 @@ class RunClientTest(unittest.TestCase):
                     '  [ "${FAIL_REGISTRY:-}" != "$3" ]\n'
                     "  exit $?\n"
                     "fi\n"
+                    'if [ "$1" = /usr/local/lib/byond-login.exe ]; then\n'
+                    '  cmp -s - "$BYOND_PASSWORD_FILE" || exit 89\n'
+                    "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
                     'printf "%s\\n" "$DISPLAY" "$@"\n'
                     'exit "$MOCK_WINE_EXIT_CODE"'
@@ -105,9 +106,7 @@ class RunClientTest(unittest.TestCase):
             runtime.mkdir()
             prefix = root / "wine prefix"
             authority = runtime / "kwin authority"
-            key_file = key_source or (
-                root / "byond-key" if key_content is not None else None
-            )
+            password_file = root / "password"
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
@@ -116,8 +115,9 @@ class RunClientTest(unittest.TestCase):
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
                 + (
-                    f"export BYOND_KEY_FILE={shlex.quote(str(key_file))}\n"
-                    if key_file is not None
+                    f"export BYOND_PASSWORD_FILE={shlex.quote(str(password_file))}\n"
+                    "export BYOND_ACCOUNT=LGplayer02\n"
+                    if password is not None
                     else ""
                 )
             )
@@ -139,11 +139,12 @@ class RunClientTest(unittest.TestCase):
                 "MOCK_WINE_EXIT_CODE": str(wine_exit_code),
             }
             env.pop("BYOND_SERVER", None)
-            env.pop("BYOND_KEY_FILE", None)
+            env.pop("BYOND_PASSWORD_FILE", None)
+            env.pop("BYOND_ACCOUNT", None)
             env.pop("BYOND_WEBVIEW2_GPU", None)
             env.pop("XAUTHORITY", None)
-            if key_content is not None:
-                (root / "byond-key").write_bytes(key_content)
+            if password:
+                password_file.write_bytes(password)
             layout = (
                 prefix
                 / "drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/"
@@ -183,19 +184,6 @@ class RunClientTest(unittest.TestCase):
                 text=True,
                 timeout=5,
             )
-            if key_file is not None and expect_key:
-                key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
-                key_bytes = Path(key_file).read_bytes()
-                self.assertTrue(key.read_bytes() == key_bytes)
-                self.assertEqual(key.stat().st_mode & 0o777, 0o600)
-                self.assertFalse(key_bytes in result.stdout.encode())
-                self.assertFalse(key_bytes in result.stderr.encode())
-            elif key_file is not None:
-                self.assertFalse(
-                    (
-                        prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
-                    ).exists()
-                )
             if result.returncode == 0:
                 for name, option in (
                     ("pager.txt", "auto-login"),
@@ -230,40 +218,31 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(result.returncode, 23)
         self.assertEqual(events, ["launch"])
 
-    def test_seeds_key_and_launches_pager_with_direct_server(self):
+    def test_passes_password_through_stdin_only(self):
+        password = b"synthetic $`\\'\"!\r\n"
         result, _, registry, events, _, _ = self.run_client(
             server="example.org:1337",
-            key_content=b"BEGIN KEY TestAccount\r\n $`\\'\"!\t\x80\x00\r\nEND KEY\r\n",
+            password=password,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(registry, BYOND_REGISTRY)
         self.assertEqual(events, ["launch"])
-        self.assertTrue(result.stdout.endswith("byond://example.org:1337\n"))
-
-    def test_rejects_empty_or_missing_key_file(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            for kwargs in (
-                {"key_content": b""},
-                {"key_source": Path(temporary) / "missing-key"},
-            ):
-                with self.subTest(case=next(iter(kwargs))):
-                    result, _, _, events, _, _ = self.run_client(
-                        server="example.org:1337", expect_key=False, **kwargs
-                    )
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("BYOND_KEY_FILE", result.stderr)
-                    self.assertEqual(events, [])
-
-    @unittest.skipUnless(
-        os.environ.get("BYOND_TEST_KEY_FILE"),
-        "BYOND credential provisioning check not enabled or secrets unavailable",
-    )
-    def test_provisions_runtime_secret_file(self):
-        result, _, _, events, _, _ = self.run_client(
-            server="example.org:1337",
-            key_source=Path(os.environ["BYOND_TEST_KEY_FILE"]),
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                ":42",
+                "/usr/local/lib/byond-login.exe",
+                "LGplayer02",
+                "byond://example.org:1337",
+            ],
         )
-        self.assertEqual(result.returncode, 0)
+        self.assertNotIn(password.strip().decode(), result.stderr)
+
+    def test_missing_password_file_falls_back_to_manual_login(self):
+        result, _, _, events, _, _ = self.run_client(password=b"")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("use the pager to log in manually", result.stderr)
+        self.assertTrue(result.stdout.endswith("/BYOND/bin/byond.exe\n"))
         self.assertEqual(events, ["launch"])
 
     def test_updates_settings_without_discarding_other_preferences(self):
@@ -444,9 +423,7 @@ class RunClientTest(unittest.TestCase):
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(cleanup[:2], ["wineserver -k", "wineserver --wait"])
                 self.assertEqual(len(cleanup), 4)
-                pattern = (
-                    r"(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)"
-                )
+                pattern = r'(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe"?([[:space:]]|$)'
                 self.assertEqual(
                     cleanup[2], f"pkill -KILL -i -f -u {os.geteuid()} {pattern}"
                 )
@@ -473,7 +450,7 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(events, ["launch"])
 
     def test_process_match_handles_windows_paths_and_long_names(self):
-        pattern = r"(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)"
+        pattern = r'(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe"?([[:space:]]|$)'
         for executable in (
             r"C:\Program Files (x86)\Microsoft\EdgeWebView\msedgewebview2.exe",
             "/path with spaces/dreamseeker.exe",

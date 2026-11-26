@@ -90,16 +90,16 @@ if [ -n "$secret_dir" ]; then
     number=1
     while [ "$number" -le "$count" ]; do
         slot="$(printf '%02d' "$number")"
-        key="$secret_dir/LGplayer${slot}_key.txt"
-        if [ -L "$key" ] || [ ! -f "$key" ] || [ ! -s "$key" ] || [ "$(stat -c '%h' "$key")" != 1 ]; then
-            echo "Missing or invalid key file for LGplayer$slot" >&2
+        password_file="$secret_dir/LGplayer${slot}_password.txt"
+        if [ -L "$password_file" ] || [ ! -f "$password_file" ] || [ ! -s "$password_file" ] ||
+            [ "$(stat -c '%h' "$password_file")" != 1 ]; then
+            echo "Missing or invalid password file for LGplayer$slot" >&2
             exit 1
         fi
-        uid="$(stat -c '%u' "$key")"
-        mode="$(stat -c '%a' "$key")"
-        if ! { [ "$uid" -eq 1000 ] && [ $((0$mode & 0400)) -ne 0 ]; } &&
-            ! { [ "$uid" -ne 1000 ] && [ $((0$mode & 0044)) -eq 36 ]; }; then
-            echo "Key file for LGplayer$slot must be readable by container UID 1000" >&2
+        uid="$(stat -c '%u' "$password_file")"
+        mode="$(stat -c '%a' "$password_file")"
+        if [ "$uid" != 1000 ] || { [ "$mode" != 400 ] && [ "$mode" != 600 ]; }; then
+            echo "Password file for LGplayer$slot must be owned by UID 1000 with mode 0400 or 0600" >&2
             exit 1
         fi
         number=$((number + 1))
@@ -121,7 +121,7 @@ profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
 settings="$(
     {
         printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid"
-        [ -z "$secret_dir" ] || printf '%s\n' "$secret_dir"
+        [ -z "$secret_dir" ] || printf '%s\n' password-file "$secret_dir"
     } | sha256sum | cut -d ' ' -f 1
 )"
 
@@ -216,8 +216,8 @@ reconcile() {
                 set -- --device /dev/dri:/dev/dri --group-add "$render_gid"
             fi
             if [ -n "$secret_dir" ]; then
-                set -- "$@" --mount "type=bind,src=$secret_dir/LGplayer${slot}_key.txt,dst=/run/secrets/byond_key.txt,readonly" \
-                    -e BYOND_KEY_FILE=/run/secrets/byond_key.txt
+                set -- "$@" --mount "type=bind,src=$secret_dir/LGplayer${slot}_password.txt,dst=/run/secrets/byond_password.txt,readonly" \
+                    -e "BYOND_ACCOUNT=LGplayer$slot" -e BYOND_PASSWORD_FILE=/run/secrets/byond_password.txt
             fi
             docker run -d --name "$name" --platform linux/amd64 --init \
                 "$@" \

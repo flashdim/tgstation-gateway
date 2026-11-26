@@ -34,7 +34,7 @@ if ! timeout --kill-after=1s 5s wineserver --wait; then
     exit 1
 fi
 
-client_pattern='(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)'
+client_pattern='(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe"?([[:space:]]|$)'
 if pkill -KILL -i -f -u "$EUID" "$client_pattern"; then
     :
 else
@@ -79,31 +79,6 @@ export DISPLAY="${DISPLAY:-:20}"
 until display_ready; do
     sleep 1
 done
-
-seed_byond_key() {
-    local key_file="${BYOND_KEY_FILE:-}"
-    local key_path="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
-    local temporary
-
-    [ -n "$key_file" ] || return 0
-    [ -f "$key_file" ] && [ -r "$key_file" ] || {
-        echo "BYOND_KEY_FILE is not readable" >&2
-        exit 1
-    }
-    [ -s "$key_file" ] || {
-        echo "BYOND_KEY_FILE is empty" >&2
-        exit 1
-    }
-    mkdir -p "$(dirname "$key_path")"
-    temporary="$(mktemp "$key_path.XXXXXX")"
-    if ! cat -- "$key_file" >"$temporary" || ! mv -f -- "$temporary" "$key_path"; then
-        rm -f -- "$temporary"
-        echo "Failed to install BYOND key file" >&2
-        exit 1
-    fi
-}
-
-seed_byond_key
 
 if ! bash -c 'status=0; timeout --kill-after=1s 30s "$@" 9>&- || status=$?; exit "$status"' \
     _ wine reg add 'HKCU\Software\Dantom\BYOND' /v userpath /t REG_SZ \
@@ -267,6 +242,7 @@ esac
 flock -u 9
 exec 9>&-
 
+set --
 if [ -n "${BYOND_SERVER:-}" ]; then
     server="${BYOND_SERVER#byond://}"
     if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||
@@ -274,8 +250,16 @@ if [ -n "${BYOND_SERVER:-}" ]; then
         echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
         exit 1
     fi
-    server_url="byond://$server"
-    exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" "$server_url"
+    set -- "byond://$server"
 fi
 
-exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+if [ -n "${BYOND_PASSWORD_FILE:-}" ]; then
+    if [[ ! "${BYOND_ACCOUNT:-}" =~ ^[A-Za-z0-9_-]{1,48}$ ]] ||
+        [ ! -f "$BYOND_PASSWORD_FILE" ] || [ ! -r "$BYOND_PASSWORD_FILE" ]; then
+        echo "Invalid BYOND account or unreadable password file; use the pager to log in manually" >&2
+    else
+        exec wine /usr/local/lib/byond-login.exe "$BYOND_ACCOUNT" "$@" <"$BYOND_PASSWORD_FILE"
+    fi
+fi
+
+exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" "$@"

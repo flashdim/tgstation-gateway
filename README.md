@@ -300,52 +300,57 @@ erases their Wine and data volumes**, including volumes left behind by missing
 containers. This interrupts active sessions and permanently deletes saved
 logins, settings and player data. It also applies to automatic manager restarts
 after failures and host/daemon restarts; a failed startup can leave a partially
-reset deployment. Host key files are read-only and are not erased. Unowned
+reset deployment. Host password files are read-only and are not erased. Unowned
 containers and volumes are rejected, not deleted. Subsequent reconciliation
 passes only start stopped players or recreate missing or changed ones, retaining
 their volumes until the next manager startup.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
 resource limits. Container startup does not establish playable sessions.
 
-To provision optional BYOND pager keys, place the **complete, unmodified**
-pager-generated key file for each account in a protected host directory, named
-`LGplayer01_key.txt`, `LGplayer02_key.txt`, and so on. Do not put key contents
-in environment variables or Compose files. For example:
+To opt into BYOND pager login automation, place one UTF-8 password per file
+in a protected host directory, named `LGplayer01_password.txt`,
+`LGplayer02_password.txt`, and so on. An optional final LF or CRLF is ignored.
+Replace the old keys override and `_key.txt` files; the launcher no longer
+copies `key.txt`. Use the development player and manager images from the
+same revision when testing this change.
 
 ```sh
-export GATEWAY_SECRET_DIRECTORY=/absolute/host/path/to/byond-keys
+export GATEWAY_SECRET_DIRECTORY=/absolute/host/path/to/byond-passwords
 docker compose -f examples/compose.traefik.yaml \
-  -f examples/compose.traefik.keys.yaml up -d
+  -f examples/compose.traefik.passwords.yaml up -d
 ```
 
-Use the keys override for subsequent Compose commands (and the GPU override
+Use the passwords override for subsequent Compose commands (and the GPU override
 too, if enabled). The directory is mounted read-only into the manager at the
 same absolute path; Docker resolves each player bind mount on the daemon host.
 Use a local daemon and keep the path identical there; the path cannot contain
 commas, double quotes or newlines. The manager validates all
 configured files before reconciling, then mounts only the matching file
-read-only into each player and sets `BYOND_KEY_FILE` to that mount. Files must
-be nonempty regular files, not final symlinks or hard links, and readable by
-container UID 1000; owner UID 1000 and mode `0400` is one option. For another
-owner, validation requires both group and other read bits. Directory traversal
+read-only into each player. `BYOND_PASSWORD_FILE` contains only the mount
+path and `BYOND_ACCOUNT` identifies the slot's account. Files must be nonempty
+regular files owned by UID 1000 with mode `0400` or `0600`; symlinks and
+hard links are rejected. Directory traversal
 permissions, ACLs, user namespace remapping and remote daemons need
 separate operator validation. Protect the directory and its parents against
 untrusted modification; validation and Docker mounting are not atomic.
-Docker metadata exposes host paths. Do not log, publish or cache credentials.
+Docker metadata exposes host paths. Do not put passwords in environment
+variables, command lines, Compose files, images, logs or caches. The desktop
+and pager run as UID 1000 and can read the slot's password file, so use only
+dedicated accounts in trusted desktops. Restrict access to each slot.
 
-The launcher copies the file byte-for-byte into the player's Wine
-prefix at startup and sets the BYOND `userpath` registry value to
-`C:\users\steamuser\Documents\BYOND\` before launching the pager.
-Changing the directory setting recreates players, but changing
-a file in place does not automatically recreate them. To rotate a key, stop
-the manager, replace the intended host key file, then start the manager with
-the same Compose overrides; it recreates all configured players with clean
-volumes and copies their current keys. Disabling key provisioning and restarting
-the manager also erases those players' saved logins. Treat running Wine prefixes
-and any backups as sensitive; backups and out-of-range slot volumes are not
-erased automatically. Actual BYOND key portability and automatic
-login have not been verified; inspect login interactively without exposing the
-key, and record results separately from startup tests.
+The launcher still sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
+It looks for the English login dialog owned by the pager it starts, fills
+the account and password, checks **Save password** and **Automatically login
+when program starts**, and submits at most once per pager launch. An
+unrecognized dialog or rejected login needs manual intervention. Real BYOND
+login has not been verified. Treat Wine prefixes and backups as sensitive.
+To rotate a password, stop the manager, replace the file, and start the manager
+with the same overrides. This resets all configured player volumes.
+
+For a standalone player, mount only its password file read-only at
+`/run/secrets/byond_password.txt` and set `BYOND_PASSWORD_FILE` to that path
+and `BYOND_ACCOUNT` to the intended account. Neither variable is needed for
+manual login.
 
 For managed players, Docker health checks the Selkies endpoint, not Dream
 Seeker. This lets Traefik route to the desktop even if the BYOND pager needs
@@ -607,32 +612,32 @@ real login and gameplay verification first, as required by the roadmap, and
 record the environment and results separately from the fixtures.
 
 For credential rotation on a disposable deployment, record non-sensitive
-markers in both accounts' volumes, stop the intended service, replace its key,
+markers in both accounts' volumes, stop the intended service, replace its password file,
 and recreate that service as described below. Verify only the intended
 account receives the replacement, its data persists, and the other account
-is unchanged; do not log key contents. For resource exhaustion, use a
+is unchanged; do not log credentials. For resource exhaustion, use a
 disposable host with bounded test workloads and monitoring; record the
 triggered limit, service and host behavior, retained data and recovery after
 restoring capacity. Do not intentionally exhaust a shared or production host.
 Neither procedure has been verified against the player image.
 
 Optionally set `GATEWAY_SECRET_DIRECTORY` to an absolute, protected host
-directory containing a nonempty `<account>_key.txt` for every slot. The
-generator mounts only the matching file read-only and sets `BYOND_KEY_FILE` to
-its container path. Keys must be readable by the generator and container UID
-1000; owner UID 1000 and mode `0400` is one option. Final symlinks and hard
+directory containing a nonempty `<account>_password.txt` for every slot. The
+generator mounts only the matching file read-only and sets `BYOND_ACCOUNT`
+and `BYOND_PASSWORD_FILE`. Files must be owned by UID 1000 with mode
+`0400` or `0600`. Final symlinks and hard
 links are rejected. Protect parent directories from untrusted changes and keep
 files stable until containers stop; validation and Docker mounting are not
 atomic. User namespace remapping and remote daemons require separate permission
-validation. Match keys to accounts manually; never store credentials in
+validation. Match passwords to accounts manually; never store credentials in
 environment values, command lines, images, logs or build caches. Docker
-metadata contains the host paths. To rotate a key, stop its service, replace
-the source file, and recreate it with Compose.
+metadata contains the host paths. To rotate a password, stop its service,
+replace the source file, and recreate it with Compose. BYOND may reuse its
+previous saved login without opening the dialog; sign out if needed.
 
 The fixed account volumes retain login and desktop data across container
 recreation. Never reassign an account's data to a different person without an
-explicit operator-controlled cleanup. The launcher copies an optional key into
-its Wine prefix; using it for login in a fresh prefix remains unverified.
+explicit operator-controlled cleanup.
 
 The image prefix is initialized at build time and then copied into each new
 Wine volume. Consequently, any machine identifiers, registry values, or

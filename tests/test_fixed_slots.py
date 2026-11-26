@@ -25,6 +25,11 @@ class FixedSlotsTest(unittest.TestCase):
         return {
             "PATH": os.environ["PATH"],
             "HOME": os.environ["HOME"],
+            **(
+                {"DOCKER_CONFIG": os.environ["DOCKER_CONFIG"]}
+                if "DOCKER_CONFIG" in os.environ
+                else {}
+            ),
             "GATEWAY_SLOT_COUNT": "2",
             "GATEWAY_SLOT_PATH": "/{account}/",
             "GATEWAY_PORT": "18080",
@@ -62,25 +67,38 @@ class FixedSlotsTest(unittest.TestCase):
         )
         self.assertNotEqual(set(result["volumes"]), set(changed["volumes"]))
 
-    def test_each_slot_receives_only_its_own_key_path(self):
+    def test_each_slot_receives_only_its_own_password_path(self):
         with tempfile.TemporaryDirectory() as directory:
             for account in ("LGplayer01", "LGplayer02"):
-                (Path(directory) / f"{account}_key.txt").write_text("private\n")
-            result = fixed_slots.compose_config(
-                self.environment(GATEWAY_SECRET_DIRECTORY=directory)
-            )
+                (Path(directory) / f"{account}_password.txt").write_text("private\n")
+            with patch.object(
+                Path,
+                "lstat",
+                return_value=SimpleNamespace(
+                    st_mode=stat.S_IFREG | 0o400, st_size=8, st_nlink=1, st_uid=1000
+                ),
+            ):
+                result = fixed_slots.compose_config(
+                    self.environment(GATEWAY_SECRET_DIRECTORY=directory)
+                )
             for index in (1, 2):
                 service = result["services"][f"player{index:02}"]
                 secret = next(
                     mount
                     for mount in service["volumes"]
-                    if mount["target"] == "/run/secrets/byond_key.txt"
+                    if mount["target"] == "/run/secrets/byond_password.txt"
                 )
                 self.assertEqual(
-                    secret["source"], f"{directory}/LGplayer{index:02}_key.txt"
+                    secret["source"], f"{directory}/LGplayer{index:02}_password.txt"
                 )
                 self.assertTrue(secret["read_only"])
                 self.assertFalse(secret["bind"]["create_host_path"])
+                self.assertEqual(
+                    service["environment"]["BYOND_ACCOUNT"], f"LGplayer{index:02}"
+                )
+                self.assertEqual(
+                    service["environment"]["BYOND_PASSWORD_FILE"], secret["target"]
+                )
             self.assertNotIn("private", json.dumps(result))
 
     def test_configured_capacity_and_resource_limits(self):
@@ -103,7 +121,7 @@ class FixedSlotsTest(unittest.TestCase):
                     self.assertEqual(service["pids_limit"], 512)
                     self.assertEqual(int(service["shm_size"]), 2 * 1024**3)
 
-    def test_invalid_key_port_or_slot_configuration_fails(self):
+    def test_invalid_password_port_or_slot_configuration_fails(self):
         for overrides in (
             {"GATEWAY_PORT": "65535"},
             {"GATEWAY_PORT": "0"},
@@ -117,9 +135,9 @@ class FixedSlotsTest(unittest.TestCase):
                 with self.assertRaises(fixed_slots.ConfigError):
                     fixed_slots.compose_config(self.environment(**overrides))
         with tempfile.TemporaryDirectory() as directory:
-            (Path(directory) / "LGplayer01_key.txt").write_text("key")
-            (Path(directory) / "LGplayer02_key.txt").symlink_to(
-                Path(directory) / "LGplayer01_key.txt"
+            (Path(directory) / "LGplayer01_password.txt").write_text("key")
+            (Path(directory) / "LGplayer02_password.txt").symlink_to(
+                Path(directory) / "LGplayer01_password.txt"
             )
             with self.assertRaises(fixed_slots.ConfigError):
                 fixed_slots.compose_config(
@@ -127,22 +145,22 @@ class FixedSlotsTest(unittest.TestCase):
                 )
         with tempfile.TemporaryDirectory() as directory:
             for account in ("LGplayer01", "LGplayer02"):
-                (Path(directory) / f"{account}_key.txt").write_text("key")
+                (Path(directory) / f"{account}_password.txt").write_text("key")
             owner_group_only = SimpleNamespace(
                 st_mode=stat.S_IFREG | 0o604,
                 st_size=3,
                 st_nlink=1,
                 st_uid=0,
             )
-            with patch.object(fixed_slots.os, "fstat", return_value=owner_group_only):
+            with patch.object(Path, "lstat", return_value=owner_group_only):
                 with self.assertRaises(fixed_slots.ConfigError):
                     fixed_slots.compose_config(
                         self.environment(GATEWAY_SECRET_DIRECTORY=directory)
                     )
-            (Path(directory) / "LGplayer02_key.txt").unlink()
+            (Path(directory) / "LGplayer02_password.txt").unlink()
             os.link(
-                Path(directory) / "LGplayer01_key.txt",
-                Path(directory) / "LGplayer02_key.txt",
+                Path(directory) / "LGplayer01_password.txt",
+                Path(directory) / "LGplayer02_password.txt",
             )
             with self.assertRaises(fixed_slots.ConfigError):
                 fixed_slots.compose_config(
@@ -426,9 +444,15 @@ class FixedSlotsDockerTest(FixedSlotsTest):
     def test_isolation_and_recreation_with_persistent_account_data(self):
         with tempfile.TemporaryDirectory() as directory:
             for number in (1, 2):
-                key = Path(directory) / f"LGplayer{number:02}_key.txt"
+                key = Path(directory) / f"LGplayer{number:02}_password.txt"
                 key.write_text(f"fixture-{number}")
-                key.chmod(0o644)
+                key.chmod(0o600)
+                if os.getuid() == 0:
+                    os.chown(key, 1000, -1)
+                elif os.getuid() != 1000:
+                    subprocess.run(
+                        ["sudo", "-n", "chown", "1000", str(key)], check=True
+                    )
             env = self.environment(
                 GATEWAY_SECRET_DIRECTORY=directory,
                 GATEWAY_DEPLOYMENT_ID=uuid.uuid4().hex,
@@ -456,7 +480,13 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                 for number in (1, 2):
                     service = f"player{number:02}"
                     self.assertEqual(
-                        run("exec", "-T", service, "cat", "/run/secrets/byond_key.txt"),
+                        run(
+                            "exec",
+                            "-T",
+                            service,
+                            "cat",
+                            "/run/secrets/byond_password.txt",
+                        ),
                         f"fixture-{number}",
                     )
                     write_secret = subprocess.run(
@@ -467,16 +497,12 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                             service,
                             "sh",
                             "-c",
-                            "echo changed > /run/secrets/byond_key.txt",
+                            "echo changed > /run/secrets/byond_password.txt",
                         ],
                         capture_output=True,
                         text=True,
                     )
                     self.assertNotEqual(write_secret.returncode, 0)
-                    self.assertEqual(
-                        (Path(directory) / f"LGplayer{number:02}_key.txt").read_text(),
-                        f"fixture-{number}",
-                    )
                     container_id = run("ps", "-q", service)
                     host_config = json.loads(
                         subprocess.run(

@@ -5,6 +5,24 @@
 FROM scratch AS wine-prefix-cache
 FROM scratch AS wine-download-cache
 
+FROM ubuntu:26.04@sha256:0d5255be560e2d2ddcfbfda88549e9e815ef29e7cd7fc62183d5709e6e2963c6 AS byond-login-build
+RUN apt-get update && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-posix
+COPY container/byond-login.c /tmp/byond-login.c
+RUN x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -municode \
+    /tmp/byond-login.c -o /byond-login.exe
+
+FROM byond-login-build AS byond-login-test
+RUN apt-get update && apt-get install -y --no-install-recommends wine wine64 xvfb xauth
+COPY tests/byond-login-dialog.c /tmp/byond-login-dialog.c
+RUN --mount=type=tmpfs,target=/tmp/login-test set -eu; \
+    export WINEPREFIX=/tmp/login-test WINEDEBUG=-all WINEDLLOVERRIDES='mscoree,mshtml=d'; \
+    pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin"; \
+    mkdir -p "$pager"; \
+    x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror \
+      /tmp/byond-login-dialog.c -o "$pager/byond.exe"; \
+    printf '%s\r\n' "fixture \$\`\\'\"!" | timeout 60s xvfb-run -a \
+      wine /byond-login.exe LGplayer02
+
 # Latest Ubuntu 26.04 Plasma image as of 2026-11-19 (Selkies 2.2.1).
 FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04@sha256:cee92447ae1445c0af4c26a73e32caa7d7cf31aed51b5c5e6549d94cc8fa8c9e
 
@@ -159,6 +177,7 @@ RUN install -d -o 1000 -g 1000 /etc/service/byond && \
     install -d -o 1000 -g 1000 /home/ubuntu/.local/share && \
     install -d -o 1000 -g 1000 -m 1777 /tmp/.X11-unix
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
+COPY --from=byond-login-build --chmod=644 /byond-login.exe /usr/local/lib/byond-login.exe
 COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
 COPY --chmod=644 container/byond-xwayland.desktop /etc/xdg/autostart/byond-xwayland.desktop
 COPY --chmod=755 container/configure-plasma.sh /usr/local/bin/configure-plasma
