@@ -18,9 +18,8 @@ The repository currently provides an experimental single-player BYOND image and 
 
 ```mermaid
 flowchart LR
-    Browser["Player browser"] -->|"HTTP(S), WebSocket"| Proxy["Operator proxy<br/>(access control, TLS)"]
-    Proxy -.->|"optional landing route"| Landing["Landing page<br/>(slot links)"]
-    Landing -.->|"returns slot links"| Browser
+    Browser["Player browser"] -->|"opens page"| Landing["Landing page<br/>(slot links)"]
+    Landing -.->|"selected slot URL<br/>(browser follows link)"| Proxy["Operator proxy<br/>(access control, TLS)"]
     Proxy -->|"slot 1 path"| Selkies1
     Proxy -->|"slot N path"| SelkiesN
     subgraph Players["Player containers (one per slot)"]
@@ -42,8 +41,10 @@ flowchart LR
 
 The proxy and the game server are outside this repository; access control and
 TLS are the operator's responsibility. The optional landing page returns slot
-links; the proxy routes each slot path to its player container. Its status query
-is separate from gameplay, and the player image works without the landing page.
+URLs; the dashed arrow shows the browser following a selected URL to the proxy.
+The page does not forward the player connection. The proxy routes each slot path
+to its player container. Its status query is separate from gameplay, and the
+player image works without the landing page.
 
 ## Run the player
 
