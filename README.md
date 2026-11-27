@@ -343,9 +343,11 @@ It waits up to two minutes for the English login dialog or, when BYOND has
 automatically signed in as Guest, uses the pager's accessible **Logout** and
 **Login** controls to open it. It then fills the configured account and
 password, checks **Save password** and **Automatically login when program
-starts**, and submits at most once per pager launch. If the dialog is
-unrecognized or cannot be opened, manual intervention is required. Automated
-Guest-to-account login has not yet been verified against real BYOND. Treat
+starts**, and submits at most once per pager launch. If the pager already shows
+the configured account signed in, it skips logout and login. If the dialog is
+unrecognized or cannot be opened, manual intervention is required. Guest-to-account
+login was verified against real BYOND for two accounts; automatic server
+connection after login has not yet been verified. Treat
 Wine prefixes and backups as sensitive.
 To rotate a password, stop the manager, replace the file, and start the manager
 with the same overrides. This resets all configured player volumes.
@@ -670,10 +672,11 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 At each client startup, the launcher sets `auto-login on` in BYOND's
 `cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
 `cfg/seeker.txt`, retaining other settings. When `BYOND_PASSWORD_FILE` is set,
-startup is login-only: the launcher does not pass the server URL, even if the
-password file is unreadable. It does not verify the logged-in account or
-automatically connect after login. Verify the intended account in the pager
-and connect manually; the healthcheck requires the pager, not Dream Seeker.
+the pager starts without the server URL. The login helper opens the server only
+after the pager's Home page shows `BYOND_ACCOUNT` as signed in (compared as a
+BYOND ckey), so it never joins as Guest. If the account is not shown within a
+minute of submitting, or the password file is unreadable, it does not connect;
+log in and connect manually. The healthcheck requires the pager, not Dream Seeker.
 Without password-file configuration, it starts the pager with the server
 URL; the pager is expected to log in and launch Dream Seeker. Without a configured
 password, BYOND may require interactive pager login. A BYOND account or

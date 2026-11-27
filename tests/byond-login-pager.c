@@ -6,6 +6,7 @@ enum { ACCOUNT = 100, PASSWORD, SAVE, AUTOMATIC, LOGIN, PAGER_LINK = 200 };
 
 static HWND link;
 static int exit_code = 4;
+static const wchar_t server[] = L"byond://fixture.test:1337";
 
 static void control(HWND dialog, int id, const wchar_t *class, const wchar_t *title,
                     DWORD style, int y)
@@ -64,17 +65,26 @@ static INT_PTR CALLBACK pager_proc(HWND window, UINT message, WPARAM wparam, LPA
 {
     (void)wparam;
     switch (message) {
-    case WM_CREATE:
-        link = CreateWindowW(L"Button", L"Logout", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                             10, 10, 300, 30, window,
+    case WM_CREATE: {
+        wchar_t signed_in[2];
+        BOOL saved = GetEnvironmentVariableW(L"BYOND_LOGIN_TEST_SIGNED_IN", signed_in, 2) == 1 &&
+                     signed_in[0] == L'1';
+        link = CreateWindowW(L"Button", saved ? L"LGplayer02" : L"Logout",
+                             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 10, 10, 300, 30, window,
                              (HMENU)(INT_PTR)PAGER_LINK, GetModuleHandleW(NULL), NULL);
         if (!link)
             return -1;
         SetTimer(window, 1, 20000, NULL);
         return 0;
+    }
     case WM_COMMAND:
         if (LOWORD(wparam) != PAGER_LINK || HIWORD(wparam) != BN_CLICKED)
             return 0;
+        if (GetWindowTextLengthW(link) == 10) {
+            exit_code = 7;
+            PostQuitMessage(exit_code);
+            return 0;
+        }
         if (GetWindowTextLengthW(link) == 6) {
             SetWindowTextW(link, L" log in ");
             return 0;
@@ -88,6 +98,18 @@ static INT_PTR CALLBACK pager_proc(HWND window, UINT message, WPARAM wparam, LPA
             };
             exit_code = (int)DialogBoxIndirectParamW(GetModuleHandleW(NULL),
                                                       &template.header, window, login_proc, 0);
+            if (exit_code) {
+                PostQuitMessage(exit_code);
+                return 0;
+            }
+            /* Signed in; wait for the helper to open the server. */
+            SetWindowTextW(link, L"LGplayer02");
+            exit_code = 6;
+        }
+        return 0;
+    case WM_APP:
+        if (GetWindowTextLengthW(link) == 10) {
+            exit_code = 0;
             PostQuitMessage(exit_code);
         }
         return 0;
@@ -104,8 +126,11 @@ static INT_PTR CALLBACK pager_proc(HWND window, UINT message, WPARAM wparam, LPA
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int show)
 {
     (void)previous;
-    (void)command;
     (void)show;
+    if (*command) {
+        HWND pager = FindWindowW(L"ByondLoginFixture", NULL);
+        return wcscmp(command, server) == 0 && pager && PostMessageW(pager, WM_APP, 0, 0) ? 0 : 8;
+    }
     WNDCLASSW cls = {0};
     cls.lpfnWndProc = pager_proc;
     cls.hInstance = instance;

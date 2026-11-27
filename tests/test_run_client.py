@@ -262,9 +262,9 @@ class RunClientTest(unittest.TestCase):
                 ":42",
                 "/usr/local/lib/byond-login.exe",
                 "LGplayer02",
+                "byond://example.org:1337",
             ],
         )
-        self.assertIn("Automatic server connection disabled", result.stderr)
         self.assertNotIn(password.strip().decode(), result.stderr)
 
     def test_missing_password_file_falls_back_to_manual_login(self):

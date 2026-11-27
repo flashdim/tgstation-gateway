@@ -88,6 +88,7 @@ static BOOL CALLBACK find_login(HWND window, LPARAM arg)
 
 struct link_search {
     const wchar_t *name;
+    const wchar_t *account;
     BOOL report;
     unsigned reported;
     unsigned remaining;
@@ -119,6 +120,23 @@ static BOOL link_matches(const wchar_t *text, const wchar_t *wanted)
                same_label(text, length, L"Sign in");
     return same_label(text, length, L"Logout") || same_label(text, length, L"Log out") ||
            same_label(text, length, L"Sign out");
+}
+
+/* BYOND compares keys as ckeys: lowercase letters and digits only. */
+static BOOL same_ckey(const wchar_t *text, const wchar_t *account)
+{
+    if (!text)
+        return FALSE;
+    for (;;) {
+        while (*text && !iswalnum(*text))
+            ++text;
+        while (*account && !iswalnum(*account))
+            ++account;
+        if (!*text || !*account)
+            return !*text && !*account;
+        if (towlower(*text++) != towlower(*account++))
+            return FALSE;
+    }
 }
 
 static BOOL mentions_account(const wchar_t *text)
@@ -153,7 +171,12 @@ static HRESULT activate_if_match(IAccessible *accessible, VARIANT child,
     VARIANT role;
     VariantInit(&role);
     HRESULT result = IAccessible_get_accName(accessible, child, &name);
-    if (SUCCEEDED(result) && search->report && name) {
+    if (SUCCEEDED(result) && search->account) {
+        if (name && same_ckey(name, search->account)) {
+            search->found = TRUE;
+            search->result = S_OK;
+        }
+    } else if (SUCCEEDED(result) && search->report && name) {
         if (SUCCEEDED(IAccessible_get_accRole(accessible, child, &role)))
             report_node(search, name, &role);
         VariantClear(&role);
@@ -227,7 +250,8 @@ static BOOL inspect_link_window(HWND window, struct link_search *search)
     if (GetClassNameW(window, class_name, 32) && wcscmp(class_name, L"Button") == 0 &&
         SendMessageTimeoutW(window, WM_GETTEXT, 96, (LPARAM)text,
                             SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, NULL) &&
-        link_matches(text, search->name) && IsWindowEnabled(window) && !search->report) {
+        !search->account && !search->report && link_matches(text, search->name) &&
+        IsWindowEnabled(window)) {
         if (SendMessageTimeoutW(window, BM_CLICK, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, NULL)) {
             search->found = TRUE;
             search->result = S_OK;
@@ -286,7 +310,7 @@ static BOOL CALLBACK inspect_top_window(HWND window, LPARAM arg)
     struct window_search *search = (struct window_search *)arg;
     DWORD pid = 0;
     GetWindowThreadProcessId(window, &pid);
-    if (pid != search->pager)
+    if (pid != search->pager || (search->link->account && is_class(window, L"#32770")))
         return TRUE;
     if (!inspect_link_window(window, search->link))
         return FALSE;
@@ -307,6 +331,20 @@ static BOOL pager_link(DWORD pager, const wchar_t *name, BOOL *found, unsigned *
                 link.nodes, link.accessible_windows, (unsigned long)link.last_error);
     }
     return link.found && SUCCEEDED(link.result);
+}
+
+/* The pager's Home page shows "<account> | Logout" once that account is signed in. */
+static BOOL signed_in_as(DWORD pager, const wchar_t *account)
+{
+    const wchar_t *c = account;
+    while (*c && !iswalnum(*c))
+        ++c;
+    if (!*c)
+        return FALSE;
+    struct link_search link = { .name = L"", .account = account, .remaining = 10000 };
+    struct window_search windows = { .pager = pager, .link = &link };
+    EnumWindows(inspect_top_window, (LPARAM)&windows);
+    return link.found;
 }
 
 static void report_pager_links(DWORD pager)
@@ -379,13 +417,13 @@ static BOOL read_password(wchar_t *password, int capacity)
 int wmain(int argc, wchar_t **argv)
 {
     static const wchar_t pager[] = L"C:\\Program Files (x86)\\BYOND\\bin\\byond.exe";
-    wchar_t command[350], password[1025] = {0};
+    wchar_t command[350], connect[350], password[1025] = {0};
     PROCESS_INFORMATION process;
     STARTUPINFOW startup = { .cb = sizeof(startup) };
 
-    if (argc < 2 || argc > 3 ||
-        swprintf(command, 350, L"\"%ls\"%ls%ls", pager, argc == 3 ? L" " : L"",
-                 argc == 3 ? argv[2] : L"") < 0)
+    if (argc < 2 || argc > 3 || swprintf(command, 350, L"\"%ls\"", pager) < 0 ||
+        (argc == 3 && (wcsncmp(argv[2], L"byond://", 8) != 0 ||
+                       swprintf(connect, 350, L"\"%ls\" %ls", pager, argv[2]) < 0)))
         return 1;
     setvbuf(stdin, NULL, _IONBF, 0);
     BOOL have_password = read_password(password, 1025);
@@ -404,7 +442,7 @@ int wmain(int argc, wchar_t **argv)
     CloseHandle(process.hThread);
     if (have_password) {
         ULONGLONG deadline = GetTickCount64() + 120000;
-        BOOL submitted = FALSE;
+        BOOL submitted = FALSE, verified = FALSE;
         BOOL clicked_logout = FALSE;
         BOOL attempted_logout = FALSE, attempted_login = FALSE;
         unsigned last_scan_nodes = 0;
@@ -422,6 +460,11 @@ int wmain(int argc, wchar_t **argv)
             if (search.matches > 1)
                 break;
 
+            if (GetTickCount64() >= next_link_scan && !attempted_logout &&
+                signed_in_as(process.dwProcessId, argv[1])) {
+                verified = TRUE;
+                break;
+            }
             if (GetTickCount64() >= next_link_scan && !attempted_logout) {
                 BOOL found = FALSE;
                 BOOL activated = pager_link(process.dwProcessId, L"Logout", &found,
@@ -456,7 +499,18 @@ int wmain(int argc, wchar_t **argv)
                 }
             }
         }
-        if (!submitted && !clicked_logout)
+        SecureZeroMemory(password, sizeof(password));
+        if (submitted) {
+            ULONGLONG verify_deadline = GetTickCount64() + 60000;
+            while (!verified && GetTickCount64() < verify_deadline &&
+                   WaitForSingleObject(process.hProcess, 1000) == WAIT_TIMEOUT)
+                verified = signed_in_as(process.dwProcessId, argv[1]);
+        }
+        if (verified) {
+            fprintf(stderr, "BYOND signed in as %ls\n", argv[1]);
+        } else if (submitted) {
+            fprintf(stderr, "BYOND did not show %ls as signed in; check the password\n", argv[1]);
+        } else if (!clicked_logout)
             fprintf(stderr, "No accessible BYOND Logout link found (%u nodes inspected)\n",
                     last_scan_nodes);
         else if (!submitted && clicked_logout && !attempted_login) {
@@ -467,8 +521,22 @@ int wmain(int argc, wchar_t **argv)
         }
         else if (!submitted && clicked_logout && attempted_login)
             fputs("BYOND Login dialog did not appear after opening the Login link\n", stderr);
-        if (!submitted)
+        if (!submitted && !verified)
             fputs("BYOND login automation did not submit; if not already signed in, use the pager to log in manually\n", stderr);
+        if (argc == 3 && !verified)
+            fputs("Not connecting to the game server until the account is signed in\n", stderr);
+        if (argc == 3 && verified) {
+            PROCESS_INFORMATION client;
+            STARTUPINFOW client_startup = { .cb = sizeof(client_startup) };
+            if (CreateProcessW(pager, connect, NULL, NULL, FALSE, 0, NULL, NULL,
+                               &client_startup, &client)) {
+                CloseHandle(client.hThread);
+                CloseHandle(client.hProcess);
+                fputs("Connecting to the game server\n", stderr);
+            } else {
+                fputs("Could not start the game server connection\n", stderr);
+            }
+        }
     } else {
         fputs("Invalid BYOND password file; use the pager to log in manually\n", stderr);
     }

@@ -286,12 +286,13 @@ if [ -n "${BYOND_SERVER:-}" ]; then
 fi
 
 if [ -n "${BYOND_PASSWORD_FILE:-}" ]; then
-    if [ "$#" -gt 0 ]; then
-        echo "Automatic server connection disabled during password login; verify the account and connect manually" >&2
-    fi
-    set --
+    # The helper opens the server only after the pager shows the account signed in.
     if [[ ! "${BYOND_ACCOUNT:-}" =~ ^[A-Za-z0-9_-]{1,48}$ ]] ||
         [ ! -f "$BYOND_PASSWORD_FILE" ] || [ ! -r "$BYOND_PASSWORD_FILE" ]; then
+        if [ "$#" -gt 0 ]; then
+            echo "Automatic server connection disabled until the account is signed in" >&2
+        fi
+        set --
         echo "Invalid BYOND account or unreadable password file; use the pager to log in manually" >&2
     else
         exec wine /usr/local/lib/byond-login.exe "$BYOND_ACCOUNT" "$@" <"$BYOND_PASSWORD_FILE"
