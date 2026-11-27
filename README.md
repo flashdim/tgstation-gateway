@@ -339,17 +339,14 @@ and pager run as UID 1000 and can read the slot's password file, so use only
 dedicated accounts in trusted desktops. Restrict access to each slot.
 
 The launcher still sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
-It looks for the English login dialog owned by the pager it starts, fills
-the account and password, checks **Save password** and **Automatically login
-when program starts**, and submits at most once per pager launch. An
-initial Guest selection may disable password controls; the helper enters the
-configured account before checking that those controls are enabled. It does
-not log out an existing Guest session or open the dialog automatically.
-If BYOND has already signed in using saved credentials, no dialog submission
-is needed. An unrecognized dialog or rejected login needs manual intervention.
-The user has observed saved-credential login in one local test; automated
-credential submission has not been verified against real BYOND. Treat Wine
-prefixes and backups as sensitive.
+It waits up to two minutes for the English login dialog or, when BYOND has
+automatically signed in as Guest, uses the pager's accessible **Logout** and
+**Login** controls to open it. It then fills the configured account and
+password, checks **Save password** and **Automatically login when program
+starts**, and submits at most once per pager launch. If the dialog is
+unrecognized or cannot be opened, manual intervention is required. Automated
+Guest-to-account login has not yet been verified against real BYOND. Treat
+Wine prefixes and backups as sensitive.
 To rotate a password, stop the manager, replace the file, and start the manager
 with the same overrides. This resets all configured player volumes.
 

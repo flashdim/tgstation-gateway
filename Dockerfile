@@ -9,11 +9,12 @@ FROM ubuntu:26.04@sha256:0d5255be560e2d2ddcfbfda88549e9e815ef29e7cd7fc62183d5709
 RUN apt-get update && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-posix
 COPY container/byond-login.c /tmp/byond-login.c
 RUN x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -municode \
-    /tmp/byond-login.c -o /byond-login.exe
+    /tmp/byond-login.c -loleacc -loleaut32 -lole32 -luuid -o /byond-login.exe
 
 FROM byond-login-build AS byond-login-test
 RUN apt-get update && apt-get install -y --no-install-recommends wine wine64 xvfb xauth
 COPY tests/byond-login-dialog.c /tmp/byond-login-dialog.c
+COPY tests/byond-login-pager.c /tmp/byond-login-pager.c
 RUN --mount=type=tmpfs,target=/tmp/login-test set -eu; \
     export WINEPREFIX=/tmp/login-test WINEDEBUG=-all WINEDLLOVERRIDES='mscoree,mshtml=d'; \
     pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin"; \
@@ -24,7 +25,12 @@ RUN --mount=type=tmpfs,target=/tmp/login-test set -eu; \
       export BYOND_LOGIN_TEST_GUEST="$guest"; \
       printf '%s\r\n' "fixture \$\`\\'\"!" | timeout 60s xvfb-run -a \
         wine /byond-login.exe LGplayer02; \
-    done
+    done; \
+    x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror -municode -mwindows \
+      /tmp/byond-login-pager.c -o "$pager/byond.exe"; \
+    export BYOND_LOGIN_DEBUG=1; \
+    printf '%s\r\n' "fixture \$\`\\'\"!" | timeout 60s xvfb-run -a \
+      wine /byond-login.exe LGplayer02
 
 # Latest Ubuntu 26.04 Plasma image as of 2026-11-19 (Selkies 2.2.1).
 FROM ghcr.io/selkies-project/selkies-egl-desktop:26.04@sha256:cee92447ae1445c0af4c26a73e32caa7d7cf31aed51b5c5e6549d94cc8fa8c9e
