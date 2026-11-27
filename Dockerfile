@@ -15,8 +15,15 @@ FROM byond-login-build AS byond-login-test
 RUN apt-get update && apt-get install -y --no-install-recommends wine wine64 xvfb xauth
 COPY tests/byond-login-dialog.c /tmp/byond-login-dialog.c
 COPY tests/byond-login-pager.c /tmp/byond-login-pager.c
+COPY tests/byond-login-accessibility.c /tmp/tests/byond-login-accessibility.c
 RUN --mount=type=tmpfs,target=/tmp/login-test set -eu; \
     export WINEPREFIX=/tmp/login-test WINEDEBUG=-all WINEDLLOVERRIDES='mscoree,mshtml=d'; \
+    mkdir -p /tmp/container; \
+    cp /tmp/byond-login.c /tmp/container/byond-login.c; \
+    x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror \
+      /tmp/tests/byond-login-accessibility.c -loleacc -loleaut32 -lole32 -luuid \
+      -o /tmp/login-test/accessibility.exe; \
+    timeout 60s xvfb-run -a wine /tmp/login-test/accessibility.exe; \
     pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin"; \
     mkdir -p "$pager"; \
     x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror \

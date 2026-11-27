@@ -184,10 +184,11 @@ static HRESULT activate_if_match(IAccessible *accessible, VARIANT child,
         result = IAccessible_get_accRole(accessible, child, &role);
         if (SUCCEEDED(result) && role.vt == VT_I4 &&
             (role.lVal == ROLE_SYSTEM_LINK || role.lVal == ROLE_SYSTEM_PUSHBUTTON ||
-             role.lVal == ROLE_SYSTEM_MENUITEM || role.lVal == ROLE_SYSTEM_STATICTEXT ||
-             role.lVal == ROLE_SYSTEM_TEXT)) {
+             role.lVal == ROLE_SYSTEM_MENUITEM)) {
             search->found = TRUE;
             search->result = IAccessible_accDoDefaultAction(accessible, child);
+            if (search->result == S_FALSE)
+                search->result = E_FAIL;
             result = search->result;
         }
     }
@@ -452,6 +453,7 @@ int wmain(int argc, wchar_t **argv)
             struct search search = { .pid = process.dwProcessId };
             EnumWindows(find_login, (LPARAM)&search);
             if (search.matches == 1) {
+                fputs("Found the BYOND Login dialog\n", stderr);
                 submitted = submit(&search.dialog, argv[1], password);
                 if (submitted)
                     fputs("BYOND login submitted once\n", stderr);
@@ -477,7 +479,7 @@ int wmain(int argc, wchar_t **argv)
                         break;
                     }
                     clicked_logout = TRUE;
-                    fputs("BYOND Guest session detected; signed out\n", stderr);
+                    fputs("Requested BYOND logout; waiting for Login\n", stderr);
                     Sleep(500);
                     continue;
                 }
@@ -494,7 +496,7 @@ int wmain(int argc, wchar_t **argv)
                         fputs("Could not activate the BYOND Login link\n", stderr);
                         break;
                     }
-                    fputs("Opened the BYOND Login dialog\n", stderr);
+                    fputs("Requested BYOND Login; waiting for the dialog\n", stderr);
                     Sleep(500);
                 }
             }
