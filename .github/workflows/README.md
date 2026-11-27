@@ -24,8 +24,9 @@ fails, other images may already be published for that release. Re-run the
 failed job for transient failures; otherwise fix the cause in a new release.
 After unit tests pass, `landing-screenshot` renders the landing page with five
 slots in Chromium and uploads a desktop `landing-desktop.png` as an unzipped
-artifact, downloadable from the run summary. It is a
-visual aid, not a gameplay check.
+artifact, downloadable from the run summary. It uses Ubuntu 24.04 because the
+Ubuntu 26.04 runner's Microsoft package repository returned HTTP 403 during
+Playwright's dependency installation. It is a visual aid, not a gameplay check.
 The landing image is smoke-tested by generating slots from `GATEWAY_PLAY_HOST`
 and related environment variables, checking the generated links, rejecting an
 invalid host, and checking that it serves the page files and attribution.
