@@ -221,9 +221,8 @@ struct window_search {
 static BOOL CALLBACK inspect_child_window(HWND window, LPARAM arg)
 {
     struct window_search *search = (struct window_search *)arg;
-    DWORD pid = 0;
-    GetWindowThreadProcessId(window, &pid);
-    return pid != search->pager || inspect_link_window(window, search->link);
+    /* WebView2 renders the pager content in a separate process. */
+    return inspect_link_window(window, search->link);
 }
 
 static BOOL CALLBACK inspect_top_window(HWND window, LPARAM arg)
