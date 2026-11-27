@@ -295,71 +295,37 @@ refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
 To update an existing image tag, pull it first and restart the manager.
-**Every manager startup removes and recreates all configured owned players and
-erases their Wine and data volumes**, including volumes left behind by missing
-containers. This interrupts active sessions and permanently deletes saved
-logins, settings and player data. It also applies to automatic manager restarts
-after failures and host/daemon restarts; a failed startup can leave a partially
-reset deployment. Host password files are read-only and are not erased. Unowned
-containers and volumes are rejected, not deleted. Subsequent reconciliation
-passes only start stopped players or recreate missing or changed ones, retaining
-their volumes until the next manager startup.
+**Every manager startup removes and recreates all configured owned player
+containers, retaining their Wine and data volumes.** This interrupts active
+sessions, including on automatic manager restarts, but preserves saved logins,
+settings and player data. Volumes left behind by missing containers are reused
+after checking their ownership labels. Unowned containers and volumes are
+rejected, not deleted. Subsequent reconciliation passes only start stopped
+players or recreate missing or changed ones, also retaining their volumes.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
 resource limits. Container startup does not establish playable sessions.
 
-To opt into BYOND pager login automation, place one UTF-8 password per file
-in a protected host directory, named `LGplayer01_password.txt`,
-`LGplayer02_password.txt`, and so on. An optional final LF or CRLF is ignored.
-Replace the old keys override and `_key.txt` files; the launcher no longer
-copies `key.txt`. Use the development player and manager images from the
-same revision when testing this change.
+Log in once through each player's desktop using its intended BYOND account
+(`LGplayer01`, `LGplayer02`, etc.). If the pager starts as Guest, use **Logout**
+or **Ctrl+L**, then **Login**. Enter credentials yourself and check **Save password**
+and **Automatically login when program starts**. The saved login remains in that
+player's Wine volume across container recreation and manager restarts. To rotate
+credentials, sign out and save the replacement through that player's pager.
+The launcher does not fill dialogs, send account shortcuts, or verify account
+identity; confirm the intended account before joining the game.
 
-```sh
-export GATEWAY_SECRET_DIRECTORY=/absolute/host/path/to/byond-passwords
-docker compose -f examples/compose.traefik.yaml \
-  -f examples/compose.traefik.passwords.yaml up -d
-```
+Password-file provisioning and the native login helper have been removed.
+When upgrading, remove `examples/compose.traefik.passwords.yaml` from your Compose
+commands and unset `GATEWAY_SECRET_DIRECTORY`, `BYOND_PASSWORD_FILE` and
+`BYOND_ACCOUNT`. Use the player and manager images from the same revision.
+**Stop the old manager before upgrading:** restarting the old manager still
+erases player volumes. Do not use `down -v` or delete player volumes when updating.
+Previously erased login data cannot be recovered by this change.
 
-Use the passwords override for subsequent Compose commands (and the GPU override
-too, if enabled). The directory is mounted read-only into the manager at the
-same absolute path; Docker resolves each player bind mount on the daemon host.
-Use a local daemon and keep the path identical there; the path cannot contain
-commas, double quotes or newlines. The manager validates all
-configured files before reconciling, then mounts only the matching file
-read-only into each player. `BYOND_PASSWORD_FILE` contains only the mount
-path and `BYOND_ACCOUNT` identifies the slot's account. Files must be nonempty
-regular files owned by UID 1000 with mode `0400` or `0600`; symlinks and
-hard links are rejected. Directory traversal
-permissions, ACLs, user namespace remapping and remote daemons need
-separate operator validation. Protect the directory and its parents against
-untrusted modification; validation and Docker mounting are not atomic.
-Docker metadata exposes host paths. Do not put passwords in environment
-variables, command lines, Compose files, images, logs or caches. The desktop
-and pager run as UID 1000 and can read the slot's password file, so use only
-dedicated accounts in trusted desktops. Restrict access to each slot.
-
-The launcher still sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
-It waits up to two minutes for the English login dialog or, when BYOND has
-automatically signed in as Guest, detects the pager's accessible **Logout** and
-**Login** controls and sends the native **Ctrl+L** shortcut instead of invoking
-their accessibility actions. It focuses the pager before sending the shortcut,
-ignoring identically named plain-text nodes.
-Shortcut-request logs do not confirm logout or that the dialog opened; the helper
-separately detects the native Login dialog. It then fills the configured account and
-password, checks **Save password** and **Automatically login when program
-starts**, and submits at most once per pager launch. If the pager already shows
-the configured account signed in, it skips logout and login. If the dialog is
-unrecognized or cannot be opened, manual intervention is required. Guest-to-account
-login was verified against real BYOND for two accounts; automatic server
-connection after login has not yet been verified. Treat
-Wine prefixes and backups as sensitive.
-To rotate a password, stop the manager, replace the file, and start the manager
-with the same overrides. This resets all configured player volumes.
-
-For a standalone player, mount only its password file read-only at
-`/run/secrets/byond_password.txt` and set `BYOND_PASSWORD_FILE` to that path
-and `BYOND_ACCOUNT` to the intended account. Neither variable is needed for
-manual login.
+The launcher sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
+Treat Wine volumes and their backups as sensitive: they contain saved credentials.
+Use dedicated accounts, restrict access to each desktop, and never commit credentials
+or put them in environment variables, command lines, Compose files, images or logs.
 
 For managed players, Docker health checks the Selkies endpoint, not Dream
 Seeker. This lets Traefik route to the desktop even if the BYOND pager needs
@@ -385,7 +351,7 @@ in the shell or Compose `.env` file. Obtain that override with
 The manager passes `/dev/dri:/dev/dri` and that supplementary group to
 every player, not to the landing container. GPU access is disabled
 by default. Changing the GPU setting or group ID requires a manager restart,
-which recreates configured players and erases their volumes as described above.
+which recreates configured players while retaining their volumes as described above.
 Enabling it requires `/dev/dri` on the daemon host;
 Compose refuses a missing bind-mount source rather than creating it.
 Use both Compose files for subsequent GPU deployment commands.
@@ -621,28 +587,14 @@ real login and gameplay verification first, as required by the roadmap, and
 record the environment and results separately from the fixtures.
 
 For credential rotation on a disposable deployment, record non-sensitive
-markers in both accounts' volumes, stop the intended service, replace its password file,
-and recreate that service as described below. Verify only the intended
-account receives the replacement, its data persists, and the other account
-is unchanged; do not log credentials. For resource exhaustion, use a
+markers in both accounts' volumes, sign out in the intended account's pager,
+enter and save its replacement credentials, and recreate that service.
+Verify only the intended account receives the replacement, its data persists,
+and the other account is unchanged; do not log credentials. For resource exhaustion, use a
 disposable host with bounded test workloads and monitoring; record the
 triggered limit, service and host behavior, retained data and recovery after
 restoring capacity. Do not intentionally exhaust a shared or production host.
 Neither procedure has been verified against the player image.
-
-Optionally set `GATEWAY_SECRET_DIRECTORY` to an absolute, protected host
-directory containing a nonempty `<account>_password.txt` for every slot. The
-generator mounts only the matching file read-only and sets `BYOND_ACCOUNT`
-and `BYOND_PASSWORD_FILE`. Files must be owned by UID 1000 with mode
-`0400` or `0600`. Final symlinks and hard
-links are rejected. Protect parent directories from untrusted changes and keep
-files stable until containers stop; validation and Docker mounting are not
-atomic. User namespace remapping and remote daemons require separate permission
-validation. Match passwords to accounts manually; never store credentials in
-environment values, command lines, images, logs or build caches. Docker
-metadata contains the host paths. To rotate a password, stop its service,
-replace the source file, and recreate it with Compose. BYOND may reuse its
-previous saved login without opening the dialog; sign out if needed.
 
 The fixed account volumes retain login and desktop data across container
 recreation. Never reassign an account's data to a different person without an
@@ -675,15 +627,11 @@ BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
 
 At each client startup, the launcher sets `auto-login on` in BYOND's
 `cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
-`cfg/seeker.txt`, retaining other settings. When `BYOND_PASSWORD_FILE` is set,
-the pager starts without the server URL. The login helper opens the server only
-after the pager's Home page shows `BYOND_ACCOUNT` as signed in (compared as a
-BYOND ckey), so it never joins as Guest. If the account is not shown within a
-minute of submitting, or the password file is unreadable, it does not connect;
-log in and connect manually. The healthcheck requires the pager, not Dream Seeker.
-Without password-file configuration, it starts the pager with the server
-URL; the pager is expected to log in and launch Dream Seeker. Without a configured
-password, BYOND may require interactive pager login. A BYOND account or
+`cfg/seeker.txt`, retaining other settings. It starts the pager with the server
+URL; BYOND handles its own saved login and launches Dream Seeker. On first use,
+log in and save credentials yourself. There is no helper that enters credentials
+or verifies the account before connection; confirm the pager is signed in as
+the intended account, not Guest. A BYOND account or
 server-side authentication may still be required. Automatic login and joining
 through the pager have not yet been verified against a real server. In
 direct-server mode, the healthcheck still requires a Dream Seeker process; it

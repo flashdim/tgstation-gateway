@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import tempfile
 import time
@@ -33,7 +32,6 @@ class RunClientTest(unittest.TestCase):
         existing_layout=None,
         wine_exit_code=0,
         cleanup_failure=None,
-        password=None,
         existing_config=None,
         bad_config_directory=False,
         desktop_failure=None,
@@ -110,9 +108,6 @@ class RunClientTest(unittest.TestCase):
                     '  [ "${FAIL_REGISTRY:-}" != "$3" ]\n'
                     "  exit $?\n"
                     "fi\n"
-                    'if [ "$1" = /usr/local/lib/byond-login.exe ]; then\n'
-                    '  cmp -s - "$BYOND_PASSWORD_FILE" || exit 89\n'
-                    "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
                     'printf "%s\\n" "$DISPLAY" "$@"\n'
                     'exit "$MOCK_WINE_EXIT_CODE"'
@@ -126,7 +121,6 @@ class RunClientTest(unittest.TestCase):
             runtime.mkdir()
             prefix = root / "wine prefix"
             authority = runtime / "kwin authority"
-            password_file = root / "password"
             (runtime / "container-env").write_text(
                 f"export DISPLAY=':42'\nexport WINEPREFIX='{prefix}'\n"
                 "export WINELOADER='/usr/bin/wine'\nexport WINESERVER='/usr/bin/wineserver'\n"
@@ -134,12 +128,6 @@ class RunClientTest(unittest.TestCase):
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
-                + (
-                    f"export BYOND_PASSWORD_FILE={shlex.quote(str(password_file))}\n"
-                    "export BYOND_ACCOUNT=LGplayer02\n"
-                    if password is not None
-                    else ""
-                )
             )
             env = {
                 **os.environ,
@@ -171,8 +159,6 @@ class RunClientTest(unittest.TestCase):
                 f"{'old-bus' if desktop_failure == 'stale-bus' else 'current-bus'}\n"
                 f"{':1.99' if desktop_failure == 'stale-owner' else ':1.23'}\n"
             )
-            if password:
-                password_file.write_bytes(password)
             layout = (
                 prefix
                 / "drive_c/users/steamuser/Documents/BYOND/Skins/exadv1/"
@@ -245,36 +231,6 @@ class RunClientTest(unittest.TestCase):
     def test_preserves_wine_exit_status(self):
         result, _, _, events, _, _ = self.run_client(wine_exit_code=23)
         self.assertEqual(result.returncode, 23)
-        self.assertEqual(events, ["launch"])
-
-    def test_passes_password_through_stdin_only(self):
-        password = b"synthetic $`\\'\"!\r\n"
-        result, _, registry, events, _, _ = self.run_client(
-            server="example.org:1337",
-            password=password,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(registry, BYOND_REGISTRY)
-        self.assertEqual(events, ["launch"])
-        self.assertEqual(
-            result.stdout.splitlines(),
-            [
-                ":42",
-                "/usr/local/lib/byond-login.exe",
-                "LGplayer02",
-                "byond://example.org:1337",
-            ],
-        )
-        self.assertNotIn(password.strip().decode(), result.stderr)
-
-    def test_missing_password_file_falls_back_to_manual_login(self):
-        result, _, _, events, _, _ = self.run_client(
-            password=b"", server="example.org:1337"
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("use the pager to log in manually", result.stderr)
-        self.assertTrue(result.stdout.endswith("/BYOND/bin/byond.exe\n"))
-        self.assertNotIn("byond://", result.stdout)
         self.assertEqual(events, ["launch"])
 
     def test_updates_settings_without_discarding_other_preferences(self):

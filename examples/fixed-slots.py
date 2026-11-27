@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import re
-import stat
 import subprocess
 import sys
 
@@ -30,9 +29,6 @@ def compose_config(env):
     first_port = int(port_text)
     if first_port < 1 or first_port + len(config.slots) - 1 > 65535:
         raise ConfigError("Player ports exceed the TCP port range")
-    secret_dir = env.get("GATEWAY_SECRET_DIRECTORY", "")
-    if secret_dir and not os.path.isabs(secret_dir):
-        raise ConfigError("GATEWAY_SECRET_DIRECTORY must be an absolute path")
     command = [
         "docker",
         "compose",
@@ -87,38 +83,6 @@ def compose_config(env):
             volumes[name] = {}
             service["volumes"].append(
                 {"type": "volume", "source": name, "target": target}
-            )
-        if secret_dir:
-            path = Path(secret_dir) / f"{slot.account}_password.txt"
-            try:
-                info = path.lstat()
-            except (FileNotFoundError, PermissionError):
-                valid = False
-            else:
-                valid = (
-                    stat.S_ISREG(info.st_mode)
-                    and info.st_size > 0
-                    and info.st_nlink == 1
-                    and info.st_uid == 1000
-                    and stat.S_IMODE(info.st_mode) in (0o400, 0o600)
-                )
-            if not valid:
-                raise ConfigError(
-                    f"Missing or invalid password file for {slot.account}; "
-                    "expected owner UID 1000 and mode 0400 or 0600"
-                )
-            service["volumes"].append(
-                {
-                    "type": "bind",
-                    "source": str(path),
-                    "target": "/run/secrets/byond_password.txt",
-                    "read_only": True,
-                    "bind": {"create_host_path": False},
-                }
-            )
-            service["environment"].update(
-                BYOND_ACCOUNT=slot.account,
-                BYOND_PASSWORD_FILE="/run/secrets/byond_password.txt",
             )
         services[f"player{slot.number:02}"] = service
     if env.get("GATEWAY_FIXED_LANDING") == "1":

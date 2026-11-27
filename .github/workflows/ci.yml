@@ -41,9 +41,6 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
 
-      - name: Test BYOND login helper under Wine
-        run: docker build --target byond-login-test --output type=cacheonly .
-
       - name: Test fixed account isolation
         env:
           GATEWAY_DOCKER_TEST_IMAGE: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc

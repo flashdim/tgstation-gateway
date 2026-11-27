@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-if [ -n "${BYOND_SERVER:-}" ] && [ -z "${BYOND_PASSWORD_FILE:-}" ]; then
+if [ -n "${BYOND_SERVER:-}" ]; then
     process='(^|[\\/])dreamseeker[.]exe"?([[:space:]]|$)'
     client='Dream Seeker'
 else

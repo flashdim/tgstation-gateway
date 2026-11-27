@@ -11,7 +11,6 @@ server="${BYOND_SERVER:?BYOND_SERVER is required}"
 wayland="${SELKIES_WAYLAND:-true}"
 gpu="${GATEWAY_MANAGER_GPU:-false}"
 render_gid="${DRI_RENDER_GID:-}"
-secret_dir="${GATEWAY_SECRET_DIRECTORY:-}"
 
 if ! printf '%s' "$deployment" | grep -Eq '^[a-z0-9][a-z0-9_-]{0,47}$'; then
     echo "GATEWAY_DEPLOYMENT_ID must be 1-48 lowercase letters, digits, _ or -" >&2
@@ -72,40 +71,6 @@ case "$gpu" in
         ;;
 esac
 
-if [ -n "$secret_dir" ]; then
-    case "$secret_dir" in
-        /*) ;;
-        *)
-            echo "GATEWAY_SECRET_DIRECTORY must be an absolute host path" >&2
-            exit 1
-            ;;
-    esac
-    case "$secret_dir" in
-        *','* | *'"'* | *'
-'*)
-            echo "GATEWAY_SECRET_DIRECTORY cannot contain commas, double quotes or newlines" >&2
-            exit 1
-            ;;
-    esac
-    number=1
-    while [ "$number" -le "$count" ]; do
-        slot="$(printf '%02d' "$number")"
-        password_file="$secret_dir/LGplayer${slot}_password.txt"
-        if [ -L "$password_file" ] || [ ! -f "$password_file" ] || [ ! -s "$password_file" ] ||
-            [ "$(stat -c '%h' "$password_file")" != 1 ]; then
-            echo "Missing or invalid password file for LGplayer$slot" >&2
-            exit 1
-        fi
-        uid="$(stat -c '%u' "$password_file")"
-        mode="$(stat -c '%a' "$password_file")"
-        if [ "$uid" != 1000 ] || { [ "$mode" != 400 ] && [ "$mode" != 600 ]; }; then
-            echo "Password file for LGplayer$slot must be owned by UID 1000 with mode 0400 or 0600" >&2
-            exit 1
-        fi
-        number=$((number + 1))
-    done
-fi
-
 exec 9>/run/gateway-lock/manager.lock
 if ! flock -n 9; then
     echo "Another manager already owns deployment $deployment" >&2
@@ -119,10 +84,8 @@ fi
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
 settings="$(
-    {
-        printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid"
-        [ -z "$secret_dir" ] || printf '%s\n' password-file "$secret_dir"
-    } | sha256sum | cut -d ' ' -f 1
+    printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
+        sha256sum | cut -d ' ' -f 1
 )"
 
 owner_label="io.tgstation-gateway.deployment"
@@ -139,11 +102,7 @@ ensure_volume() {
             echo "Refusing to use unowned volume $volume" >&2
             exit 1
         fi
-        if [ "$reset_players" != true ]; then
-            return
-        fi
-        echo "Erasing player volume $volume after manager startup"
-        docker volume rm "$volume" >/dev/null
+        return
     fi
     docker volume create --label "$owner_label=$deployment" --label "$slot_label=$slot" \
         --label "$role_label=$2" "$volume" >/dev/null
@@ -191,7 +150,7 @@ reconcile() {
             fi
             old_settings="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.settings"}}' "$id")"
             if [ "$reset_players" = true ]; then
-                echo "Recreating player $name with clean data after manager startup"
+                echo "Recreating player $name with retained data after manager startup"
                 docker rm -f "$id" >/dev/null
                 id=""
             elif [ "$old_settings" != "$settings" ]; then
@@ -214,10 +173,6 @@ reconcile() {
             set --
             if [ "$gpu" = true ]; then
                 set -- --device /dev/dri:/dev/dri --group-add "$render_gid"
-            fi
-            if [ -n "$secret_dir" ]; then
-                set -- "$@" --mount "type=bind,src=$secret_dir/LGplayer${slot}_password.txt,dst=/run/secrets/byond_password.txt,readonly" \
-                    -e "BYOND_ACCOUNT=LGplayer$slot" -e BYOND_PASSWORD_FILE=/run/secrets/byond_password.txt
             fi
             docker run -d --name "$name" --platform linux/amd64 --init \
                 "$@" \

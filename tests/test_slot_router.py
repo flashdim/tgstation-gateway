@@ -25,7 +25,6 @@ class ComposeTest(unittest.TestCase):
             "GATEWAY_MANAGER_IMAGE": "ghcr.io/flashdim/tgstation-gateway-manager:latest",
             "GATEWAY_MANAGER_GPU": "false",
             "DRI_RENDER_GID": "",
-            "GATEWAY_SECRET_DIRECTORY": "",
         }
 
     def test_compose_uses_one_manager_and_no_static_players(self):
@@ -117,36 +116,6 @@ class ComposeTest(unittest.TestCase):
         self.assertNotIn("devices", manager)
         self.assertNotIn("/dev/dri", json.dumps(services["landing"]))
 
-    def test_password_override_mounts_directory_only_in_manager(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "-f",
-                    str(COMPOSE),
-                    "-f",
-                    str(ROOT / "examples/compose.traefik.passwords.yaml"),
-                    "config",
-                    "--format",
-                    "json",
-                ],
-                env={**self.env, "GATEWAY_SECRET_DIRECTORY": directory},
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            services = json.loads(result.stdout)["services"]
-            manager = services["manager"]
-            self.assertEqual(
-                manager["environment"]["GATEWAY_SECRET_DIRECTORY"], directory
-            )
-            mount = next(v for v in manager["volumes"] if v["target"] == directory)
-            self.assertEqual(mount["source"], directory)
-            self.assertTrue(mount["read_only"])
-            self.assertFalse(mount["bind"].get("create_host_path", False))
-            self.assertNotIn(directory, json.dumps(services["landing"]))
-
     def test_manager_rejects_invalid_values_before_using_docker(self):
         for key, value in (
             ("GATEWAY_SLOT_COUNT", "0"),
@@ -158,9 +127,6 @@ class ComposeTest(unittest.TestCase):
             ("GATEWAY_TRAEFIK_ENTRYPOINT", "https,other"),
             ("GATEWAY_TRAEFIK_NETWORK", "bad network"),
             ("GATEWAY_MANAGER_GPU", "invalid"),
-            ("GATEWAY_SECRET_DIRECTORY", "relative"),
-            ("GATEWAY_SECRET_DIRECTORY", "/path,other"),
-            ("GATEWAY_SECRET_DIRECTORY", '/path"other'),
         ):
             result = subprocess.run(
                 ["sh", str(ROOT / "examples/slot-manager.sh")],
@@ -171,94 +137,7 @@ class ComposeTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
 
-    def test_manager_password_mount_and_invalid_files(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            keys = root / "keys with spaces"
-            keys.mkdir()
-            first = keys / "LGplayer01_password.txt"
-            second = keys / "LGplayer02_password.txt"
-            first.write_bytes(b"synthetic $`\\'\r\n")
-            second.write_bytes(b"other key")
-            first.chmod(0o600)
-            second.chmod(0o400)
-            script = (ROOT / "examples/slot-manager.sh").read_text()
-            script = script.replace(
-                "stat -c '%u' \"$password_file\"", 'printf %s "${FIXTURE_UID:-1000}"'
-            )
-            script = script.replace(
-                "/run/gateway-lock/manager.lock", str(root / "lock")
-            )
-            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
-            (root / "manager.sh").write_text(script)
-            (root / "seccomp").write_text("{}")
-            docker = root / "docker"
-            docker.write_text(
-                "#!/bin/sh\n"
-                'case "$1 $2" in\n'
-                '  "image inspect") echo fixture-image ;;\n'
-                '  "volume inspect") exit 1 ;;\n'
-                '  "run -d") printf "%s\\n" "$@" > "$ARGUMENTS"; exit 23 ;;\n'
-                "esac\n"
-            )
-            docker.chmod(0o755)
-            env = {
-                **self.env,
-                "GATEWAY_SLOT_COUNT": "2",
-                "GATEWAY_SECRET_DIRECTORY": str(keys),
-                "PATH": f"{root}:{os.environ['PATH']}",
-                "ARGUMENTS": str(root / "arguments"),
-            }
-
-            def run(**overrides):
-                return subprocess.run(
-                    ["sh", str(root / "manager.sh")],
-                    env={**env, **overrides},
-                    capture_output=True,
-                    text=True,
-                )
-
-            result = run()
-            self.assertEqual(result.returncode, 23, result.stderr)
-            arguments = (root / "arguments").read_text().splitlines()
-            self.assertIn(
-                f"type=bind,src={first},dst=/run/secrets/byond_password.txt,readonly",
-                arguments,
-            )
-            self.assertIn(
-                "BYOND_PASSWORD_FILE=/run/secrets/byond_password.txt", arguments
-            )
-            self.assertIn("BYOND_ACCOUNT=LGplayer01", arguments)
-            self.assertNotIn(str(second), "\n".join(arguments))
-            self.assertNotIn("synthetic", result.stdout + result.stderr)
-
-            for kind in ("missing", "empty", "symlink", "hardlink"):
-                with self.subTest(kind=kind):
-                    second.unlink()
-                    if kind == "empty":
-                        second.touch()
-                    elif kind == "symlink":
-                        second.symlink_to(first)
-                    elif kind == "hardlink":
-                        os.link(first, second)
-                    result = run()
-                    self.assertNotEqual(result.returncode, 23)
-                    invalid_slot = "01" if kind == "hardlink" else "02"
-                    self.assertIn(
-                        f"Missing or invalid password file for LGplayer{invalid_slot}",
-                        result.stderr,
-                    )
-                    if kind == "missing":
-                        second.write_bytes(b"other key")
-            second.unlink(missing_ok=True)
-            second.write_bytes(b"other key")
-            for mode, uid in ((0o644, "1000"), (0o400, "1001")):
-                second.chmod(mode)
-                result = run(FIXTURE_UID=uid)
-                self.assertNotEqual(result.returncode, 23)
-                self.assertIn("must be owned by UID 1000", result.stderr)
-
-    def test_manager_resets_players_and_volumes_only_on_startup(self):
+    def test_manager_recreates_players_on_startup_preserving_volumes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = (ROOT / "examples/slot-manager.sh").read_text()
@@ -300,9 +179,6 @@ class ComposeTest(unittest.TestCase):
                 '  "volume create")\n'
                 '    for arg in "$@"; do volume="$arg"; done\n'
                 '    touch "$STATE/$volume" ;;\n'
-                '  "volume rm")\n'
-                '    [ "${FAIL_VOLUME_REMOVE:-false}" != true ] || exit 43\n'
-                '    rm "$STATE/$3" ;;\n'
                 '  "run -d")\n'
                 '    for arg in "$@"; do\n'
                 '      case "$arg" in io.tgstation-gateway.settings=*)\n'
@@ -349,6 +225,8 @@ class ComposeTest(unittest.TestCase):
                 any(event.startswith(("rm ", "volume rm ")) for event in events)
             )
             settings = (root / "settings").read_text()
+            for role in ("wine", "data"):
+                (root / f"gatewaytest-player01-{role}").write_text("saved login")
             for running in ("true", "false", "missing"):
                 with self.subTest(container=running):
                     (root / "running").write_text(running)
@@ -360,15 +238,11 @@ class ComposeTest(unittest.TestCase):
                         events.count("rm -f fixture-id"), int(running != "missing")
                     )
                     for role in ("wine", "data"):
-                        removal = f"volume rm gatewaytest-player01-{role}"
-                        self.assertEqual(events.count(removal), 1)
-                        self.assertLess(
-                            events.index(removal),
-                            next(
-                                index
-                                for index, event in enumerate(events)
-                                if event.startswith("run -d ")
-                            ),
+                        volume = f"gatewaytest-player01-{role}"
+                        self.assertEqual((root / volume).read_text(), "saved login")
+                        self.assertNotIn(f"volume rm {volume}", events)
+                        self.assertFalse(
+                            any(event.startswith("volume create ") for event in events)
                         )
                     self.assertEqual(
                         sum(event.startswith("run -d ") for event in events), 1
@@ -387,9 +261,6 @@ class ComposeTest(unittest.TestCase):
                 self.assertFalse(
                     any(event.startswith(("volume rm ", "run -d ")) for event in events)
                 )
-            result, events = run(FAIL_VOLUME_REMOVE="true")
-            self.assertEqual(result.returncode, 43)
-            self.assertFalse(any(event.startswith("run -d ") for event in events))
             (root / "exists").touch()
             (root / "settings").write_text("outdated")
             result, events = run()
@@ -515,7 +386,7 @@ class ComposeTest(unittest.TestCase):
     "Set fixture images to run the Docker manager and routing test",
 )
 class ManagerDockerTest(unittest.TestCase):
-    def test_manager_creates_routes_reconciles_and_resets_players(self):
+    def test_manager_creates_routes_recreates_players_and_retains_data(self):
         project = f"gatewaytest{uuid.uuid4().hex[:12]}"
         network = f"{project}-edge"
         fixture_image = f"{project}-fixture"
@@ -532,7 +403,6 @@ class ManagerDockerTest(unittest.TestCase):
             "GATEWAY_MANAGER_IMAGE": os.environ["GATEWAY_TEST_MANAGER_IMAGE"],
             "GATEWAY_MANAGER_GPU": "false",
             "DRI_RENDER_GID": "",
-            "GATEWAY_SECRET_DIRECTORY": "",
         }
         created = subprocess.run(
             ["docker", "network", "create", network],
@@ -569,19 +439,6 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 root.chmod(0o755)
-                keys = root / "keys"
-                keys.mkdir(mode=0o755)
-                for number in (1, 2, 3):
-                    key = keys / f"LGplayer{number:02}_password.txt"
-                    key.write_bytes(f"fixture {number} $`\\'\r\n".encode())
-                    key.chmod(0o600)
-                    if os.getuid() == 0:
-                        os.chown(key, 1000, -1)
-                    elif os.getuid() != 1000:
-                        subprocess.run(
-                            ["sudo", "-n", "chown", "1000", str(key)], check=True
-                        )
-                env["GATEWAY_SECRET_DIRECTORY"] = str(keys)
                 context = root / "backend"
                 context.mkdir()
                 (context / "app.py").write_text(backend)
@@ -639,8 +496,6 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     "-f",
                     str(COMPOSE),
                     "-f",
-                    str(ROOT / "examples/compose.traefik.passwords.yaml"),
-                    "-f",
                     str(override),
                 ]
                 try:
@@ -675,35 +530,6 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
                     self.wait_for_route(command, env, "/", "landing")
-                    for number in (1, 2):
-                        player = f"{project}-player{number:02}"
-                        content = subprocess.check_output(
-                            [
-                                "docker",
-                                "exec",
-                                player,
-                                "cat",
-                                "/run/secrets/byond_password.txt",
-                            ],
-                            env=env,
-                        )
-                        self.assertEqual(
-                            content,
-                            f"fixture {number} $`\\'\r\n".encode(),
-                        )
-                        write = subprocess.run(
-                            [
-                                "docker",
-                                "exec",
-                                player,
-                                "sh",
-                                "-c",
-                                "echo changed > /run/secrets/byond_password.txt",
-                            ],
-                            env=env,
-                            capture_output=True,
-                        )
-                        self.assertNotEqual(write.returncode, 0)
                     first = f"{project}-player01"
                     self.wait_for_health(env, first, "healthy")
                     subprocess.run(
@@ -769,7 +595,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                             json.loads(result.stdout) if result.returncode == 0 else []
                         )
 
-                    def assert_clean_player():
+                    def assert_retained_player():
                         subprocess.run(
                             [
                                 "docker",
@@ -777,8 +603,8 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                                 player,
                                 "sh",
                                 "-c",
-                                "test ! -e /home/ubuntu/.wine/marker && "
-                                "test ! -e /home/ubuntu/.local/share/marker",
+                                'test "$(cat /home/ubuntu/.wine/marker)" = stale && '
+                                'test "$(cat /home/ubuntu/.local/share/marker)" = stale',
                             ],
                             env=env,
                             check=True,
@@ -815,7 +641,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         [state["State"]["StartedAt"] for state in player_state()],
                         [state["State"]["StartedAt"] for state in after],
                     )
-                    assert_clean_player()
+                    assert_retained_player()
                     original_id = after[0]["Id"]
                     subprocess.run(
                         [
@@ -866,7 +692,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     )
                     self.assertEqual(up.returncode, 0, up.stderr)
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
-                    assert_clean_player()
+                    assert_retained_player()
                     env["GATEWAY_PLAY_HOST"] = "new.example.org"
                     up = subprocess.run(
                         [*command, "up", "-d"], env=env, capture_output=True, text=True
@@ -874,7 +700,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     self.assertEqual(up.returncode, 0, up.stderr)
                     self.wait_for_route(command, env, "/LGplayer02/", "/LGplayer02/")
                     self.wait_for_route(command, env, "/LGplayer01/", "/LGplayer01/")
-                    assert_clean_player()
+                    assert_retained_player()
                     subprocess.run(
                         ["docker", "stop", first],
                         env=env,

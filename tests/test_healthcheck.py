@@ -90,17 +90,6 @@ class HealthcheckTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Dream Seeker is not running", result.stderr)
 
-    def test_password_login_requires_pager_not_dreamseeker(self):
-        result = self.check(
-            BYOND_SERVER="example.org:1337",
-            BYOND_PASSWORD_FILE="/run/secrets/byond_password.txt",
-            HTTP_OK="1",
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.log.read_text().splitlines()[0], f"pgrep -f {PAGER_PROCESS}"
-        )
-
     def test_http_fallback_uses_configured_port_and_prefix(self):
         result = self.check(
             HTTP_OK="1", SELKIES_PORT="8081", SELKIES_SUBFOLDER="/player/"
