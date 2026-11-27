@@ -89,6 +89,8 @@ static BOOL CALLBACK find_login(HWND window, LPARAM arg)
 struct link_search {
     const wchar_t *name;
     const wchar_t *account;
+    HWND pager_window;
+    BOOL shortcut;
     BOOL report;
     unsigned reported;
     unsigned remaining;
@@ -98,6 +100,30 @@ struct link_search {
     BOOL found;
     HRESULT result;
 };
+
+static HRESULT account_shortcut(HWND pager)
+{
+    if (!IsWindowVisible(pager) || IsIconic(pager))
+        ShowWindow(pager, SW_RESTORE);
+    SetForegroundWindow(pager);
+    Sleep(100);
+    if (GetForegroundWindow() != pager) {
+        fputs("Could not focus the BYOND pager for Ctrl+L\n", stderr);
+        return E_FAIL;
+    }
+    INPUT keys[4] = {0};
+    for (unsigned i = 0; i < 4; ++i) {
+        keys[i].type = INPUT_KEYBOARD;
+        keys[i].ki.wVk = i == 0 || i == 3 ? VK_CONTROL : 'L';
+        keys[i].ki.dwFlags = i >= 2 ? KEYEVENTF_KEYUP : 0;
+    }
+    if (SendInput(4, keys, sizeof(INPUT)) != 4) {
+        SendInput(2, &keys[2], sizeof(INPUT));
+        fputs("Could not send Ctrl+L to the BYOND pager\n", stderr);
+        return E_FAIL;
+    }
+    return S_OK;
+}
 
 static BOOL same_label(const wchar_t *text, size_t length, const wchar_t *label)
 {
@@ -186,7 +212,8 @@ static HRESULT activate_if_match(IAccessible *accessible, VARIANT child,
             (role.lVal == ROLE_SYSTEM_LINK || role.lVal == ROLE_SYSTEM_PUSHBUTTON ||
              role.lVal == ROLE_SYSTEM_MENUITEM)) {
             search->found = TRUE;
-            search->result = IAccessible_accDoDefaultAction(accessible, child);
+            search->result = search->shortcut ? account_shortcut(search->pager_window) :
+                                               IAccessible_accDoDefaultAction(accessible, child);
             if (search->result == S_FALSE)
                 search->result = E_FAIL;
             result = search->result;
@@ -253,6 +280,11 @@ static BOOL inspect_link_window(HWND window, struct link_search *search)
                             SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, NULL) &&
         !search->account && !search->report && link_matches(text, search->name) &&
         IsWindowEnabled(window)) {
+        if (search->shortcut) {
+            search->found = TRUE;
+            search->result = account_shortcut(search->pager_window);
+            return FALSE;
+        }
         if (SendMessageTimeoutW(window, BM_CLICK, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, NULL)) {
             search->found = TRUE;
             search->result = S_OK;
@@ -313,6 +345,7 @@ static BOOL CALLBACK inspect_top_window(HWND window, LPARAM arg)
     GetWindowThreadProcessId(window, &pid);
     if (pid != search->pager || (search->link->account && is_class(window, L"#32770")))
         return TRUE;
+    search->link->pager_window = window;
     if (!inspect_link_window(window, search->link))
         return FALSE;
     EnumChildWindows(window, inspect_child_window, arg);
@@ -321,7 +354,7 @@ static BOOL CALLBACK inspect_top_window(HWND window, LPARAM arg)
 
 static BOOL pager_link(DWORD pager, const wchar_t *name, BOOL *found, unsigned *nodes)
 {
-    struct link_search link = { .name = name, .remaining = 10000 };
+    struct link_search link = { .name = name, .shortcut = TRUE, .remaining = 10000 };
     struct window_search windows = { .pager = pager, .link = &link };
     EnumWindows(inspect_top_window, (LPARAM)&windows);
     *found = link.found;
@@ -475,11 +508,11 @@ int wmain(int argc, wchar_t **argv)
                 next_link_scan = GetTickCount64() + 1000;
                 if (found) {
                     if (!activated) {
-                        fputs("Could not activate the BYOND Logout link\n", stderr);
+                        fputs("Could not request BYOND logout with Ctrl+L\n", stderr);
                         break;
                     }
                     clicked_logout = TRUE;
-                    fputs("Requested BYOND logout; waiting for Login\n", stderr);
+                    fputs("Sent BYOND Ctrl+L for logout; waiting for Login\n", stderr);
                     Sleep(500);
                     continue;
                 }
@@ -493,10 +526,10 @@ int wmain(int argc, wchar_t **argv)
                 next_link_scan = GetTickCount64() + 1000;
                 if (found) {
                     if (!activated) {
-                        fputs("Could not activate the BYOND Login link\n", stderr);
+                        fputs("Could not request BYOND Login with Ctrl+L\n", stderr);
                         break;
                     }
-                    fputs("Requested BYOND Login; waiting for the dialog\n", stderr);
+                    fputs("Sent BYOND Ctrl+L for Login; waiting for the dialog\n", stderr);
                     Sleep(500);
                 }
             }

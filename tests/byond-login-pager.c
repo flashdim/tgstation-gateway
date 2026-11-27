@@ -78,7 +78,8 @@ static INT_PTR CALLBACK pager_proc(HWND window, UINT message, WPARAM wparam, LPA
         return 0;
     }
     case WM_COMMAND:
-        if (LOWORD(wparam) != PAGER_LINK || HIWORD(wparam) != BN_CLICKED)
+        /* Only the native accelerator works; accessibility actions are no-ops. */
+        if (LOWORD(wparam) != PAGER_LINK || HIWORD(wparam) != 1)
             return 0;
         if (GetWindowTextLengthW(link) == 10) {
             exit_code = 7;
@@ -144,10 +145,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command, int s
     if (!window)
         return 2;
     ShowWindow(window, SW_SHOW);
+    ACCEL shortcut = { .fVirt = FVIRTKEY | FCONTROL, .key = 'L', .cmd = PAGER_LINK };
+    HACCEL accelerators = CreateAcceleratorTableW(&shortcut, 1);
+    if (!accelerators)
+        return 2;
     MSG message;
     while (GetMessageW(&message, NULL, 0, 0) > 0) {
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
+        if (!TranslateAcceleratorW(window, accelerators, &message)) {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
     }
+    DestroyAcceleratorTable(accelerators);
     return exit_code;
 }

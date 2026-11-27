@@ -340,9 +340,11 @@ dedicated accounts in trusted desktops. Restrict access to each slot.
 
 The launcher still sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
 It waits up to two minutes for the English login dialog or, when BYOND has
-automatically signed in as Guest, uses the pager's accessible **Logout** and
-**Login** controls to open it, ignoring identically named plain-text nodes.
-Action-request logs do not confirm logout or that the dialog opened; the helper
+automatically signed in as Guest, detects the pager's accessible **Logout** and
+**Login** controls and sends the native **Ctrl+L** shortcut instead of invoking
+their accessibility actions. It focuses the pager before sending the shortcut,
+ignoring identically named plain-text nodes.
+Shortcut-request logs do not confirm logout or that the dialog opened; the helper
 separately detects the native Login dialog. It then fills the configured account and
 password, checks **Save password** and **Automatically login when program
 starts**, and submits at most once per pager launch. If the pager already shows
