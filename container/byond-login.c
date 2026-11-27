@@ -6,6 +6,7 @@
 #include <io.h>
 #include <stdio.h>
 #include <wchar.h>
+#include <wctype.h>
 
 struct dialog {
     HWND window, account, password, save, automatic, login;
@@ -87,6 +88,8 @@ static BOOL CALLBACK find_login(HWND window, LPARAM arg)
 
 struct link_search {
     const wchar_t *name;
+    BOOL report;
+    unsigned reported;
     unsigned remaining;
     unsigned nodes;
     unsigned accessible_windows;
@@ -95,6 +98,54 @@ struct link_search {
     HRESULT result;
 };
 
+static BOOL same_label(const wchar_t *text, size_t length, const wchar_t *label)
+{
+    size_t size = wcslen(label);
+    return length == size && _wcsnicmp(text, label, size) == 0;
+}
+
+/* Matches BYOND's account links, tolerating case, spacing, and wording. */
+static BOOL link_matches(const wchar_t *text, const wchar_t *wanted)
+{
+    if (!text)
+        return FALSE;
+    while (iswspace(*text))
+        ++text;
+    size_t length = wcslen(text);
+    while (length && iswspace(text[length - 1]))
+        --length;
+    if (wcscmp(wanted, L"Login") == 0)
+        return same_label(text, length, L"Login") || same_label(text, length, L"Log in") ||
+               same_label(text, length, L"Sign in");
+    return same_label(text, length, L"Logout") || same_label(text, length, L"Log out") ||
+           same_label(text, length, L"Sign out");
+}
+
+static BOOL mentions_account(const wchar_t *text)
+{
+    for (; text && *text; ++text)
+        if (!_wcsnicmp(text, L"log", 3) || !_wcsnicmp(text, L"sign", 4))
+            return TRUE;
+    return FALSE;
+}
+
+/* Lists candidate controls once, after the Login link could not be found. */
+static void report_node(struct link_search *search, BSTR name, const VARIANT *role)
+{
+    LONG kind = role->vt == VT_I4 ? role->lVal : -1;
+    if (!search->report || search->reported >= 80 ||
+        (kind != ROLE_SYSTEM_LINK && kind != ROLE_SYSTEM_PUSHBUTTON &&
+         kind != ROLE_SYSTEM_MENUITEM && !mentions_account(name)))
+        return;
+    char label[49] = "";
+    unsigned used = 0;
+    for (const wchar_t *c = name; c && *c && used < 48; ++c)
+        label[used++] = *c >= 32 && *c < 127 ? (char)*c : '?';
+    label[used] = 0;
+    ++search->reported;
+    fprintf(stderr, "BYOND accessible candidate: role=%ld name=\"%s\"\n", kind, label);
+}
+
 static HRESULT activate_if_match(IAccessible *accessible, VARIANT child,
                                  struct link_search *search)
 {
@@ -102,11 +153,16 @@ static HRESULT activate_if_match(IAccessible *accessible, VARIANT child,
     VARIANT role;
     VariantInit(&role);
     HRESULT result = IAccessible_get_accName(accessible, child, &name);
-    if (SUCCEEDED(result) && name && wcscmp(name, search->name) == 0) {
+    if (SUCCEEDED(result) && search->report && name) {
+        if (SUCCEEDED(IAccessible_get_accRole(accessible, child, &role)))
+            report_node(search, name, &role);
+        VariantClear(&role);
+    } else if (SUCCEEDED(result) && link_matches(name, search->name)) {
         result = IAccessible_get_accRole(accessible, child, &role);
         if (SUCCEEDED(result) && role.vt == VT_I4 &&
             (role.lVal == ROLE_SYSTEM_LINK || role.lVal == ROLE_SYSTEM_PUSHBUTTON ||
-             role.lVal == ROLE_SYSTEM_STATICTEXT)) {
+             role.lVal == ROLE_SYSTEM_MENUITEM || role.lVal == ROLE_SYSTEM_STATICTEXT ||
+             role.lVal == ROLE_SYSTEM_TEXT)) {
             search->found = TRUE;
             search->result = IAccessible_accDoDefaultAction(accessible, child);
             result = search->result;
@@ -171,7 +227,7 @@ static BOOL inspect_link_window(HWND window, struct link_search *search)
     if (GetClassNameW(window, class_name, 32) && wcscmp(class_name, L"Button") == 0 &&
         SendMessageTimeoutW(window, WM_GETTEXT, 96, (LPARAM)text,
                             SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, NULL) &&
-        wcscmp(text, search->name) == 0 && IsWindowEnabled(window)) {
+        link_matches(text, search->name) && IsWindowEnabled(window) && !search->report) {
         if (SendMessageTimeoutW(window, BM_CLICK, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, NULL)) {
             search->found = TRUE;
             search->result = S_OK;
@@ -251,6 +307,14 @@ static BOOL pager_link(DWORD pager, const wchar_t *name, BOOL *found, unsigned *
                 link.nodes, link.accessible_windows, (unsigned long)link.last_error);
     }
     return link.found && SUCCEEDED(link.result);
+}
+
+static void report_pager_links(DWORD pager)
+{
+    struct link_search link = { .name = L"", .report = TRUE, .remaining = 10000 };
+    struct window_search windows = { .pager = pager, .link = &link };
+    EnumWindows(inspect_top_window, (LPARAM)&windows);
+    fprintf(stderr, "BYOND accessible candidates listed: %u\n", link.reported);
 }
 
 static BOOL send(HWND window, UINT message, WPARAM wparam, LPARAM lparam, DWORD_PTR *result)
@@ -395,9 +459,12 @@ int wmain(int argc, wchar_t **argv)
         if (!submitted && !clicked_logout)
             fprintf(stderr, "No accessible BYOND Logout link found (%u nodes inspected)\n",
                     last_scan_nodes);
-        else if (!submitted && clicked_logout && !attempted_login)
+        else if (!submitted && clicked_logout && !attempted_login) {
             fprintf(stderr, "No accessible BYOND Login link found (%u nodes inspected)\n",
                     last_scan_nodes);
+            if (WaitForSingleObject(process.hProcess, 0) == WAIT_TIMEOUT)
+                report_pager_links(process.dwProcessId);
+        }
         else if (!submitted && clicked_logout && attempted_login)
             fputs("BYOND Login dialog did not appear after opening the Login link\n", stderr);
         if (!submitted)

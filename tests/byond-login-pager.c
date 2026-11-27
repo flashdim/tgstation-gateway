@@ -76,10 +76,10 @@ static INT_PTR CALLBACK pager_proc(HWND window, UINT message, WPARAM wparam, LPA
         if (LOWORD(wparam) != PAGER_LINK || HIWORD(wparam) != BN_CLICKED)
             return 0;
         if (GetWindowTextLengthW(link) == 6) {
-            SetWindowTextW(link, L"Login");
+            SetWindowTextW(link, L" log in ");
             return 0;
         }
-        if (GetWindowTextLengthW(link) == 5) {
+        if (GetWindowTextLengthW(link) == 8) {
             const struct {
                 DLGTEMPLATE header;
                 WORD menu, class, title;
