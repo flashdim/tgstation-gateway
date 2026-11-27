@@ -78,9 +78,8 @@ if ! flock -n 9; then
 fi
 docker info >/dev/null
 docker network inspect "$network" >/dev/null
-if ! docker image inspect "$image" >/dev/null 2>&1; then
-    docker pull "$image"
-fi
+docker pull "$image"
+
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
 settings="$(
