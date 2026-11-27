@@ -56,7 +56,7 @@ def compose_config(env):
     player["restart"] = "unless-stopped"
     player["mem_limit"] = "4g"
     player["cpus"] = 2
-    player["pids_limit"] = 512
+    player["pids_limit"] = 2048
     services = {}
     volumes = {}
     networks = {}

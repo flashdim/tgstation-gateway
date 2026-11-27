@@ -176,7 +176,7 @@ reconcile() {
             docker run -d --name "$name" --platform linux/amd64 --init \
                 "$@" \
                 --restart unless-stopped --network "$network" \
-                --memory 4g --cpus 2 --pids-limit 512 --shm-size 2g \
+                --memory 4g --cpus 2 --pids-limit 2048 --shm-size 2g \
                 --security-opt seccomp=/opt/gateway/seccomp.json \
                 --health-cmd "curl -fsS --max-time 2 -o /dev/null http://localhost:8080/LGplayer$slot/api/health" \
                 --health-interval 5s --health-timeout 5s --health-start-period 60s --health-retries 3 \

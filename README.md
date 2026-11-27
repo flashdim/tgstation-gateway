@@ -206,7 +206,7 @@ exited container and, when the daemon starts, restarts containers that were not
 manually stopped. A manual stop persists across daemon restarts; an unhealthy
 but running container is not restarted by this policy. Removing a container
 externally also requires another `up`. The example sets 4 GiB memory, two CPUs,
-512 PIDs and 2 GiB shared memory per player; these are not measured recommendations. Monitor
+2048 PIDs (Dream Seeker with WebView2 exhausted 512 and crashed) and 2 GiB shared memory per player; these are not measured recommendations. Monitor
 startup and health and ensure sufficient host resources and Docker bridge address
 pools for all slots. `docker compose -f
 /tmp/gateway-compose.json down` stops the deployment but retains the named

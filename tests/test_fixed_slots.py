@@ -87,7 +87,7 @@ class FixedSlotsTest(unittest.TestCase):
                     )
                     self.assertEqual(service["mem_limit"], "4g")
                     self.assertEqual(service["cpus"], 2)
-                    self.assertEqual(service["pids_limit"], 512)
+                    self.assertEqual(service["pids_limit"], 2048)
                     self.assertEqual(int(service["shm_size"]), 2 * 1024**3)
 
     def test_invalid_port_or_slot_configuration_fails(self):
@@ -421,7 +421,7 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                     )
                     self.assertEqual(host_config["Memory"], 4 * 1024**3)
                     self.assertEqual(host_config["NanoCpus"], 2 * 10**9)
-                    self.assertEqual(host_config["PidsLimit"], 512)
+                    self.assertEqual(host_config["PidsLimit"], 2048)
                     self.assertEqual(host_config["ShmSize"], 2 * 1024**3)
                     run(
                         "exec",
