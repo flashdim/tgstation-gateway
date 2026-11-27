@@ -26,9 +26,9 @@ key_module = load("byond_key_check", "byond-key-check.py")
 
 class SessionWatcherTest(TestCase):
     def setUp(self):
-        self.restart = Mock()
+        self.control = Mock()
         self.watcher = connector_module.SessionWatcher(
-            {"SELKIES_SUBFOLDER": "/LGplayer01/"}, restart=self.restart
+            {"SELKIES_SUBFOLDER": "/LGplayer01/"}, control=self.control
         )
         self.present = False
         self.enterContext(contextlib.redirect_stderr(io.StringIO()))
@@ -41,29 +41,31 @@ class SessionWatcherTest(TestCase):
             patch.object(connector_module, "sessions_present", side_effect=sessions)
         )
 
-    def test_restarts_once_per_session_start(self):
+    def test_starts_on_connect_and_stops_on_disconnect_once(self):
         self.watcher.step()
-        self.restart.assert_not_called()
+        self.control.assert_not_called()
         self.present = True
         self.watcher.step()
         self.watcher.step()
-        self.assertEqual(self.restart.call_count, 1)
         self.present = False
         self.watcher.step()
+        self.watcher.step()
         self.present = True
         self.watcher.step()
-        self.assertEqual(self.restart.call_count, 2)
+        self.assertEqual(
+            [call.args[0] for call in self.control.call_args_list],
+            ["start", "stop", "start"],
+        )
 
-    def test_failed_restart_is_retried(self):
+    def test_failed_action_is_retried(self):
         self.present = True
-        self.restart.side_effect = [OSError("busy"), None]
+        self.control.side_effect = [OSError("busy"), None]
         self.watcher.step()
         self.watcher.step()
-        self.assertEqual(self.restart.call_count, 2)
         self.watcher.step()
-        self.assertEqual(self.restart.call_count, 2)
+        self.assertEqual(self.control.call_count, 2)
 
-    def test_session_errors_do_not_restart_or_end_a_session(self):
+    def test_session_errors_do_not_change_game_state(self):
         self.present = True
         self.watcher.step()
         with patch.object(
@@ -73,7 +75,7 @@ class SessionWatcherTest(TestCase):
         ):
             self.watcher.step()
         self.watcher.step()
-        self.assertEqual(self.restart.call_count, 1)
+        self.assertEqual(self.control.call_count, 1)
 
     def test_invalid_port_fails_closed(self):
         for port in ("0", "65536", "http"):

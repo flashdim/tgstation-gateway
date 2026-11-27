@@ -28,6 +28,7 @@ class RunClientTest(unittest.TestCase):
         server=None,
         account=None,
         key=None,
+        reset=False,
         gpu=None,
         fail_registry=False,
         wayland=False,
@@ -139,6 +140,7 @@ class RunClientTest(unittest.TestCase):
                 **os.environ,
                 "PATH": f"{commands}:{os.environ['PATH']}",
                 "XDG_RUNTIME_DIR": str(runtime),
+                "BYOND_GAME_CONTROL": str(ROOT / "container/byond-game.sh"),
                 "BYOND_KEY_CHECK": str(ROOT / "container/byond-key-check.py"),
                 "WINE_LOG": str(root / "wine-log"),
                 "EVENT_LOG": str(root / "event-log"),
@@ -182,6 +184,8 @@ class RunClientTest(unittest.TestCase):
             if bad_config_directory:
                 cfg.parent.mkdir(parents=True, exist_ok=True)
                 cfg.write_text("not a directory")
+            if reset:
+                (runtime / "byond-reset-requested").touch()
             if key is not None:
                 key_path = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
                 key_path.parent.mkdir(parents=True, exist_ok=True)
@@ -347,8 +351,20 @@ class RunClientTest(unittest.TestCase):
                     ],
                 )
 
-    def test_launches_pager_without_matching_key(self):
-        bin_dir = "drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+    def test_container_start_launches_only_pager_even_with_key(self):
+        result, prefix, _, events, _, _ = self.run_client(
+            "example.org:1337",
+            account="LGplayer01",
+            key="BEGIN KEY LGplayer01\nsecret\nEND KEY\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["launch"])
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [":42", str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe")],
+        )
+
+    def test_reset_launches_only_pager_without_matching_key(self):
         for key in (
             None,
             "BEGIN KEY Other\nsecret\nEND KEY\n",
@@ -356,16 +372,20 @@ class RunClientTest(unittest.TestCase):
         ):
             with self.subTest(key=key):
                 result, prefix, _, events, _, _ = self.run_client(
-                    "example.org:1337", account="LGplayer01", key=key
+                    "example.org:1337", account="LGplayer01", key=key, reset=True
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(
-                    result.stdout.splitlines(), [":42", str(prefix / bin_dir)]
+                    result.stdout.splitlines(),
+                    [
+                        ":42",
+                        str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
+                    ],
                 )
                 self.assertIn("log in as LGplayer01", result.stderr)
 
-    def test_launches_dreamseeker_with_matching_key(self):
+    def test_reset_launches_pager_and_dreamseeker_with_matching_key(self):
         for server, url in (
             ("ss13.lazorgator.party:1337", "byond://ss13.lazorgator.party:1337"),
             ("byond://example.org:1234", "byond://example.org:1234"),
@@ -376,27 +396,28 @@ class RunClientTest(unittest.TestCase):
                     server,
                     account="LGplayer01",
                     key="BEGIN KEY lgplayer01\nsecret\nEND KEY\n",
+                    reset=True,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(events, ["launch"])
-                self.assertEqual(
+                self.assertEqual(events, ["launch", "launch"])
+                bin_dir = prefix / "drive_c/Program Files (x86)/BYOND/bin"
+                self.assertCountEqual(
                     result.stdout.splitlines(),
                     [
                         ":42",
-                        str(
-                            prefix
-                            / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
-                        ),
+                        str(bin_dir / "byond.exe"),
+                        ":42",
+                        str(bin_dir / "dreamseeker.exe"),
                         url,
                     ],
                 )
 
-    def test_rejects_invalid_server_when_account_is_configured(self):
+    def test_reset_with_invalid_server_keeps_pager(self):
         result, _, _, events, _, _ = self.run_client(
-            "example.org", account="LGplayer01"
+            "example.org", account="LGplayer01", reset=True
         )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(events, [])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["launch"])
         self.assertIn("Invalid BYOND_SERVER", result.stderr)
 
     def test_configures_webview2_gpu_before_launch(self):

@@ -226,12 +226,14 @@ class DesktopSessionTest(unittest.TestCase):
                     **os.environ,
                     "PATH": f"{root}:{os.environ['PATH']}",
                     "RESET_LOG": str(root / "reset-log"),
+                    "XDG_RUNTIME_DIR": str(root),
                 },
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
             self.assertEqual(result.returncode, 23)
+            self.assertTrue((root / "byond-reset-requested").exists())
             self.assertEqual(
                 (root / "reset-log").read_text().splitlines(),
                 ["-k", "/etc/service/byond"],
@@ -318,6 +320,9 @@ class DesktopSessionTest(unittest.TestCase):
         self.assertIn(
             "container/byond-key-check.py /usr/local/bin/byond-key-check.py",
             dockerfile,
+        )
+        self.assertIn(
+            "container/byond-game.sh /usr/local/bin/byond-game.sh", dockerfile
         )
         self.assertNotIn("SELKIES_RUN_AFTER_CONNECT", dockerfile)
         self.assertNotIn("SELKIES_RUN_AFTER_CONTROLLER_", dockerfile)

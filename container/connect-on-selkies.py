@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restart the BYOND service whenever a Selkies session starts."""
+"""Start Dream Seeker when a Selkies client connects and stop it on disconnect."""
 
 import http.client
 import json
@@ -62,7 +62,7 @@ def sessions_present(port, path):
 
 
 class SessionWatcher:
-    def __init__(self, env, restart=None):
+    def __init__(self, env, control=None):
         port = env.get("SELKIES_PORT") or "8080"
         if not re.fullmatch(r"[0-9]{1,5}", port) or not 1 <= int(port) <= 65535:
             raise ValueError("SELKIES_PORT must be a valid TCP port")
@@ -73,14 +73,14 @@ class SessionWatcher:
             if prefix
             else "/api/sessions"
         )
-        self.restart = restart or self.restart_service
-        self.connected = False
+        self.control = control or self.run_control
+        # Last action applied successfully; the container starts without a game.
+        self.applied = "stop"
         self.last_notice = None
 
     @staticmethod
-    def restart_service():
-        # The service's run script performs cleanup and chooses pager or game.
-        subprocess.run(["s6-svc", "-k", "/etc/service/byond"], check=True, timeout=10)
+    def run_control(action):
+        subprocess.run(["/usr/local/bin/byond-game.sh", action], check=True, timeout=60)
 
     def notice(self, message):
         if message != self.last_notice:
@@ -94,18 +94,22 @@ class SessionWatcher:
             self.notice(f"Waiting for Selkies: {error}")
             return
         self.last_notice = None
-        if not present:
-            self.connected = False
-        elif not self.connected:
-            print(
-                "Selkies session started; restarting BYOND", file=sys.stderr, flush=True
-            )
-            try:
-                self.restart()
-            except (OSError, subprocess.SubprocessError) as error:
-                self.notice(f"Could not restart BYOND: {type(error).__name__}")
-                return
-            self.connected = True
+        action = "start" if present else "stop"
+        if self.applied == action:
+            return
+        try:
+            self.control(action)
+        except (OSError, subprocess.SubprocessError) as error:
+            self.notice(f"Could not {action} Dream Seeker: {type(error).__name__}")
+            return
+        print(
+            "Selkies client connected; starting Dream Seeker"
+            if present
+            else "Selkies client disconnected; stopped Dream Seeker",
+            file=sys.stderr,
+            flush=True,
+        )
+        self.applied = action
 
 
 def main():
