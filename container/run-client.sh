@@ -274,4 +274,21 @@ esac
 flock -u 9
 exec 9>&-
 
-exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+bin_dir="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin"
+key_file="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
+
+# Without a server and account there is nothing to connect to, so keep the pager.
+if [ -n "${BYOND_SERVER:-}" ] && [ -n "${BYOND_ACCOUNT:-}" ]; then
+    server="${BYOND_SERVER#byond://}"
+    if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||
+        ((10#${BASH_REMATCH[2]} < 1 || 10#${BASH_REMATCH[2]} > 65535)); then
+        echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
+        exit 1
+    fi
+    # Dream Seeker only when key.txt holds this player's BYOND key.
+    if python3 "${BYOND_KEY_CHECK:-/usr/local/bin/byond-key-check.py}" "$key_file" "$BYOND_ACCOUNT"; then
+        exec wine "$bin_dir/dreamseeker.exe" "byond://$server"
+    fi
+fi
+
+exec wine "$bin_dir/byond.exe"

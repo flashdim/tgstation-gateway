@@ -6,7 +6,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGER_PROCESS = r'(^|[\\/])byond[.]exe"?([[:space:]]|$)'
+PAGER_PROCESS = r'(^|[\\/])(byond|dreamseeker)[.]exe"?([[:space:]]|$)'
 
 
 class HealthcheckTest(unittest.TestCase):
@@ -62,17 +62,17 @@ class HealthcheckTest(unittest.TestCase):
             timeout=5,
         )
 
-    def test_requires_pager_even_if_selkies_is_available(self):
+    def test_requires_client_even_if_selkies_is_available(self):
         result = self.check(PAGER_RUNNING="0", HTTP_OK="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("BYOND pager is not running", result.stderr)
+        self.assertIn("BYOND client is not running", result.stderr)
 
     def test_requires_selkies_when_pager_is_running(self):
         result = self.check()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Selkies health endpoint is unavailable", result.stderr)
 
-    def test_requires_pager_while_game_waits_for_a_viewer(self):
+    def test_requires_client_when_server_is_configured(self):
         env = {
             "BYOND_SERVER": "example.org:1337",
             "HTTP_OK": "1",
@@ -86,7 +86,7 @@ class HealthcheckTest(unittest.TestCase):
 
         result = self.check(**env, PAGER_RUNNING="0")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("BYOND pager is not running", result.stderr)
+        self.assertIn("BYOND client is not running", result.stderr)
 
     def test_http_fallback_uses_configured_port_and_prefix(self):
         result = self.check(

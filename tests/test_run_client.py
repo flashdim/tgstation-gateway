@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -25,6 +26,8 @@ class RunClientTest(unittest.TestCase):
     def run_client(
         self,
         server=None,
+        account=None,
+        key=None,
         gpu=None,
         fail_registry=False,
         wayland=False,
@@ -83,7 +86,9 @@ class RunClientTest(unittest.TestCase):
                     "esac"
                 ),
                 "python3": (
-                    'test "$1" = /usr/local/bin/x11-tray-ready.py || exit 1\n'
+                    'if [ "$1" != /usr/local/bin/x11-tray-ready.py ]; then\n'
+                    f'  exec {sys.executable} "$@"\n'
+                    "fi\n"
                     'if [ "$DESKTOP_FAILURE" = tray ]; then exit 1; fi\n'
                     'if [ "$DESKTOP_DELAY" = 1 ]; then test -f "$DESKTOP_SEEN" || exit 1; fi\n'
                     'touch "$DESKTOP_READY"'
@@ -127,12 +132,14 @@ class RunClientTest(unittest.TestCase):
                 "export WINEDEBUG='+all'\n"
                 f"export SELKIES_WAYLAND={'true' if wayland else 'false'}\n"
                 + (f"export BYOND_SERVER='{server}'\n" if server is not None else "")
+                + (f"export BYOND_ACCOUNT='{account}'\n" if account is not None else "")
                 + (f"export BYOND_WEBVIEW2_GPU='{gpu}'\n" if gpu is not None else "")
             )
             env = {
                 **os.environ,
                 "PATH": f"{commands}:{os.environ['PATH']}",
                 "XDG_RUNTIME_DIR": str(runtime),
+                "BYOND_KEY_CHECK": str(ROOT / "container/byond-key-check.py"),
                 "WINE_LOG": str(root / "wine-log"),
                 "EVENT_LOG": str(root / "event-log"),
                 "CLEANUP_LOG": str(root / "cleanup-log"),
@@ -175,6 +182,10 @@ class RunClientTest(unittest.TestCase):
             if bad_config_directory:
                 cfg.parent.mkdir(parents=True, exist_ok=True)
                 cfg.write_text("not a directory")
+            if key is not None:
+                key_path = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
+                key_path.parent.mkdir(parents=True, exist_ok=True)
+                key_path.write_text(key)
             if wayland:
                 authority.write_text("test cookie")
                 subprocess.run(
@@ -336,23 +347,57 @@ class RunClientTest(unittest.TestCase):
                     ],
                 )
 
-    def test_launches_pager_without_connecting_to_server(self):
-        for server in (
-            "ss13.lazorgator.party:1337",
-            "byond://example.org:1234",
-            "[::1]:1337",
+    def test_launches_pager_without_matching_key(self):
+        bin_dir = "drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+        for key in (
+            None,
+            "BEGIN KEY Other\nsecret\nEND KEY\n",
+            "BEGIN KEY LGplayer01\nEND KEY\n",
+        ):
+            with self.subTest(key=key):
+                result, prefix, _, events, _, _ = self.run_client(
+                    "example.org:1337", account="LGplayer01", key=key
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(events, ["launch"])
+                self.assertEqual(
+                    result.stdout.splitlines(), [":42", str(prefix / bin_dir)]
+                )
+                self.assertIn("log in as LGplayer01", result.stderr)
+
+    def test_launches_dreamseeker_with_matching_key(self):
+        for server, url in (
+            ("ss13.lazorgator.party:1337", "byond://ss13.lazorgator.party:1337"),
+            ("byond://example.org:1234", "byond://example.org:1234"),
+            ("[::1]:1337", "byond://[::1]:1337"),
         ):
             with self.subTest(server=server):
-                result, prefix, _, events, _, _ = self.run_client(server)
+                result, prefix, _, events, _, _ = self.run_client(
+                    server,
+                    account="LGplayer01",
+                    key="BEGIN KEY lgplayer01\nsecret\nEND KEY\n",
+                )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(
                     result.stdout.splitlines(),
                     [
                         ":42",
-                        str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
+                        str(
+                            prefix
+                            / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
+                        ),
+                        url,
                     ],
                 )
+
+    def test_rejects_invalid_server_when_account_is_configured(self):
+        result, _, _, events, _, _ = self.run_client(
+            "example.org", account="LGplayer01"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(events, [])
+        self.assertIn("Invalid BYOND_SERVER", result.stderr)
 
     def test_configures_webview2_gpu_before_launch(self):
         result, prefix, registry, events, _, _ = self.run_client(

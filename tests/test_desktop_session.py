@@ -315,6 +315,10 @@ class DesktopSessionTest(unittest.TestCase):
             "container/connect-on-selkies.py /usr/local/bin/connect-on-selkies.py",
             dockerfile,
         )
+        self.assertIn(
+            "container/byond-key-check.py /usr/local/bin/byond-key-check.py",
+            dockerfile,
+        )
         self.assertNotIn("SELKIES_RUN_AFTER_CONNECT", dockerfile)
         self.assertNotIn("SELKIES_RUN_AFTER_CONTROLLER_", dockerfile)
         self.assertNotIn("selkies-controller-presence.patch", dockerfile)

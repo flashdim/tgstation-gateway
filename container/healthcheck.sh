@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-process='(^|[\\/])byond[.]exe"?([[:space:]]|$)'
-client='BYOND pager'
+process='(^|[\\/])(byond|dreamseeker)[.]exe"?([[:space:]]|$)'
+client='BYOND client'
 
 if ! pgrep -f "$process" >/dev/null; then
     echo "$client is not running" >&2

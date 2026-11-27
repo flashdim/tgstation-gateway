@@ -311,11 +311,9 @@ or **Ctrl+L**, then **Login**. Enter credentials yourself and check **Save passw
 and **Automatically login when program starts**. The saved login remains in that
 player's Wine volume across container recreation and manager restarts. To rotate
 credentials, sign out and save the replacement through that player's pager.
-The pager starts without a server URL. When a Selkies client connects, the
-game launcher waits until that slot's `key.txt` contains a complete key block
-for its configured account before starting Dream Seeker. If the key is missing
-or belongs to another account, sign in and save the correct login; the launcher
-will retry while the client remains connected.
+Until a matching `key.txt` exists, the pager starts instead of the game. After
+saving the login, click **Reset Session** (or reconnect) so the launcher finds
+the key and starts Dream Seeker.
 
 The key-file check is not proof of an authenticated session: saved keys for
 multiple accounts can coexist, and the pager may still be signed in as Guest
@@ -635,25 +633,26 @@ BYOND_ACCOUNT=LGplayer01 BYOND_SERVER=server.example.org:1337 \
   docker compose -f examples/compose.yaml up
 ```
 
-At each client startup, the launcher sets `auto-login on` in BYOND's
-`cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
-`cfg/seeker.txt`, retaining other settings. The pager starts without connecting
-to the server. After a Selkies client connects, the game launcher checks
-`$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt` for a nonempty,
-complete `BEGIN KEY <account>` / `END KEY` block matching `BYOND_ACCOUNT`
-case-insensitively. It will not start the game when the file is absent,
-unreadable, incomplete or mismatched; it retries while a client remains connected.
-The managed deployment and fixed-slot generator set `BYOND_ACCOUNT` per slot.
-Without a valid `BYOND_ACCOUNT` and `BYOND_SERVER`, automatic game connection
-is disabled and the pager remains available for manual use.
+The BYOND launcher runs when the container starts, when a Selkies session
+starts (a watcher restarts it when the first client connects) and when
+**Reset Session** is clicked. Each run kills all BYOND, Dream Seeker and WebView2
+processes, sets `auto-login on` in BYOND's `cfg/pager.txt` and `graphics-hwmode on`
+and `guest-login off` in `cfg/seeker.txt` (retaining other settings), then:
 
-Any Selkies client, including a viewer, counts as connected. Only one Dream
-Seeker is started for a continuous connection; if one is already running,
-it is left alone. Disconnecting does not stop it. If the game exits while a
-viewer stays connected, reconnect or use **Reset Session** to request another
-launch. The check confirms only that a key block is present, not that BYOND
-authenticated or selected that account. A BYOND account or server-side
-authentication may still be required.
+- starts `dreamseeker.exe` targeting `BYOND_SERVER` if
+  `$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt` has a nonempty,
+  complete `BEGIN KEY <account>` / `END KEY` block matching `BYOND_ACCOUNT`
+  case-insensitively;
+- otherwise starts `byond.exe` (the pager) so the player can log in and save
+  the password. The key is picked up at the next launcher run, for example
+  after **Reset Session**.
+
+Without `BYOND_SERVER` and `BYOND_ACCOUNT` the pager always starts. An invalid
+`BYOND_SERVER` stops the launcher. The managed deployment and fixed-slot
+generator set `BYOND_ACCOUNT` per slot. Any Selkies client, including a viewer,
+counts as a session start, and each new connection restarts BYOND, closing a
+running game. The check confirms only that a key block is present, not that BYOND
+authenticated or selected that account.
 
 The standalone example does not mount a persistent Wine volume by default;
 add one at `/home/ubuntu/.wine` to retain saved logins across container

@@ -161,6 +161,7 @@ RUN install -d -o 1000 -g 1000 /etc/service/byond /etc/service/byond-connect && 
 COPY --chown=1000:1000 --chmod=755 container/run-client.sh /etc/service/byond/run
 COPY --chown=1000:1000 --chmod=755 container/run-game-connection.sh /etc/service/byond-connect/run
 COPY --chmod=755 container/connect-on-selkies.py /usr/local/bin/connect-on-selkies.py
+COPY --chmod=755 container/byond-key-check.py /usr/local/bin/byond-key-check.py
 COPY --chmod=755 container/publish-xwayland-env.sh /usr/local/bin/publish-xwayland-env
 COPY --chmod=644 container/byond-xwayland.desktop /etc/xdg/autostart/byond-xwayland.desktop
 COPY --chmod=755 container/configure-plasma.sh /usr/local/bin/configure-plasma
