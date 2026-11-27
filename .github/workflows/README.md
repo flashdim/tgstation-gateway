@@ -53,6 +53,8 @@ image, authenticated routing, Selkies disconnect behavior or gameplay.
 Both workflows test the locally built manager image in the managed Traefik
 Compose deployment with pinned Traefik and mock backends, including HTTPS
 routes, WebSocket upgrades, slot-count reconciliation and retained volumes.
+The mock player image is pushed to a temporary loopback-only registry so the
+manager exercises its startup pull, including on restarts.
 Restarting the manager must recreate both players and retain markers in their
 Wine and data volumes; subsequent reconciliation must not recreate them again.
 The test verifies the running manager uses the image built for that job. This

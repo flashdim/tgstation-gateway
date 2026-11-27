@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 import time
 import unittest
+import urllib.error
+import urllib.request
 import uuid
 
 
@@ -382,6 +384,7 @@ class ComposeTest(unittest.TestCase):
             "GATEWAY_TEST_MANAGER_IMAGE",
             "GATEWAY_TEST_BACKEND_IMAGE",
             "GATEWAY_TEST_TRAEFIK_IMAGE",
+            "GATEWAY_TEST_REGISTRY_IMAGE",
         )
     ),
     "Set fixture images to run the Docker manager and routing test",
@@ -390,7 +393,8 @@ class ManagerDockerTest(unittest.TestCase):
     def test_manager_creates_routes_recreates_players_and_retains_data(self):
         project = f"gatewaytest{uuid.uuid4().hex[:12]}"
         network = f"{project}-edge"
-        fixture_image = f"{project}-fixture"
+        registry = f"{project}-registry"
+        fixture_image = ""
         env = {
             **os.environ,
             "GATEWAY_DEPLOYMENT_ID": project,
@@ -399,7 +403,6 @@ class ManagerDockerTest(unittest.TestCase):
             "GATEWAY_TRAEFIK_ENTRYPOINT": "https",
             "GATEWAY_SLOT_COUNT": "2",
             "BYOND_SERVER": "tgstation:1337",
-            "GATEWAY_IMAGE": fixture_image,
             "GATEWAY_LANDING_IMAGE": os.environ["GATEWAY_TEST_BACKEND_IMAGE"],
             "GATEWAY_MANAGER_IMAGE": os.environ["GATEWAY_TEST_MANAGER_IMAGE"],
             "GATEWAY_MANAGER_GPU": "false",
@@ -437,6 +440,34 @@ class Handler(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Handler).serve_forever()
 """
         try:
+            subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "-d",
+                    "--name",
+                    registry,
+                    "-p",
+                    "127.0.0.1::5000",
+                    os.environ["GATEWAY_TEST_REGISTRY_IMAGE"],
+                ],
+                env=env,
+                check=True,
+                capture_output=True,
+            )
+            address = subprocess.check_output(
+                ["docker", "port", registry, "5000/tcp"], env=env, text=True
+            ).strip()
+            fixture_image = f"{address}/{project}-fixture:latest"
+            env["GATEWAY_IMAGE"] = fixture_image
+            for _ in range(100):
+                try:
+                    with urllib.request.urlopen(f"http://{address}/v2/", timeout=1):
+                        break
+                except (OSError, urllib.error.URLError):
+                    time.sleep(0.1)
+            else:
+                self.fail("Fixture registry did not become ready")
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 root.chmod(0o755)
@@ -460,6 +491,18 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                     text=True,
                 )
                 self.assertEqual(build.returncode, 0, build.stderr)
+                subprocess.run(
+                    ["docker", "push", fixture_image],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["docker", "image", "rm", fixture_image],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
                 overrides = {
                     "services": {
                         "landing": {
@@ -768,11 +811,17 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         )
         finally:
             subprocess.run(
-                ["docker", "network", "rm", network], env=env, capture_output=True
+                ["docker", "rm", "-f", registry], env=env, capture_output=True
             )
             subprocess.run(
-                ["docker", "image", "rm", fixture_image], env=env, capture_output=True
+                ["docker", "network", "rm", network], env=env, capture_output=True
             )
+            if fixture_image:
+                subprocess.run(
+                    ["docker", "image", "rm", fixture_image],
+                    env=env,
+                    capture_output=True,
+                )
 
     def wait_for_route(self, command, env, path, expected):
         for _ in range(100):

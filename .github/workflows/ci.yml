@@ -198,9 +198,11 @@ jobs:
           GATEWAY_TEST_MANAGER_IMAGE: tgstation-gateway-manager:ci
           GATEWAY_TEST_BACKEND_IMAGE: python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
           GATEWAY_TEST_TRAEFIK_IMAGE: traefik:v3.8.0@sha256:00c9734983e74ae35a1fc18eaee9e9da13f3dde95c4e45b3b8c3b60e0dbd2d17
+          GATEWAY_TEST_REGISTRY_IMAGE: registry:3@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
         run: |
           docker pull "$GATEWAY_TEST_BACKEND_IMAGE"
           docker pull "$GATEWAY_TEST_TRAEFIK_IMAGE"
+          docker pull "$GATEWAY_TEST_REGISTRY_IMAGE"
           python3 -m unittest discover -s tests -p test_slot_router.py -v
 
   image:

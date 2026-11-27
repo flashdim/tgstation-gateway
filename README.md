@@ -294,7 +294,8 @@ and data volumes until those slots are configured again. It
 refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
-To update an existing image tag, pull it first and restart the manager.
+The manager pulls the configured player image on every startup; restart it to
+update an existing image tag. The registry must be reachable and accessible.
 **Every manager startup removes and recreates all configured owned player
 containers, retaining their Wine and data volumes.** This interrupts active
 sessions, including on automatic manager restarts, but preserves saved logins,
