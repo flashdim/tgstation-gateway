@@ -28,11 +28,11 @@ class ObservationError(Exception):
 
 def server_url(server):
     server = server.removeprefix("byond://")
-    match = re.fullmatch(
-        r"(?:[a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})", server
-    )
+    match = re.fullmatch(r"(?:[a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})", server)
     if not match or not 1 <= int(match.group(1)) <= 65535:
-        raise ValueError("Invalid BYOND_SERVER: expected host:port or byond://host:port")
+        raise ValueError(
+            "Invalid BYOND_SERVER: expected host:port or byond://host:port"
+        )
     return f"byond://{server}"
 
 
@@ -61,7 +61,9 @@ def sessions_present(port, path):
             try:
                 payload = json.loads(data)
             except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                raise ObservationError("Selkies sessions response is invalid JSON") from error
+                raise ObservationError(
+                    "Selkies sessions response is invalid JSON"
+                ) from error
             if (
                 not isinstance(payload, dict)
                 or not isinstance(payload.get("sessions"), list)
@@ -87,7 +89,10 @@ def key_matches(path, account):
     except FileNotFoundError:
         return False, "BYOND key.txt is missing"
     except OSError as error:
-        return False, f"Cannot read BYOND key.txt: {error.strerror or type(error).__name__}"
+        return (
+            False,
+            f"Cannot read BYOND key.txt: {error.strerror or type(error).__name__}",
+        )
     if len(data) > MAX_KEY_BYTES:
         return False, "BYOND key.txt is too large to check"
 
@@ -119,11 +124,15 @@ def process_ids(pattern):
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
-        raise ObservationError(f"cannot check BYOND processes: {type(error).__name__}") from error
+        raise ObservationError(
+            f"cannot check BYOND processes: {type(error).__name__}"
+        ) from error
     if result.returncode == 1:
         return frozenset()
     if result.returncode != 0:
-        raise ObservationError(f"cannot check BYOND processes: pgrep exited {result.returncode}")
+        raise ObservationError(
+            f"cannot check BYOND processes: pgrep exited {result.returncode}"
+        )
     try:
         return frozenset(int(pid) for pid in result.stdout.split())
     except ValueError as error:
@@ -142,11 +151,17 @@ class GameConnector:
             raise ValueError("SELKIES_PORT must be a valid TCP port")
         self.port = int(port)
         prefix = env.get("SELKIES_SUBFOLDER", env.get("SUBFOLDER", "")).strip("/")
-        self.sessions_path = f"/{quote(prefix, safe='/~._-')}/api/sessions" if prefix else "/api/sessions"
+        self.sessions_path = (
+            f"/{quote(prefix, safe='/~._-')}/api/sessions"
+            if prefix
+            else "/api/sessions"
+        )
         self.runtime = Path(env.get("XDG_RUNTIME_DIR") or "/tmp/runtime-ubuntu")
         self.prefix = Path(env.get("WINEPREFIX") or "/home/ubuntu/.wine")
         self.key = self.prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
-        self.game = self.prefix / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
+        self.game = (
+            self.prefix / "drive_c/Program Files (x86)/BYOND/bin/dreamseeker.exe"
+        )
         self.connected = False
         self.attempted = False
         self.pager_pids = None
@@ -160,7 +175,11 @@ class GameConnector:
 
     def disconnect(self):
         if self.connected:
-            print("Selkies disconnected; leaving any running Dream Seeker open", file=sys.stderr, flush=True)
+            print(
+                "Selkies disconnected; leaving any running Dream Seeker open",
+                file=sys.stderr,
+                flush=True,
+            )
         self.connected = False
         self.attempted = False
         self.pager_pids = None
@@ -172,10 +191,16 @@ class GameConnector:
         if env.get("SELKIES_WAYLAND", "false") == "true":
             try:
                 lines = (self.runtime / "byond-xwayland").read_text().splitlines()
-                if len(lines) != 2 or not all(lines) or not os.access(lines[1], os.R_OK):
+                if (
+                    len(lines) != 2
+                    or not all(lines)
+                    or not os.access(lines[1], os.R_OK)
+                ):
                     raise ValueError
             except (OSError, ValueError):
-                raise ObservationError("waiting for an authenticated XWayland display") from None
+                raise ObservationError(
+                    "waiting for an authenticated XWayland display"
+                ) from None
             env["DISPLAY"], env["XAUTHORITY"] = lines
         else:
             env["DISPLAY"] = env.get("DISPLAY") or ":20"
@@ -186,7 +211,11 @@ class GameConnector:
             code = self.child.poll()
             if code is not None:
                 if code:
-                    print(f"Dream Seeker exited with status {code}", file=sys.stderr, flush=True)
+                    print(
+                        f"Dream Seeker exited with status {code}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                 self.child = None
 
         try:
@@ -223,7 +252,9 @@ class GameConnector:
 
                 matches, reason = key_matches(self.key, self.account)
                 if not matches:
-                    self.notice(f"{reason}; log in as {self.account} and save the password")
+                    self.notice(
+                        f"{reason}; log in as {self.account} and save the password"
+                    )
                     return
                 if process_ids(GAME_PATTERN):
                     self.attempted = True
@@ -239,26 +270,40 @@ class GameConnector:
                     )
                 except OSError as error:
                     self.attempted = True
-                    self.notice(f"Could not start Dream Seeker: {error.strerror or type(error).__name__}")
+                    self.notice(
+                        f"Could not start Dream Seeker: {error.strerror or type(error).__name__}"
+                    )
                     return
                 self.attempted = True
                 self.last_notice = None
-                print(f"Starting Dream Seeker for {self.account}", file=sys.stderr, flush=True)
+                print(
+                    f"Starting Dream Seeker for {self.account}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         except ObservationError as error:
             self.notice(f"Waiting to start Dream Seeker: {error}")
         except OSError as error:
-            self.notice(f"Cannot access BYOND startup lock: {error.strerror or type(error).__name__}")
+            self.notice(
+                f"Cannot access BYOND startup lock: {error.strerror or type(error).__name__}"
+            )
 
 
 def main():
     if not os.environ.get("BYOND_SERVER"):
-        print("BYOND_SERVER is not configured; automatic game connection is disabled", file=sys.stderr, flush=True)
+        print(
+            "BYOND_SERVER is not configured; automatic game connection is disabled",
+            file=sys.stderr,
+            flush=True,
+        )
         while True:
             time.sleep(3600)
     try:
         connector = GameConnector(os.environ)
     except ValueError as error:
-        print(f"Automatic game connection disabled: {error}", file=sys.stderr, flush=True)
+        print(
+            f"Automatic game connection disabled: {error}", file=sys.stderr, flush=True
+        )
         while True:
             time.sleep(3600)
     while True:

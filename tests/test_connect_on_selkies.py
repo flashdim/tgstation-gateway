@@ -49,12 +49,16 @@ class GameConnectorTest(TestCase):
             return self.present
 
         def processes(pattern):
-            return self.pager if pattern == connector_module.PAGER_PATTERN else self.game
+            return (
+                self.pager if pattern == connector_module.PAGER_PATTERN else self.game
+            )
 
         self.sessions_mock = self.enterContext(
             patch.object(connector_module, "sessions_present", side_effect=sessions)
         )
-        self.enterContext(patch.object(connector_module, "process_ids", side_effect=processes))
+        self.enterContext(
+            patch.object(connector_module, "process_ids", side_effect=processes)
+        )
         child = Mock()
         child.poll.return_value = None
         self.launch = self.enterContext(
@@ -140,7 +144,9 @@ class GameConnectorTest(TestCase):
         self.save_key()
         self.present = True
         self.connector.step()
-        self.sessions_mock.side_effect = connector_module.ObservationError("unavailable")
+        self.sessions_mock.side_effect = connector_module.ObservationError(
+            "unavailable"
+        )
         self.connector.step()
         self.assertIn("unavailable", self.log.getvalue())
         self.sessions_mock.side_effect = lambda port, path: True
@@ -178,13 +184,19 @@ class GameConnectorTest(TestCase):
         for data in cases:
             with self.subTest(data=data):
                 self.connector.key.write_bytes(data)
-                self.assertFalse(connector_module.key_matches(self.connector.key, "LGplayer01")[0])
+                self.assertFalse(
+                    connector_module.key_matches(self.connector.key, "LGplayer01")[0]
+                )
         self.connector.key.write_bytes(
             b"BEGIN KEY Guest\nx\nEND KEY\n[BEGIN KEY lgplayer01]\ny\n[END KEY]\n"
         )
-        self.assertTrue(connector_module.key_matches(self.connector.key, "LGplayer01")[0])
+        self.assertTrue(
+            connector_module.key_matches(self.connector.key, "LGplayer01")[0]
+        )
         with patch.object(connector_module, "MAX_KEY_BYTES", 10):
-            self.assertFalse(connector_module.key_matches(self.connector.key, "LGplayer01")[0])
+            self.assertFalse(
+                connector_module.key_matches(self.connector.key, "LGplayer01")[0]
+            )
 
     def test_invalid_configuration_fails_closed(self):
         for server in (
@@ -202,8 +214,12 @@ class GameConnectorTest(TestCase):
         for account in ("", "player name", "../LGplayer01"):
             with self.subTest(account=account):
                 with self.assertRaises(ValueError):
-                    connector_module.GameConnector({**self.env, "BYOND_ACCOUNT": account})
-        self.assertEqual(connector_module.server_url("byond://[::1]:1337"), "byond://[::1]:1337")
+                    connector_module.GameConnector(
+                        {**self.env, "BYOND_ACCOUNT": account}
+                    )
+        self.assertEqual(
+            connector_module.server_url("byond://[::1]:1337"), "byond://[::1]:1337"
+        )
 
 
 class SessionsApiTest(TestCase):
@@ -227,9 +243,13 @@ class SessionsApiTest(TestCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         port = server.server_address[1]
-        self.assertFalse(connector_module.sessions_present(port, "/LGplayer01/api/sessions"))
+        self.assertFalse(
+            connector_module.sessions_present(port, "/LGplayer01/api/sessions")
+        )
         server.body = json.dumps({"sessions": [{"role": None}]}).encode()
-        self.assertTrue(connector_module.sessions_present(port, "/LGplayer01/api/sessions"))
+        self.assertTrue(
+            connector_module.sessions_present(port, "/LGplayer01/api/sessions")
+        )
         self.assertEqual(server.paths, ["/LGplayer01/api/sessions"] * 2)
         server.body = b'{"sessions": "not a list"}'
         with self.assertRaises(connector_module.ObservationError):
