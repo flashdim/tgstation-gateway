@@ -84,7 +84,7 @@ fi
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
 settings="$(
-    printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
+    printf '%s\n' v4 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
         sha256sum | cut -d ' ' -f 1
 )"
 
@@ -201,7 +201,8 @@ reconcile() {
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Authenticated-User-Email=" \
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Id=" \
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Secret=" \
-                -e "BYOND_SERVER=$server" -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
+                -e "BYOND_SERVER=$server" -e "BYOND_ACCOUNT=LGplayer$slot" \
+                -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
                 -e "SELKIES_MODE=websockets" -e "SELKIES_WAYLAND=$wayland" \
                 -e SELKIES_GAMEPAD_ENABLED=false -e SELKIES_MICROPHONE_ENABLED=false \
                 -e SELKIES_WEBCAM_ENABLED=false -e SELKIES_FILE_TRANSFERS=none \

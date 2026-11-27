@@ -307,6 +307,14 @@ class DesktopSessionTest(unittest.TestCase):
     def test_selkies_uses_stock_presence_without_reset_hook(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         compose = (ROOT / "examples/compose.yaml").read_text()
+        self.assertIn(
+            "container/run-game-connection.sh /etc/service/byond-connect/run",
+            dockerfile,
+        )
+        self.assertIn(
+            "container/connect-on-selkies.py /usr/local/bin/connect-on-selkies.py",
+            dockerfile,
+        )
         self.assertNotIn("SELKIES_RUN_AFTER_CONNECT", dockerfile)
         self.assertNotIn("SELKIES_RUN_AFTER_CONTROLLER_", dockerfile)
         self.assertNotIn("selkies-controller-presence.patch", dockerfile)

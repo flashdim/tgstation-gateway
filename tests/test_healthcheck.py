@@ -7,7 +7,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGER_PROCESS = r'(^|[\\/])byond[.]exe"?([[:space:]]|$)'
-DREAMSEEKER_PROCESS = r'(^|[\\/])dreamseeker[.]exe"?([[:space:]]|$)'
 
 
 class HealthcheckTest(unittest.TestCase):
@@ -73,22 +72,21 @@ class HealthcheckTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Selkies health endpoint is unavailable", result.stderr)
 
-    def test_requires_dreamseeker_in_direct_mode(self):
+    def test_requires_pager_while_game_waits_for_a_viewer(self):
         env = {
             "BYOND_SERVER": "example.org:1337",
-            "EXPECTED_PROCESS": DREAMSEEKER_PROCESS,
             "HTTP_OK": "1",
         }
         result = self.check(**env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.log.read_text().splitlines()[0],
-            f"pgrep -f {DREAMSEEKER_PROCESS}",
+            f"pgrep -f {PAGER_PROCESS}",
         )
 
         result = self.check(**env, PAGER_RUNNING="0")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Dream Seeker is not running", result.stderr)
+        self.assertIn("BYOND pager is not running", result.stderr)
 
     def test_http_fallback_uses_configured_port_and_prefix(self):
         result = self.check(

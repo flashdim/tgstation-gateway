@@ -42,6 +42,8 @@ class FixedSlotsTest(unittest.TestCase):
         self.assertEqual(second["ports"][0]["published"], "18081")
         self.assertEqual(first["environment"]["SELKIES_SUBFOLDER"], "/LGplayer01/")
         self.assertEqual(second["environment"]["SELKIES_SUBFOLDER"], "/LGplayer02/")
+        self.assertEqual(first["environment"]["BYOND_ACCOUNT"], "LGplayer01")
+        self.assertEqual(second["environment"]["BYOND_ACCOUNT"], "LGplayer02")
         self.assertEqual(first["ports"][0]["host_ip"], "127.0.0.1")
         self.assertEqual(first["restart"], "unless-stopped")
         self.assertEqual(second["restart"], "unless-stopped")
@@ -63,6 +65,10 @@ class FixedSlotsTest(unittest.TestCase):
             self.environment(GATEWAY_ACCOUNT_PREFIX="Other")
         )
         self.assertNotEqual(set(result["volumes"]), set(changed["volumes"]))
+        self.assertEqual(
+            changed["services"]["player01"]["environment"]["BYOND_ACCOUNT"],
+            "Other01",
+        )
 
     def test_configured_capacity_and_resource_limits(self):
         for count in (1, 3, 99):

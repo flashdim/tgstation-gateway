@@ -311,13 +311,22 @@ or **Ctrl+L**, then **Login**. Enter credentials yourself and check **Save passw
 and **Automatically login when program starts**. The saved login remains in that
 player's Wine volume across container recreation and manager restarts. To rotate
 credentials, sign out and save the replacement through that player's pager.
-The launcher does not fill dialogs, send account shortcuts, or verify account
-identity; confirm the intended account before joining the game.
+The pager starts without a server URL. When a Selkies client connects, the
+game launcher waits until that slot's `key.txt` contains a complete key block
+for its configured account before starting Dream Seeker. If the key is missing
+or belongs to another account, sign in and save the correct login; the launcher
+will retry while the client remains connected.
+
+The key-file check is not proof of an authenticated session: saved keys for
+multiple accounts can coexist, and the pager may still be signed in as Guest
+or another account. The launcher does not fill dialogs, send account shortcuts,
+or verify which account is active. Check the pager and the game account yourself.
 
 Password-file provisioning and the native login helper have been removed.
 When upgrading, remove `examples/compose.traefik.passwords.yaml` from your Compose
-commands and unset `GATEWAY_SECRET_DIRECTORY`, `BYOND_PASSWORD_FILE` and
-`BYOND_ACCOUNT`. Use the player and manager images from the same revision.
+commands and unset `GATEWAY_SECRET_DIRECTORY` and `BYOND_PASSWORD_FILE`.
+The manager now sets `BYOND_ACCOUNT` to each slot's account name. Use the player
+and manager images from the same revision.
 **Stop the old manager before upgrading:** restarting the old manager still
 erases player volumes. Do not use `down -v` or delete player volumes when updating.
 Previously erased login data cannot be recovered by this change.
@@ -617,25 +626,39 @@ for same-repository pull requests. Releases publish a version tag matching the
 release and `latest` for non-prereleases. CI development tags are pushed before
 image validation and may refer to a build that later fails validation.
 
-## Connect directly to a server
+## Start a game when a viewer connects
 
-To request a connection to a server through the BYOND pager, provide its address and port:
+For a standalone player, set the server and the expected BYOND account:
 
 ```sh
-BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
+BYOND_ACCOUNT=LGplayer01 BYOND_SERVER=server.example.org:1337 \
+  docker compose -f examples/compose.yaml up
 ```
 
 At each client startup, the launcher sets `auto-login on` in BYOND's
 `cfg/pager.txt` and `graphics-hwmode on` and `guest-login off` in
-`cfg/seeker.txt`, retaining other settings. It starts the pager with the server
-URL; BYOND handles its own saved login and launches Dream Seeker. On first use,
-log in and save credentials yourself. There is no helper that enters credentials
-or verifies the account before connection; confirm the pager is signed in as
-the intended account, not Guest. A BYOND account or
-server-side authentication may still be required. Automatic login and joining
-through the pager have not yet been verified against a real server. In
-direct-server mode, the healthcheck still requires a Dream Seeker process; it
-does not prove login or gameplay.
+`cfg/seeker.txt`, retaining other settings. The pager starts without connecting
+to the server. After a Selkies client connects, the game launcher checks
+`$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt` for a nonempty,
+complete `BEGIN KEY <account>` / `END KEY` block matching `BYOND_ACCOUNT`
+case-insensitively. It will not start the game when the file is absent,
+unreadable, incomplete or mismatched; it retries while a client remains connected.
+The managed deployment and fixed-slot generator set `BYOND_ACCOUNT` per slot.
+Without a valid `BYOND_ACCOUNT` and `BYOND_SERVER`, automatic game connection
+is disabled and the pager remains available for manual use.
+
+Any Selkies client, including a viewer, counts as connected. Only one Dream
+Seeker is started for a continuous connection; if one is already running,
+it is left alone. Disconnecting does not stop it. If the game exits while a
+viewer stays connected, reconnect or use **Reset Session** to request another
+launch. The check confirms only that a key block is present, not that BYOND
+authenticated or selected that account. A BYOND account or server-side
+authentication may still be required.
+
+The standalone example does not mount a persistent Wine volume by default;
+add one at `/home/ubuntu/.wine` to retain saved logins across container
+recreation. The player healthcheck requires the pager and Selkies, not Dream
+Seeker, so waiting for a viewer or saved login does not make the desktop unhealthy.
 
 ## Customize the session
 

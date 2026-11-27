@@ -67,6 +67,7 @@ def compose_config(env):
         service["networks"] = {network: None}
         service["ports"][0]["published"] = str(first_port + slot.number - 1)
         service["environment"]["SELKIES_SUBFOLDER"] = slot.path
+        service["environment"]["BYOND_ACCOUNT"] = slot.account
         service["labels"] = {
             "io.tgstation-gateway.project": "tgstation-gateway",
             "io.tgstation-gateway.deployment": config.deployment_id,

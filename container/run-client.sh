@@ -274,15 +274,4 @@ esac
 flock -u 9
 exec 9>&-
 
-set --
-if [ -n "${BYOND_SERVER:-}" ]; then
-    server="${BYOND_SERVER#byond://}"
-    if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||
-        ((10#${BASH_REMATCH[2]} < 1 || 10#${BASH_REMATCH[2]} > 65535)); then
-        echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
-        exit 1
-    fi
-    set -- "byond://$server"
-fi
-
-exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" "$@"
+exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"

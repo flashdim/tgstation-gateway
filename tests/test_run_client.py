@@ -336,11 +336,11 @@ class RunClientTest(unittest.TestCase):
                     ],
                 )
 
-    def test_launches_pager_with_server_url(self):
-        for server, url in (
-            ("ss13.lazorgator.party:1337", "byond://ss13.lazorgator.party:1337"),
-            ("byond://example.org:1234", "byond://example.org:1234"),
-            ("[::1]:1337", "byond://[::1]:1337"),
+    def test_launches_pager_without_connecting_to_server(self):
+        for server in (
+            "ss13.lazorgator.party:1337",
+            "byond://example.org:1234",
+            "[::1]:1337",
         ):
             with self.subTest(server=server):
                 result, prefix, _, events, _, _ = self.run_client(server)
@@ -351,24 +351,8 @@ class RunClientTest(unittest.TestCase):
                     [
                         ":42",
                         str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
-                        url,
                     ],
                 )
-
-    def test_rejects_invalid_server(self):
-        for server in (
-            "example.org",
-            "https://example.org:1337",
-            "example.org:0",
-            "example.org:65536",
-            "example.org:1337 extra",
-            ":1337",
-        ):
-            with self.subTest(server=server):
-                result, _, _, _, _, _ = self.run_client(server)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("Invalid BYOND_SERVER", result.stderr)
-                self.assertEqual(result.stdout, "")
 
     def test_configures_webview2_gpu_before_launch(self):
         result, prefix, registry, events, _, _ = self.run_client(
@@ -398,7 +382,6 @@ class RunClientTest(unittest.TestCase):
             [
                 ":42",
                 str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
-                "byond://example.org:1337",
             ],
         )
 

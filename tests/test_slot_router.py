@@ -307,6 +307,7 @@ class ComposeTest(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 23, result.stderr)
                 arguments = (root / "arguments").read_text().splitlines()
+                self.assertIn("BYOND_ACCOUNT=LGplayer01", arguments)
                 if gpu == "true":
                     self.assertEqual(
                         arguments[arguments.index("--device") + 1], "/dev/dri:/dev/dri"
