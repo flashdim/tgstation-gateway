@@ -1,10 +1,12 @@
 import os
+import importlib.util
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +42,8 @@ class RunClientTest(unittest.TestCase):
         bad_config_directory=False,
         desktop_failure=None,
         desktop_delay=False,
+        pager_ready_probe=False,
+        pager_missing=False,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -64,6 +68,7 @@ class RunClientTest(unittest.TestCase):
                 "pgrep": (
                     'printf "pgrep %s\\n" "$*" >> "$CLEANUP_LOG"\n'
                     'if [ "$1" = -i ] && [ "$2" = -x ]; then '
+                    'if [ "$5" = byond.exe ]; then test "$PAGER_MISSING" != 1; exit $?; fi; '
                     'test -f "$GAME_STARTED"; exit $?; fi\n'
                     'case "$CLEANUP_FAILURE" in pgrep) exit 2;; '
                     "survives) exit 0;; exiting) "
@@ -119,7 +124,14 @@ class RunClientTest(unittest.TestCase):
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
                     'case "$1" in */dreamseeker.exe) touch "$GAME_STARTED";; esac\n'
                     'printf "%s\\n" "$DISPLAY" "$@"\n'
-                    'case "$1" in */dreamseeker.exe) /bin/sleep 0.1;; esac\n'
+                    'if [ "$PAGER_READY_PROBE" = 1 ]; then\n'
+                    "  for i in $(seq 1 50); do\n"
+                    '    if [ -f "$XDG_RUNTIME_DIR/byond-pager-ready" ]; then '
+                    'echo ready >> "$EVENT_LOG"; break; fi\n'
+                    "    /bin/sleep 0.02\n"
+                    "  done\n"
+                    "fi\n"
+                    "/bin/sleep 0.1\n"
                     'exit "$MOCK_WINE_EXIT_CODE"'
                 ),
             }.items():
@@ -163,6 +175,8 @@ class RunClientTest(unittest.TestCase):
                 "DESKTOP_DELAY": "1" if desktop_delay else "0",
                 "DESKTOP_SEEN": str(root / "desktop-seen"),
                 "DESKTOP_READY": str(root / "desktop-ready"),
+                "PAGER_READY_PROBE": "1" if pager_ready_probe else "0",
+                "PAGER_MISSING": "1" if pager_missing else "0",
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_PASSWORD_FILE", None)
@@ -218,6 +232,7 @@ class RunClientTest(unittest.TestCase):
                 text=True,
                 timeout=5,
             )
+            self.assertFalse((runtime / "byond-pager-ready").exists())
             if result.returncode == 0:
                 for name, options in (
                     ("pager.txt", {"auto-login": "on"}),
@@ -252,6 +267,19 @@ class RunClientTest(unittest.TestCase):
         result, _, _, events, _, _ = self.run_client(wine_exit_code=23)
         self.assertEqual(result.returncode, 23)
         self.assertEqual(events, ["launch"])
+
+    def test_pager_readiness_is_published_and_cleared(self):
+        result, _, _, events, _, _ = self.run_client(pager_ready_probe=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["launch", "ready"])
+
+    def test_unobserved_pager_never_becomes_ready(self):
+        result, _, _, events, _, _ = self.run_client(
+            pager_ready_probe=True, pager_missing=True
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(events, ["launch"])
+        self.assertIn("Timed out waiting for the BYOND pager", result.stderr)
 
     def test_updates_settings_without_discarding_other_preferences(self):
         config = {
@@ -489,7 +517,7 @@ class RunClientTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(cleanup[:2], ["wineserver -k", "wineserver --wait"])
-                self.assertEqual(len(cleanup), 4)
+                self.assertEqual(len(cleanup), 5)
                 pattern = r'(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe"?([[:space:]]|$)'
                 self.assertEqual(
                     cleanup[2], f"pkill -KILL -i -f -u {os.geteuid()} {pattern}"
@@ -508,7 +536,9 @@ class RunClientTest(unittest.TestCase):
         result, _, _, events, _, cleanup = self.run_client(cleanup_failure="exiting")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch"])
-        self.assertEqual(len([line for line in cleanup if line.startswith("pgrep")]), 2)
+        self.assertEqual(
+            len([line for line in cleanup if line.startswith("pgrep -i -f")]), 2
+        )
 
     def test_launches_when_no_wine_server_exists(self):
         result, _, _, events, _, cleanup = self.run_client(cleanup_failure="no_server")
@@ -569,10 +599,12 @@ class GameStartTest(unittest.TestCase):
             "pgrep": (
                 'if [ -f "$TEST_ROOT/pgrep-error" ]; then exit 2; fi\n'
                 'test "$1" = -i && test "$2" = -x && test "$3" = -u && '
-                'test "$5" = dreamseeker.exe || exit 2\n'
+                'case "$5" in byond.exe) test -f "$TEST_ROOT/pager"; exit $?;; '
+                "dreamseeker.exe) ;; *) exit 2;; esac\n"
                 'test -f "$TEST_ROOT/observed"'
             ),
             "sleep": "exec /bin/sleep 0.05",
+            "pkill": 'rm -f "$TEST_ROOT/observed"; exit 0',
             "wine": (
                 'test ! -e "/proc/$$/fd/9" || exit 99\n'
                 'echo "$$" >> "$TEST_ROOT/pids"\n'
@@ -593,6 +625,9 @@ class GameStartTest(unittest.TestCase):
             "TEST_ROOT": str(self.root),
             "BYOND_KEY_CHECK": str(ROOT / "container/byond-key-check.py"),
         }
+        (self.root / "pager").touch()
+        start_time = Path(f"/proc/{os.getpid()}/stat").read_text().split()[21]
+        (runtime / "byond-pager-ready").write_text(f"{os.getpid()} {start_time}\n")
         self.addCleanup(self.stop_games)
 
     def stop_games(self):
@@ -643,6 +678,24 @@ class GameStartTest(unittest.TestCase):
         self.assertEqual(self.start().wait(timeout=5), 75)
         self.assertFalse((self.root / "launches").exists())
 
+    def test_start_requires_pager(self):
+        (self.root / "pager").unlink()
+        (self.root / "ready").touch()
+        self.assertEqual(self.start().wait(timeout=5), 75)
+        self.assertFalse((self.root / "launches").exists())
+        (self.root / "pager").touch()
+        self.assertEqual(self.start().wait(timeout=5), 0)
+
+    def test_start_requires_live_pager_supervisor(self):
+        marker = self.root / "runtime/byond-pager-ready"
+        marker.unlink()
+        self.assertEqual(self.start().wait(timeout=5), 75)
+        marker.write_text("invalid")
+        self.assertEqual(self.start().wait(timeout=5), 75)
+        marker.write_text(f"{os.getpid()} 0\n")
+        self.assertEqual(self.start().wait(timeout=5), 75)
+        self.assertFalse((self.root / "launches").exists())
+
     def test_concurrent_start_waits_for_interrupted_callers_monitor(self):
         first = self.start()
         self.wait_for(self.root / "launches")
@@ -655,6 +708,35 @@ class GameStartTest(unittest.TestCase):
         (self.root / "ready").touch()
         self.assertEqual(second.wait(timeout=5), 0)
         self.assertEqual((self.root / "launches").read_text().count("launch"), 1)
+
+    def test_watcher_reconciles_using_game_control(self):
+        spec = importlib.util.spec_from_file_location(
+            "connector", ROOT / "container/connect-on-selkies.py"
+        )
+        connector = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(connector)
+
+        def control(action):
+            subprocess.run(
+                ["bash", str(ROOT / "container/byond-game.sh"), action],
+                env=self.env,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+
+        (self.root / "ready").touch()
+        watcher = connector.SessionWatcher({}, control=control)
+        with patch.object(connector, "sessions_present", return_value=True):
+            watcher.step()
+            self.assertTrue((self.root / "observed").exists())
+            (self.root / "observed").unlink()
+            watcher.step()
+            self.assertEqual((self.root / "launches").read_text().count("launch"), 2)
+        with patch.object(connector, "sessions_present", return_value=False):
+            connector.SessionWatcher({}, control=control).step()
+            self.assertFalse((self.root / "observed").exists())
 
 
 if __name__ == "__main__":

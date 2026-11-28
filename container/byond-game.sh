@@ -47,7 +47,9 @@ if [ "$action" = stop ]; then
 fi
 
 if [ -z "${BYOND_SERVER:-}" ] || [ -z "${BYOND_ACCOUNT:-}" ]; then
-    echo "BYOND_SERVER and BYOND_ACCOUNT are required to start Dream Seeker" >&2
+    if [ "${BYOND_GAME_QUIET:-0}" != 1 ]; then
+        echo "BYOND_SERVER and BYOND_ACCOUNT are required to start Dream Seeker" >&2
+    fi
     exit 0
 fi
 server="${BYOND_SERVER#byond://}"
@@ -57,11 +59,25 @@ if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||
     exit 1
 fi
 
+pager_ready="$XDG_RUNTIME_DIR/byond-pager-ready"
+pager_supervisor=""
+pager_start=""
+if [ -r "$pager_ready" ]; then
+    read -r pager_supervisor pager_start <"$pager_ready" || true
+fi
+if [[ ! "$pager_supervisor" =~ ^[0-9]+$ ]] ||
+    [[ ! "$pager_start" =~ ^[0-9]+$ ]] ||
+    ! kill -0 "$pager_supervisor" 2>/dev/null ||
+    [ "$(awk '{print $22}' "/proc/$pager_supervisor/stat" 2>/dev/null || true)" != "$pager_start" ] ||
+    ! pgrep -i -x -u "$EUID" byond.exe >/dev/null; then
+    if [ "${BYOND_GAME_QUIET:-0}" != 1 ]; then
+        echo "Waiting for the BYOND pager before starting Dream Seeker" >&2
+    fi
+    exit 75
+fi
+
 bin_dir="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin"
 key_file="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
-if ! python3 "${BYOND_KEY_CHECK:-/usr/local/bin/byond-key-check.py}" "$key_file" "$BYOND_ACCOUNT"; then
-    exit 0
-fi
 if pgrep -i -x -u "$EUID" dreamseeker.exe >/dev/null; then
     exit 0
 else
@@ -70,6 +86,12 @@ else
         echo "Failed to check Dream Seeker" >&2
         exit 75
     fi
+fi
+
+if [ "${BYOND_GAME_QUIET:-0}" = 1 ]; then
+    python3 "${BYOND_KEY_CHECK:-/usr/local/bin/byond-key-check.py}" "$key_file" "$BYOND_ACCOUNT" 2>/dev/null || exit 76
+else
+    python3 "${BYOND_KEY_CHECK:-/usr/local/bin/byond-key-check.py}" "$key_file" "$BYOND_ACCOUNT" || exit 76
 fi
 
 if [ "${SELKIES_WAYLAND:-false}" = true ]; then

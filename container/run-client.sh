@@ -19,6 +19,8 @@ export WINEDEBUG=-all
 # inherited by cleanup commands so the next service invocation waits for them.
 exec 9>"$XDG_RUNTIME_DIR/byond-cleanup.lock"
 flock -x 9
+pager_ready="$XDG_RUNTIME_DIR/byond-pager-ready"
+rm -f -- "$pager_ready"
 if timeout --kill-after=1s 15s wineserver -k; then
     :
 else
@@ -278,19 +280,16 @@ case "${BYOND_WEBVIEW2_GPU:-0}" in
         ;;
 esac
 
-flock -u 9
-exec 9>&-
-
 pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
 
-# Only an explicit reset also starts Dream Seeker; container start and
-# supervisor restarts launch just the pager.
-if [ "$reset_requested" != true ]; then
-    exec wine "$pager"
-fi
-
-wine "$pager" &
+wine "$pager" 9>&- &
 pager_pid=$!
+clear_pager_ready() {
+    if [ -f "$pager_ready" ] && [ "$(cut -d' ' -f1 "$pager_ready")" = "$$" ]; then
+        rm -f -- "$pager_ready"
+    fi
+}
+trap clear_pager_ready EXIT
 stop_pager() {
     local status="$1"
     trap '' TERM INT HUP
@@ -302,7 +301,26 @@ trap 'stop_pager 143' TERM
 trap 'stop_pager 130' INT
 trap 'stop_pager 129' HUP
 sleep 3
-"${BYOND_GAME_CONTROL:-/usr/local/bin/byond-game.sh}" start || true
+for attempt in {1..15}; do
+    if ! kill -0 "$pager_pid" 2>/dev/null; then
+        break
+    fi
+    if pgrep -i -x -u "$EUID" byond.exe >/dev/null; then
+        printf '%s %s\n' "$$" "$(awk '{print $22}' "/proc/$$/stat")" >"$pager_ready"
+        break
+    fi
+    sleep 1
+done
+flock -u 9
+exec 9>&-
+
+if [ ! -f "$pager_ready" ] && kill -0 "$pager_pid" 2>/dev/null; then
+    echo "Timed out waiting for the BYOND pager" >&2
+    stop_pager 1
+fi
+if [ "$reset_requested" = true ]; then
+    "${BYOND_GAME_CONTROL:-/usr/local/bin/byond-game.sh}" start || true
+fi
 status=0
 wait "$pager_pid" || status=$?
 exit "$status"

@@ -41,9 +41,8 @@ class SessionWatcherTest(TestCase):
             patch.object(connector_module, "sessions_present", side_effect=sessions)
         )
 
-    def test_starts_on_connect_and_stops_on_disconnect_once(self):
+    def test_reconciles_every_observation(self):
         self.watcher.step()
-        self.control.assert_not_called()
         self.present = True
         self.watcher.step()
         self.watcher.step()
@@ -54,16 +53,16 @@ class SessionWatcherTest(TestCase):
         self.watcher.step()
         self.assertEqual(
             [call.args[0] for call in self.control.call_args_list],
-            ["start", "stop", "start"],
+            ["stop", "start", "start", "stop", "stop", "start"],
         )
 
     def test_failed_action_is_retried(self):
         self.present = True
-        self.control.side_effect = [OSError("busy"), None]
+        self.control.side_effect = [OSError("busy"), None, None]
         self.watcher.step()
         self.watcher.step()
         self.watcher.step()
-        self.assertEqual(self.control.call_count, 2)
+        self.assertEqual(self.control.call_count, 3)
 
     def test_session_errors_do_not_change_game_state(self):
         self.present = True
@@ -75,7 +74,31 @@ class SessionWatcherTest(TestCase):
         ):
             self.watcher.step()
         self.watcher.step()
-        self.assertEqual(self.control.call_count, 1)
+        self.assertEqual(self.control.call_count, 2)
+
+    def test_reconciles_existing_game_after_watcher_restart(self):
+        state = {"running": True}
+
+        def control(action):
+            state["running"] = action == "start"
+
+        self.watcher.control = control
+        self.watcher.step()
+        self.assertFalse(state["running"])
+
+    def test_restarts_game_after_pager_cleanup(self):
+        state = {"running": False}
+
+        def control(action):
+            state["running"] = action == "start"
+
+        self.watcher.control = control
+        self.present = True
+        self.watcher.step()
+        self.assertTrue(state["running"])
+        state["running"] = False
+        self.watcher.step()
+        self.assertTrue(state["running"])
 
     def test_invalid_port_fails_closed(self):
         for port in ("0", "65536", "http"):

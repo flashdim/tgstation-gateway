@@ -74,13 +74,17 @@ class SessionWatcher:
             else "/api/sessions"
         )
         self.control = control or self.run_control
-        # Last action applied successfully; the container starts without a game.
-        self.applied = "stop"
+        self.applied = None
         self.last_notice = None
 
     @staticmethod
     def run_control(action):
-        subprocess.run(["/usr/local/bin/byond-game.sh", action], check=True, timeout=60)
+        subprocess.run(
+            ["/usr/local/bin/byond-game.sh", action],
+            check=True,
+            timeout=60,
+            env={**os.environ, "BYOND_GAME_QUIET": "1"},
+        )
 
     def notice(self, message):
         if message != self.last_notice:
@@ -93,22 +97,27 @@ class SessionWatcher:
         except ObservationError as error:
             self.notice(f"Waiting for Selkies: {error}")
             return
-        self.last_notice = None
         action = "start" if present else "stop"
-        if self.applied == action:
-            return
         try:
             self.control(action)
         except (OSError, subprocess.SubprocessError) as error:
-            self.notice(f"Could not {action} Dream Seeker: {type(error).__name__}")
+            if (
+                isinstance(error, subprocess.CalledProcessError)
+                and error.returncode == 76
+            ):
+                self.notice("Waiting for a saved BYOND key matching the slot account")
+            else:
+                self.notice(f"Could not {action} Dream Seeker: {type(error).__name__}")
             return
-        print(
-            "Selkies client connected; starting Dream Seeker"
-            if present
-            else "Selkies client disconnected; stopped Dream Seeker",
-            file=sys.stderr,
-            flush=True,
-        )
+        self.last_notice = None
+        if self.applied != action:
+            print(
+                "Selkies client connected; starting Dream Seeker"
+                if present
+                else "Selkies client disconnected; stopped Dream Seeker",
+                file=sys.stderr,
+                flush=True,
+            )
         self.applied = action
 
 
