@@ -115,6 +115,13 @@ BYOND pager without a server URL, enables hardware graphics, and disables guest
 login. A separate connector starts Dream Seeker only with a connected viewer and
 a matching saved key; that path and its DPI behavior remain unverified.
 
+Blank BYOND panels (issue #89) were reproduced with the published image in X11
+mode against a local test world, not tgstation: when Dream Seeker started
+before the pager's shared WebView2 instance had a renderer, its browser panes
+stayed blank in every trial. Waiting for that renderer before marking the pager
+ready rendered them in each trial. This timing fix is unverified with
+tgstation, Wayland mode, login, and pager panes.
+
 **Exit:** a clean build starts the streaming service and BYOND process, with
 build, configuration and limitations documented. The smoke test does not
 demonstrate interactive play or the release publish.

@@ -692,8 +692,11 @@ Session behavior:
   reconciles each successful viewer observation, including after watcher or
   pager restarts. Viewer presence is checked again after the cleanup lock is
   acquired; if Selkies cannot be queried, a new game is not started. Starts
-  wait for pager configuration and a running pager
-  observed after a short startup delay. This is a startup heuristic: process
+  wait for pager configuration, a running pager and a WebView2 renderer started
+  for the pager (up to about a minute before the pager service restarts).
+  Dream Seeker shares the pager's WebView2 profile; in testing, starting it
+  while the pager's WebView2 was still initializing left browser panes such as
+  chat, stat panels and popups blank. This is a startup heuristic: process
   observation does not confirm pager login, initialization, or connection to
   the server.
 

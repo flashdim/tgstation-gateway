@@ -47,6 +47,7 @@ class RunClientTest(unittest.TestCase):
         desktop_delay=False,
         pager_ready_probe=False,
         pager_missing=False,
+        webview_missing=False,
     ):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -73,6 +74,8 @@ class RunClientTest(unittest.TestCase):
                     'if [ "$1" = -i ] && [ "$2" = -x ]; then '
                     'if [ "$5" = byond.exe ]; then test "$PAGER_MISSING" != 1; exit $?; fi; '
                     'test -f "$GAME_STARTED"; exit $?; fi\n'
+                    'if [ "$3" = -f ] && [ "$4" = -- ]; then '
+                    'test "$WEBVIEW_MISSING" != 1; exit $?; fi\n'
                     'case "$CLEANUP_FAILURE" in pgrep) exit 2;; '
                     "survives) exit 0;; exiting) "
                     'if [ ! -f "$PGREP_SEEN" ]; then touch "$PGREP_SEEN"; '
@@ -182,6 +185,7 @@ class RunClientTest(unittest.TestCase):
                 "DESKTOP_READY": str(root / "desktop-ready"),
                 "PAGER_READY_PROBE": "1" if pager_ready_probe else "0",
                 "PAGER_MISSING": "1" if pager_missing else "0",
+                "WEBVIEW_MISSING": "1" if webview_missing else "0",
             }
             env.pop("BYOND_SERVER", None)
             env.pop("BYOND_PASSWORD_FILE", None)
@@ -273,9 +277,22 @@ class RunClientTest(unittest.TestCase):
         self.assertEqual(events, ["launch"])
 
     def test_pager_readiness_is_published_and_cleared(self):
-        result, _, _, events, _, _ = self.run_client(pager_ready_probe=True)
+        result, _, _, events, _, cleanup = self.run_client(pager_ready_probe=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch", "ready"])
+        self.assertIn(
+            f"pgrep -u {os.geteuid()} -f -- "
+            "--type=renderer .*--webview-exe-name=byond[.]exe",
+            cleanup,
+        )
+
+    def test_pager_without_webview_renderer_never_becomes_ready(self):
+        result, _, _, events, _, _ = self.run_client(
+            pager_ready_probe=True, webview_missing=True
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(events, ["launch"])
+        self.assertIn("Timed out waiting for the BYOND pager", result.stderr)
 
     def test_unobserved_pager_never_becomes_ready(self):
         result, _, _, events, _, _ = self.run_client(
@@ -516,7 +533,7 @@ class RunClientTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, ["launch"])
                 self.assertEqual(cleanup[:2], ["wineserver -k", "wineserver --wait"])
-                self.assertEqual(len(cleanup), 5)
+                self.assertEqual(len(cleanup), 6)
                 pattern = r'(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe"?([[:space:]]|$)'
                 self.assertEqual(
                     cleanup[2], f"pkill -KILL -i -f -u {os.geteuid()} {pattern}"

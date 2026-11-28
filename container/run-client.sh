@@ -294,11 +294,14 @@ trap 'stop_pager 143' TERM
 trap 'stop_pager 130' INT
 trap 'stop_pager 129' HUP
 sleep 3
-for attempt in {1..15}; do
+# Dream Seeker shares the pager's WebView2 profile; starting it before the
+# pager's WebView2 renderer exists leaves its browser panes blank.
+for attempt in {1..60}; do
     if ! kill -0 "$pager_pid" 2>/dev/null; then
         break
     fi
-    if pgrep -i -x -u "$EUID" byond.exe >/dev/null; then
+    if pgrep -i -x -u "$EUID" byond.exe >/dev/null &&
+        pgrep -u "$EUID" -f -- '--type=renderer .*--webview-exe-name=byond[.]exe' >/dev/null; then
         printf '%s %s\n' "$$" "$(awk '{print $22}' "/proc/$$/stat")" >"$pager_ready"
         break
     fi
