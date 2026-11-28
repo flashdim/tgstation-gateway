@@ -291,6 +291,16 @@ fi
 
 wine "$pager" &
 pager_pid=$!
+stop_pager() {
+    local status="$1"
+    trap '' TERM INT HUP
+    kill -TERM "$pager_pid" 2>/dev/null || true
+    wait "$pager_pid" 2>/dev/null || true
+    exit "$status"
+}
+trap 'stop_pager 143' TERM
+trap 'stop_pager 130' INT
+trap 'stop_pager 129' HUP
 sleep 3
 "${BYOND_GAME_CONTROL:-/usr/local/bin/byond-game.sh}" start || true
 status=0

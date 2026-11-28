@@ -20,7 +20,16 @@ while :; do
         trap 'rm -f -- "$file"' EXIT
         printf '%s\n%s\n' "$bus" "$owner" >"$file"
         mv -f -- "$file" "$XDG_RUNTIME_DIR/byond-plasma-ready"
-        exit 0
+        attempt=0
+        while :; do
+            sleep 1
+            current_bus="$(timeout 2 qdbus6 org.freedesktop.DBus /org/freedesktop/DBus \
+                org.freedesktop.DBus.GetId 2>/dev/null || true)"
+            current_owner="$(timeout 2 qdbus6 org.freedesktop.DBus /org/freedesktop/DBus \
+                org.freedesktop.DBus.GetNameOwner org.kde.plasmashell 2>/dev/null || true)"
+            [ "$bus" = "$current_bus" ] && [ "$owner" = "$current_owner" ] || break
+        done
+        continue
     fi
     attempt=$((attempt + 1))
     if [ "$attempt" -ge 60 ]; then
