@@ -10,26 +10,71 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run-ci: ${{ steps.filter.outputs.run-ci }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect relevant changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" != "workflow_dispatch" ] &&
+            [ -n "$BASE_SHA" ] &&
+            git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null &&
+            git diff --quiet --no-renames "$BASE_SHA" HEAD -- \
+              Dockerfile .dockerignore container/ landing/ examples/ tests/ \
+              .pre-commit-config.yaml .github/workflows/ci.yml .github/workflows/publish.yml; then
+            echo "run-ci=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run-ci=true" >> "$GITHUB_OUTPUT"
+          fi
+
   formatting:
+    needs: changes
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verify change detection
+        env:
+          CHANGE_RESULT: ${{ needs.changes.result }}
+          RUN_CI: ${{ needs.changes.outputs.run-ci }}
+        run: |
+          case "$CHANGE_RESULT:$RUN_CI" in
+            success:true|success:false) ;;
+            *) exit 1 ;;
+          esac
+
       - name: Check out source
+        if: ${{ needs.changes.outputs.run-ci == 'true' }}
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Install pre-commit
+        if: ${{ needs.changes.outputs.run-ci == 'true' }}
         run: |
           python3 -m venv "$RUNNER_TEMP/format-env"
           "$RUNNER_TEMP/format-env/bin/python" -m pip install pre-commit==4.3.0
 
       - name: Check formatting
+        if: ${{ needs.changes.outputs.run-ci == 'true' }}
         run: |
           "$RUNNER_TEMP/format-env/bin/pre-commit" run --all-files --show-diff-on-failure
 
   unit-tests:
-    needs: formatting
+    needs: [formatting, changes]
+    if: ${{ needs.changes.outputs.run-ci == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -101,7 +146,8 @@ jobs:
         run: docker rm -f landing
 
   landing-image:
-    needs: formatting
+    needs: [formatting, changes]
+    if: ${{ needs.changes.outputs.run-ci == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -149,7 +195,8 @@ jobs:
         run: bash tests/smoke-landing.sh tgstation-gateway-landing:ci
 
   manager-image:
-    needs: formatting
+    needs: [formatting, changes]
+    if: ${{ needs.changes.outputs.run-ci == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -206,7 +253,8 @@ jobs:
           python3 -m unittest discover -s tests -p test_slot_router.py -v
 
   image:
-    needs: formatting
+    needs: [formatting, changes]
+    if: ${{ needs.changes.outputs.run-ci == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

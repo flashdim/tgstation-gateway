@@ -46,12 +46,131 @@ class WorkflowTest(unittest.TestCase):
         for job in ("unit-tests", "image", "landing-image", "manager-image"):
             with self.subTest(job=job):
                 self.assertEqual(
-                    re.findall(r"^    needs: (.+)$", jobs[job], re.M), ["formatting"]
+                    re.findall(r"^    needs: (.+)$", jobs[job], re.M),
+                    ["[formatting, changes]"],
                 )
         command = "python3 -m unittest discover -s tests -v"
         self.assertIn(command, jobs["unit-tests"])
         self.assertNotIn(command, jobs["image"])
         self.assertNotIn(command, jobs["landing-image"])
+
+    def test_ci_change_detection_and_job_gates(self):
+        jobs = workflow_jobs("ci.yml")
+        for job in ("unit-tests", "image", "landing-image", "manager-image"):
+            with self.subTest(job=job):
+                self.assertIn("needs.changes.outputs.run-ci == 'true'", jobs[job])
+        self.assertIn("needs: unit-tests", jobs["landing-screenshot"])
+        self.assertIn("needs: changes", jobs["formatting"])
+        self.assertIn("needs.changes.result", jobs["formatting"])
+        self.assertEqual(
+            jobs["formatting"].count("needs.changes.outputs.run-ci == 'true'"), 3
+        )
+        self.assertNotIn("run-ci", (ROOT / ".github/workflows/publish.yml").read_text())
+
+    def test_ci_change_detection_uses_full_comparison_and_fails_open(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("fetch-depth: 0", workflow_jobs("ci.yml")["changes"])
+        self.assertIn(
+            "github.event.pull_request.base.sha || github.event.before", workflow
+        )
+        script = re.search(
+            r"      - name: Detect relevant changes\n.*?        run: \|\n"
+            r"((?:          [^\n]*\n|\n)+)",
+            workflow,
+            re.S,
+        )[1]
+        script = "\n".join(line[10:] for line in script.splitlines())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def git(*args):
+                return subprocess.run(
+                    ["git", *args], cwd=root, check=True, capture_output=True, text=True
+                ).stdout.strip()
+
+            def commit(path, content):
+                file = root / path
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(content)
+                git("add", "-A")
+                git(
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.test",
+                    "commit",
+                    "-m",
+                    path,
+                )
+                return git("rev-parse", "HEAD")
+
+            def detect(base, event="pull_request"):
+                output = root / "output"
+                output.write_text("")
+                subprocess.run(
+                    ["sh", "-ec", script],
+                    cwd=root,
+                    env={
+                        **os.environ,
+                        "BASE_SHA": base,
+                        "EVENT_NAME": event,
+                        "GITHUB_OUTPUT": str(output),
+                    },
+                    check=True,
+                )
+                return output.read_text().strip()
+
+            git("init", "-q")
+            base = commit("README.md", "initial")
+            docs = commit("docs/guide.md", "documentation")
+            self.assertEqual(detect(base), "run-ci=false")
+            self.assertEqual(detect(base, "push"), "run-ci=false")
+            self.assertEqual(detect(base, "workflow_dispatch"), "run-ci=true")
+            self.assertEqual(detect("0" * 40, "push"), "run-ci=true")
+            for path in (
+                "Dockerfile",
+                ".dockerignore",
+                "container/new-file",
+                "landing/assets/wallpapers/new-file",
+                "examples/slot-manager.sh",
+                "tests/test_workflows.py",
+                ".pre-commit-config.yaml",
+                ".github/workflows/ci.yml",
+                ".github/workflows/publish.yml",
+            ):
+                with self.subTest(path=path):
+                    commit(path, "change")
+                    self.assertEqual(detect(docs), "run-ci=true")
+                    git("reset", "--hard", docs)
+            commit("container/new-file", "change")
+            commit("docs/guide.md", "later documentation")
+            self.assertEqual(detect(docs), "run-ci=true")
+            before_delete = git("rev-parse", "HEAD")
+            git("rm", "container/new-file")
+            git(
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.test",
+                "commit",
+                "-m",
+                "delete input",
+            )
+            self.assertEqual(detect(before_delete), "run-ci=true")
+            self.assertEqual(detect(docs), "run-ci=false")
+            before_rename = git("rev-parse", "HEAD")
+            (root / "container").mkdir(exist_ok=True)
+            git("mv", "docs/guide.md", "container/renamed")
+            git(
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.test",
+                "commit",
+                "-m",
+                "rename input",
+            )
+            self.assertEqual(detect(before_rename), "run-ci=true")
 
     def test_landing_and_player_images_build_in_separate_jobs(self):
         for filename, player, tag in (
