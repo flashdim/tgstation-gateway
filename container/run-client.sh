@@ -19,6 +19,8 @@ export WINEDEBUG=-all
 # inherited by cleanup commands so the next service invocation waits for them.
 exec 9>"$XDG_RUNTIME_DIR/byond-cleanup.lock"
 flock -x 9
+pager_ready="$XDG_RUNTIME_DIR/byond-pager-ready"
+rm -f -- "$pager_ready"
 if timeout --kill-after=1s 15s wineserver -k; then
     :
 else
@@ -34,7 +36,7 @@ if ! timeout --kill-after=1s 5s wineserver --wait; then
     exit 1
 fi
 
-client_pattern='(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe([[:space:]]|$)'
+client_pattern='(^|[\\/])(dreamseeker|byond|msedgewebview2)[.]exe"?([[:space:]]|$)'
 if pkill -KILL -i -f -u "$EUID" "$client_pattern"; then
     :
 else
@@ -80,38 +82,51 @@ until display_ready; do
     sleep 1
 done
 
-seed_byond_key() {
-    local key_file="${BYOND_KEY_FILE:-}"
-    local key_path="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
-    local temporary
+desktop_ready() (
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/selkies-session-bus"
+    local marker="$XDG_RUNTIME_DIR/byond-plasma-ready" bus owner
+    [ -r "$marker" ] &&
+        { IFS= read -r bus && IFS= read -r owner; } <"$marker" &&
+        [ -n "$bus" ] && [ -n "$owner" ] &&
+        [ "$(timeout 2 qdbus6 org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.GetId 2>/dev/null)" = "$bus" ] &&
+        [ "$(timeout 2 qdbus6 org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.GetNameOwner org.kde.plasmashell 2>/dev/null)" = "$owner" ] &&
+        [ "$(timeout 2 qdbus6 org.kde.StatusNotifierWatcher /StatusNotifierWatcher \
+            org.kde.StatusNotifierWatcher.IsStatusNotifierHostRegistered 2>/dev/null)" = true ] &&
+        timeout 2 python3 /usr/local/bin/x11-tray-ready.py
+)
 
-    [ -n "$key_file" ] || return 0
-    [ -f "$key_file" ] && [ -r "$key_file" ] || {
-        echo "BYOND_KEY_FILE is not readable" >&2
-        exit 1
-    }
-    [ -s "$key_file" ] || {
-        echo "BYOND_KEY_FILE is empty" >&2
-        exit 1
-    }
-    mkdir -p "$(dirname "$key_path")"
-    temporary="$(mktemp "$key_path.XXXXXX")"
-    if ! cat -- "$key_file" >"$temporary" || ! mv -f -- "$temporary" "$key_path"; then
-        rm -f -- "$temporary"
-        echo "Failed to install BYOND key file" >&2
-        exit 1
+desktop_is_ready=false
+for attempt in {1..120}; do
+    if desktop_ready; then
+        desktop_is_ready=true
+        break
     fi
-}
+    if [ "$attempt" -eq 1 ]; then
+        echo "Waiting for Plasma panel and system tray before starting BYOND" >&2
+    fi
+    sleep 1
+done
+if [ "$desktop_is_ready" != true ]; then
+    echo "Timed out waiting for Plasma panel and system tray; refusing to launch BYOND" >&2
+    exit 1
+fi
 
-seed_byond_key
+if ! bash -c 'status=0; timeout --kill-after=1s 30s "$@" 9>&- || status=$?; exit "$status"' \
+    _ wine reg add 'HKCU\Software\Dantom\BYOND' /v userpath /t REG_SZ \
+    /d 'C:\users\steamuser\Documents\BYOND\' /f >/dev/null; then
+    echo "Failed to configure BYOND userpath" >&2
+    exit 1
+fi
 
 cfg_dir="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/cfg"
 mkdir -p "$cfg_dir"
 set_byond_option() {
-    local file="$1" option="$2" temporary
+    local file="$1" option="$2" value="$3" temporary
     temporary="$(mktemp "$file.XXXXXX")"
     if { [ ! -e "$file" ] || awk -v option="$option" '$1 != option { print }' "$file"; } >"$temporary" &&
-        printf '%s on\n' "$option" >>"$temporary" &&
+        printf '%s %s\n' "$option" "$value" >>"$temporary" &&
         mv -f -- "$temporary" "$file"; then
         return 0
     fi
@@ -119,8 +134,9 @@ set_byond_option() {
     echo "Failed to configure BYOND settings" >&2
     exit 1
 }
-set_byond_option "$cfg_dir/pager.txt" auto-login
-set_byond_option "$cfg_dir/seeker.txt" graphics-hwmode
+set_byond_option "$cfg_dir/pager.txt" auto-login on
+set_byond_option "$cfg_dir/seeker.txt" graphics-hwmode on
+set_byond_option "$cfg_dir/seeker.txt" guest-login off
 
 dimensions="$(xdpyinfo -display "$DISPLAY" | awk '$1 == "dimensions:" { print $2; exit }')"
 if [[ ! "$dimensions" =~ ^([0-9]+)x([0-9]+)$ ]]; then
@@ -257,18 +273,44 @@ case "${BYOND_WEBVIEW2_GPU:-0}" in
         ;;
 esac
 
+pager="$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+
+wine "$pager" 9>&- &
+pager_pid=$!
+clear_pager_ready() {
+    if [ -f "$pager_ready" ] && [ "$(cut -d' ' -f1 "$pager_ready")" = "$$" ]; then
+        rm -f -- "$pager_ready"
+    fi
+}
+trap clear_pager_ready EXIT
+stop_pager() {
+    local status="$1"
+    trap '' TERM INT HUP
+    kill -TERM "$pager_pid" 2>/dev/null || true
+    wait "$pager_pid" 2>/dev/null || true
+    exit "$status"
+}
+trap 'stop_pager 143' TERM
+trap 'stop_pager 130' INT
+trap 'stop_pager 129' HUP
+sleep 3
+for attempt in {1..15}; do
+    if ! kill -0 "$pager_pid" 2>/dev/null; then
+        break
+    fi
+    if pgrep -i -x -u "$EUID" byond.exe >/dev/null; then
+        printf '%s %s\n' "$$" "$(awk '{print $22}' "/proc/$$/stat")" >"$pager_ready"
+        break
+    fi
+    sleep 1
+done
 flock -u 9
 exec 9>&-
 
-if [ -n "${BYOND_SERVER:-}" ]; then
-    server="${BYOND_SERVER#byond://}"
-    if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||
-        ((10#${BASH_REMATCH[2]} < 1 || 10#${BASH_REMATCH[2]} > 65535)); then
-        echo "Invalid BYOND_SERVER: expected host:port or byond://host:port" >&2
-        exit 1
-    fi
-    server_url="byond://$server"
-    exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe" "$server_url"
+if [ ! -f "$pager_ready" ] && kill -0 "$pager_pid" 2>/dev/null; then
+    echo "Timed out waiting for the BYOND pager" >&2
+    stop_pager 1
 fi
-
-exec wine "$WINEPREFIX/drive_c/Program Files (x86)/BYOND/bin/byond.exe"
+status=0
+wait "$pager_pid" || status=$?
+exit "$status"

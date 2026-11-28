@@ -5,11 +5,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      check_byond_key:
-        description: Run the mocked runtime BYOND key provisioning check
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -53,30 +48,9 @@ jobs:
           docker pull "$GATEWAY_DOCKER_TEST_IMAGE"
           python3 -m unittest discover -s tests -p test_fixed_slots.py -v
 
-      - name: Check runtime BYOND key provisioning
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_byond_key }}
-        env:
-          BYOND_TEST_KEY: ${{ secrets.BYOND_TEST_KEY }}
-        run: |
-          set -eu
-          if [ -z "$BYOND_TEST_KEY" ]; then
-            echo "Skipping BYOND key provisioning check: test secrets unavailable."
-            exit 0
-          fi
-          umask 077
-          key_file="$RUNNER_TEMP/byond-test-key-$$"
-          set -C
-          : > "$key_file"
-          set +C
-          trap 'rm -f -- "$key_file"' EXIT
-          printf '%s' "$BYOND_TEST_KEY" > "$key_file"
-          unset BYOND_TEST_KEY
-          export BYOND_TEST_KEY_FILE="$key_file"
-          python3 -m unittest discover -s tests -p test_run_client.py -k test_provisions_runtime_secret_file -v
-
   landing-screenshot:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out source
@@ -224,9 +198,11 @@ jobs:
           GATEWAY_TEST_MANAGER_IMAGE: tgstation-gateway-manager:ci
           GATEWAY_TEST_BACKEND_IMAGE: python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
           GATEWAY_TEST_TRAEFIK_IMAGE: traefik:v3.8.0@sha256:00c9734983e74ae35a1fc18eaee9e9da13f3dde95c4e45b3b8c3b60e0dbd2d17
+          GATEWAY_TEST_REGISTRY_IMAGE: registry:3@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
         run: |
           docker pull "$GATEWAY_TEST_BACKEND_IMAGE"
           docker pull "$GATEWAY_TEST_TRAEFIK_IMAGE"
+          docker pull "$GATEWAY_TEST_REGISTRY_IMAGE"
           python3 -m unittest discover -s tests -p test_slot_router.py -v
 
   image:

@@ -7,6 +7,7 @@ network="${GATEWAY_TRAEFIK_NETWORK:-public}"
 entrypoint="${GATEWAY_TRAEFIK_ENTRYPOINT:-https}"
 host="${GATEWAY_PLAY_HOST:?GATEWAY_PLAY_HOST is required}"
 image="${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}"
+image_policy="${GATEWAY_IMAGE_POLICY:-pull}"
 server="${BYOND_SERVER:?BYOND_SERVER is required}"
 wayland="${SELKIES_WAYLAND:-true}"
 gpu="${GATEWAY_MANAGER_GPU:-false}"
@@ -48,6 +49,13 @@ case "$wayland" in
         exit 1
         ;;
 esac
+case "$image_policy" in
+    pull | local) ;;
+    *)
+        echo "GATEWAY_IMAGE_POLICY must be pull or local" >&2
+        exit 1
+        ;;
+esac
 case "$gpu" in
     true)
         if [ -z "$render_gid" ]; then
@@ -78,30 +86,62 @@ if ! flock -n 9; then
 fi
 docker info >/dev/null
 docker network inspect "$network" >/dev/null
-if ! docker image inspect "$image" >/dev/null 2>&1; then
+if [ "$image_policy" = pull ]; then
     docker pull "$image"
 fi
-image_id="$(docker image inspect --format '{{.Id}}' "$image")"
+
+if ! image_id="$(docker image inspect --format '{{.Id}}' "$image")"; then
+    echo "Player image is unavailable locally: $image" >&2
+    exit 1
+fi
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
-settings="$(printf '%s\n' v3 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" | sha256sum | cut -d ' ' -f 1)"
+settings="$(
+    printf '%s\n' v5 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
+        sha256sum | cut -d ' ' -f 1
+)"
 
 owner_label="io.tgstation-gateway.deployment"
 role_label="io.tgstation-gateway.role"
 slot_label="io.tgstation-gateway.slot"
 
-ensure_volume() {
+volume_exists() {
+    volumes="$(docker volume ls --filter "name=^$1\$" --format '{{.Name}}')" || exit $?
+    [ "$volumes" = "$1" ]
+}
+
+check_volume() {
     volume="$1"
-    if docker volume inspect "$volume" >/dev/null 2>&1; then
-        owner="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.deployment"}}' "$volume")"
-        volume_slot="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.slot"}}' "$volume")"
-        volume_role="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.role"}}' "$volume")"
-        if [ "$owner" != "$deployment" ] || [ "$volume_slot" != "$slot" ] || [ "$volume_role" != "$2" ]; then
-            echo "Refusing to use unowned volume $volume" >&2
-            exit 1
-        fi
-    else
+    owner="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.deployment"}}' "$volume")"
+    volume_slot="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.slot"}}' "$volume")"
+    volume_role="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.role"}}' "$volume")"
+    if [ "$owner" != "$deployment" ] || [ "$volume_slot" != "$slot" ] || [ "$volume_role" != "$2" ]; then
+        echo "Refusing to use unowned volume $volume" >&2
+        exit 1
+    fi
+}
+
+validate_volume() {
+    if volume_exists "$1"; then
+        check_volume "$1" "$2"
+    fi
+}
+
+ensure_volume() {
+    if ! volume_exists "$1"; then
         docker volume create --label "$owner_label=$deployment" --label "$slot_label=$slot" \
-            --label "$role_label=$2" "$volume" >/dev/null
+            --label "$role_label=$2" "$1" >/dev/null
+    fi
+    check_volume "$1" "$2"
+}
+
+validate_container() {
+    project="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.project"}}' "$id")"
+    owner="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.deployment"}}' "$id")"
+    role="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.role"}}' "$id")"
+    owned_slot="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.slot"}}' "$id")"
+    if [ "$project" != tgstation-gateway ] || [ "$owner" != "$deployment" ] || [ "$role" != player ] || [ "$owned_slot" != "$slot" ]; then
+        echo "Refusing to modify unowned container $name" >&2
+        exit 1
     fi
 }
 
@@ -123,6 +163,30 @@ reconcile() {
                     echo "Refusing to modify $name with mismatched ownership labels" >&2
                     exit 1
                 fi
+                ;;
+        esac
+    done
+    number=1
+    while [ "$number" -le "$count" ]; do
+        slot="$(printf '%02d' "$number")"
+        name="$deployment-player$slot"
+        id="$(docker container ls -a --no-trunc --filter "name=^/$name\$" --format '{{.ID}}')"
+        if [ -n "$id" ]; then
+            validate_container
+        fi
+        validate_volume "$deployment-player$slot-wine" wine
+        validate_volume "$deployment-player$slot-byond" byond
+        validate_volume "$deployment-player$slot-data" data
+        number=$((number + 1))
+    done
+    for name in $existing; do
+        case "$name" in
+            "$deployment"-player[0-9][0-9])
+                number="${name#"$deployment"-player}"
+                case "$number" in
+                    0[1-9] | [1-9][0-9]) ;;
+                    *) continue ;;
+                esac
                 numeric="${number#0}"
                 if [ "$numeric" -gt "$count" ]; then
                     echo "Removing extra player $name; retaining its volumes"
@@ -137,16 +201,14 @@ reconcile() {
         name="$deployment-player$slot"
         id="$(docker container ls -a --no-trunc --filter "name=^/$name\$" --format '{{.ID}}')"
         if [ -n "$id" ]; then
-            project="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.project"}}' "$id")"
-            owner="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.deployment"}}' "$id")"
-            role="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.role"}}' "$id")"
-            owned_slot="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.slot"}}' "$id")"
-            if [ "$project" != tgstation-gateway ] || [ "$owner" != "$deployment" ] || [ "$role" != player ] || [ "$owned_slot" != "$slot" ]; then
-                echo "Refusing to modify unowned container $name" >&2
-                exit 1
-            fi
+            validate_container
             old_settings="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.settings"}}' "$id")"
-            if [ "$old_settings" != "$settings" ]; then
+            old_generation="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.startup-generation"}}' "$id")"
+            if [ "$reset_players" = true ] && [ "$old_generation" != "$generation" ]; then
+                echo "Recreating player $name with retained data after manager startup"
+                docker rm -f "$id" >/dev/null
+                id=""
+            elif [ "$old_settings" != "$settings" ]; then
                 echo "Recreating player $name with updated settings"
                 docker rm -f "$id" >/dev/null
                 id=""
@@ -159,9 +221,32 @@ reconcile() {
         fi
         if [ -z "$id" ]; then
             wine="$deployment-player$slot-wine"
+            byond="$deployment-player$slot-byond"
             data="$deployment-player$slot-data"
-            ensure_volume "$wine" wine
+            ensure_volume "$byond" byond
             ensure_volume "$data" data
+            set --
+            if volume_exists "$wine"; then
+                check_volume "$wine" wine
+                set -- --mount "type=volume,source=$wine,target=/legacy,readonly,volume-nocopy"
+            fi
+            docker run --rm --name "$name-migration" --network none --user 0:0 --entrypoint /bin/sh \
+                --mount "type=volume,source=$byond,target=/target,volume-nocopy" \
+                "$@" "$image_id" -ec '
+                    if [ ! -f /target/.gateway-migration-complete ]; then
+                        source=/legacy/drive_c/users/steamuser/Documents/BYOND
+                        if [ -L "$source" ] || [ -L /legacy/drive_c/users/steamuser/Documents ]; then
+                            echo "Cannot migrate a symlinked BYOND documents directory" >&2
+                            exit 1
+                        fi
+                        mkdir -p /target/documents
+                        if [ -d "$source" ]; then
+                            cp -a "$source/." /target/documents/
+                        fi
+                        chown 1000:1000 /target/documents
+                        touch /target/.gateway-migration-complete
+                    fi
+                ' >/dev/null
             echo "Starting player $name"
             set --
             if [ "$gpu" = true ]; then
@@ -170,7 +255,7 @@ reconcile() {
             docker run -d --name "$name" --platform linux/amd64 --init \
                 "$@" \
                 --restart unless-stopped --network "$network" \
-                --memory 4g --cpus 2 --pids-limit 512 --shm-size 2g \
+                --memory 4g --cpus 2 --pids-limit 2048 --shm-size 2g \
                 --security-opt seccomp=/opt/gateway/seccomp.json \
                 --health-cmd "curl -fsS --max-time 2 -o /dev/null http://localhost:8080/LGplayer$slot/api/health" \
                 --health-interval 5s --health-timeout 5s --health-start-period 60s --health-retries 3 \
@@ -179,6 +264,7 @@ reconcile() {
                 --label "$slot_label=$slot" \
                 --label "io.tgstation-gateway.account=LGplayer$slot" \
                 --label "io.tgstation-gateway.settings=$settings" \
+                --label "io.tgstation-gateway.startup-generation=$generation" \
                 --label traefik.enable=true \
                 --label "traefik.docker.network=$network" \
                 --label "traefik.http.routers.$name.rule=Host(\`$host\`) && PathPrefix(\`/LGplayer$slot/\`)" \
@@ -194,19 +280,32 @@ reconcile() {
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Authenticated-User-Email=" \
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Id=" \
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Secret=" \
-                -e "BYOND_SERVER=$server" -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
+                -e "BYOND_SERVER=$server" -e "BYOND_ACCOUNT=LGplayer$slot" \
+                -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
                 -e "SELKIES_MODE=websockets" -e "SELKIES_WAYLAND=$wayland" \
                 -e SELKIES_GAMEPAD_ENABLED=false -e SELKIES_MICROPHONE_ENABLED=false \
                 -e SELKIES_WEBCAM_ENABLED=false -e SELKIES_FILE_TRANSFERS=none \
                 -e SELKIES_PRINTING_ENABLED=false \
-                -v "$wine:/home/ubuntu/.wine" -v "$data:/home/ubuntu/.local/share" \
+                --mount "type=volume,source=$byond,target=/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND,volume-subpath=documents" \
+                -v "$data:/home/ubuntu/.local/share" \
                 "$image_id" >/dev/null
         fi
         number=$((number + 1))
     done
 }
 
+generation_file=/run/gateway-lock/startup-generation
+if [ ! -f "$generation_file" ]; then
+    cat /proc/sys/kernel/random/uuid >"$generation_file.tmp"
+    mv -f "$generation_file.tmp" "$generation_file"
+fi
+generation="$(cat "$generation_file")"
+reset_players=true
 while :; do
     reconcile
+    if [ "$reset_players" = true ]; then
+        rm -f "$generation_file"
+    fi
+    reset_players=false
     sleep 10
 done

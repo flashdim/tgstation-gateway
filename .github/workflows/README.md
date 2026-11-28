@@ -1,7 +1,8 @@
 # GitHub Actions workflows
 
 `ci.yml` runs formatting, image builds, unit tests, Compose validation, smoke
-tests for both display modes, and Wine runtime checks. After formatting passes,
+tests for both display modes, and Wine runtime checks. The X11 player smoke test
+also queries Wine's BYOND `userpath` registry value. After formatting passes,
 unit tests run in a separate job in parallel with the image build and development
 image push. Unit-test failures fail the workflow but do not block that push.
 CI publishes `dev` for main and `dev-pr<number>` for pull requests from this
@@ -23,8 +24,9 @@ fails, other images may already be published for that release. Re-run the
 failed job for transient failures; otherwise fix the cause in a new release.
 After unit tests pass, `landing-screenshot` renders the landing page with five
 slots in Chromium and uploads a desktop `landing-desktop.png` as an unzipped
-artifact, downloadable from the run summary. It is a
-visual aid, not a gameplay check.
+artifact, downloadable from the run summary. It uses Ubuntu 24.04 because the
+Ubuntu 26.04 runner's Microsoft package repository returned HTTP 403 during
+Playwright's dependency installation. It is a visual aid, not a gameplay check.
 The landing image is smoke-tested by generating slots from `GATEWAY_PLAY_HOST`
 and related environment variables, checking the generated links, rejecting an
 invalid host, and checking that it serves the page files and attribution.
@@ -51,18 +53,18 @@ image, authenticated routing, Selkies disconnect behavior or gameplay.
 Both workflows test the locally built manager image in the managed Traefik
 Compose deployment with pinned Traefik and mock backends, including HTTPS
 routes, WebSocket upgrades, slot-count reconciliation and retained volumes.
+The mock player image is pushed to a temporary loopback-only registry so the
+manager exercises its startup pull, including on restarts.
+Restarting the manager must recreate both players and retain markers in their
+Wine and data volumes; subsequent reconciliation must not recreate them again.
+An unowned later-slot container must leave existing players untouched across
+manager retries; unit fixtures also exercise interrupted startup recovery.
 The test verifies the running manager uses the image built for that job. This
 does not exercise Cloudflare or live gameplay.
 
-For an explicitly enabled manual `ci.yml` dispatch, `check_byond_key` runs a
-mocked launcher provisioning check using the complete pager-generated key file
-stored as the `BYOND_TEST_KEY` Actions secret. The key is written to a
-private temporary file on the runner, removed afterward, and not passed as a
-container environment variable or saved in an image, cache or artifact.
-The check skips with a reason if the secret is unavailable; ordinary and
-fork pull-request runs keep running the non-credential tests. This uses a
-mock Wine executable and does not verify BYOND login, key portability, streaming
-or gameplay.
+The launcher unit test uses a mock Wine executable to verify pager startup and
+configuration. Login and saving credentials are operator actions in the pager;
+CI does not enter credentials or authenticate real accounts.
 
 ## Build caches
 

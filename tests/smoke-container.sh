@@ -44,6 +44,14 @@ for _ in {1..120}; do
             fi
             docker exec "$container" /usr/local/bin/healthcheck
             docker exec "$container" sh -ec '
+                output="$(wine reg query '"'"'HKCU\Software\Dantom\BYOND'"'"' /v userpath)"
+                value="$(printf "%s\n" "$output" |
+                    awk '"'"'{ sub(/\r$/, "") } $1 == "userpath" && $2 == "REG_SZ" && NF == 3 { print $3 }'"'"')"
+                if [ "$value" != '"'"'C:\users\steamuser\Documents\BYOND\'"'"' ]; then
+                    echo "BYOND userpath registry value does not match the key directory" >&2
+                    exit 1
+                fi'
+            docker exec "$container" sh -ec '
                 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}/selkies-session-bus"
                 test "$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
                     '"'"'var p = panels()[0]; print([p.alignment,p.lengthMode,p.hiding,p.opacity,p.floating,p.height].join(",").toString());'"'"')" \

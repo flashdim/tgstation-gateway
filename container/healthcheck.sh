@@ -1,13 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ -n "${BYOND_SERVER:-}" ]; then
-    process='/dreamseeker[.]exe([[:space:]]|$)'
-    client='Dream Seeker'
-else
-    process='/byond[.]exe([[:space:]]|$)'
-    client='BYOND pager'
-fi
+process='(^|[\\/])(byond|dreamseeker)[.]exe"?([[:space:]]|$)'
+client='BYOND client'
 
 if ! pgrep -f "$process" >/dev/null; then
     echo "$client is not running" >&2

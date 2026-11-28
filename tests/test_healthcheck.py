@@ -6,6 +6,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PAGER_PROCESS = r'(^|[\\/])(byond|dreamseeker)[.]exe"?([[:space:]]|$)'
 
 
 class HealthcheckTest(unittest.TestCase):
@@ -19,7 +20,7 @@ class HealthcheckTest(unittest.TestCase):
         commands = {
             "pgrep": (
                 'printf "pgrep %s\\n" "$*" >> "$COMMAND_LOG"\n'
-                'test "$1" = -f && test "$2" = "${EXPECTED_PROCESS:-/byond[.]exe([[:space:]]|$)}" && '
+                'test "$1" = -f && test "$2" = "$EXPECTED_PROCESS" && '
                 'test "${PAGER_RUNNING:-1}" = 1'
             ),
             "curl": (
@@ -41,9 +42,16 @@ class HealthcheckTest(unittest.TestCase):
             **os.environ,
             "PATH": f"{self.bin}:{os.environ['PATH']}",
             "COMMAND_LOG": str(self.log),
+            "EXPECTED_PROCESS": PAGER_PROCESS,
             **extra_env,
         }
-        for key in ("SELKIES_SUBFOLDER", "SUBFOLDER", "SELKIES_PORT", "BYOND_SERVER"):
+        for key in (
+            "SELKIES_SUBFOLDER",
+            "SUBFOLDER",
+            "SELKIES_PORT",
+            "BYOND_SERVER",
+            "BYOND_PASSWORD_FILE",
+        ):
             if key not in extra_env:
                 env.pop(key, None)
         return subprocess.run(
@@ -54,32 +62,31 @@ class HealthcheckTest(unittest.TestCase):
             timeout=5,
         )
 
-    def test_requires_pager_even_if_selkies_is_available(self):
+    def test_requires_client_even_if_selkies_is_available(self):
         result = self.check(PAGER_RUNNING="0", HTTP_OK="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("BYOND pager is not running", result.stderr)
+        self.assertIn("BYOND client is not running", result.stderr)
 
     def test_requires_selkies_when_pager_is_running(self):
         result = self.check()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Selkies health endpoint is unavailable", result.stderr)
 
-    def test_requires_dreamseeker_in_direct_mode(self):
+    def test_requires_client_when_server_is_configured(self):
         env = {
             "BYOND_SERVER": "example.org:1337",
-            "EXPECTED_PROCESS": "/dreamseeker[.]exe([[:space:]]|$)",
             "HTTP_OK": "1",
         }
         result = self.check(**env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.log.read_text().splitlines()[0],
-            "pgrep -f /dreamseeker[.]exe([[:space:]]|$)",
+            f"pgrep -f {PAGER_PROCESS}",
         )
 
         result = self.check(**env, PAGER_RUNNING="0")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Dream Seeker is not running", result.stderr)
+        self.assertIn("BYOND client is not running", result.stderr)
 
     def test_http_fallback_uses_configured_port_and_prefix(self):
         result = self.check(
@@ -89,7 +96,7 @@ class HealthcheckTest(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(),
             [
-                "pgrep -f /byond[.]exe([[:space:]]|$)",
+                f"pgrep -f {PAGER_PROCESS}",
                 "curl -fs -k --max-time 2 -o /dev/null https://localhost:8081/player/api/health",
                 "curl -fsS --max-time 2 -o /dev/null http://localhost:8081/player/api/health",
             ],

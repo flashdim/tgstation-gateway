@@ -1,7 +1,11 @@
+import ctypes
 import os
 from pathlib import Path
+import select
+import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -9,6 +13,156 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DesktopSessionTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("Xvfb"), "Xvfb is unavailable")
+    def test_x11_tray_readiness_requires_a_live_selection_owner(self):
+        read_fd, write_fd = os.pipe()
+        server = subprocess.Popen(
+            ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", "800x600x24"],
+            pass_fds=(write_fd,),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        os.close(write_fd)
+        try:
+            self.assertTrue(
+                select.select([read_fd], [], [], 5)[0], "Xvfb did not start"
+            )
+            display_name = f":{os.read(read_fd, 32).decode().strip()}"
+            env = {**os.environ, "DISPLAY": display_name}
+            env.pop("XAUTHORITY", None)
+            script = ROOT / "container/x11-tray-ready.py"
+
+            def readiness():
+                return subprocess.run(
+                    ["python3", str(script)], env=env, capture_output=True, timeout=5
+                ).returncode
+
+            self.assertNotEqual(readiness(), 0)
+            x11 = ctypes.CDLL("libX11.so.6")
+            x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+            x11.XOpenDisplay.restype = ctypes.c_void_p
+            x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+            x11.XDefaultRootWindow.restype = ctypes.c_ulong
+            x11.XCreateSimpleWindow.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint,
+                ctypes.c_uint,
+                ctypes.c_uint,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+            ]
+            x11.XCreateSimpleWindow.restype = ctypes.c_ulong
+            x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+            x11.XInternAtom.restype = ctypes.c_ulong
+            x11.XSetSelectionOwner.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+            ]
+            x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+            display = x11.XOpenDisplay(display_name.encode())
+            self.assertTrue(display)
+            try:
+                root = x11.XDefaultRootWindow(display)
+                window = x11.XCreateSimpleWindow(display, root, 0, 0, 1, 1, 0, 0, 0)
+                atom = x11.XInternAtom(display, b"_NET_SYSTEM_TRAY_S0", 0)
+                x11.XSetSelectionOwner(display, atom, window, 0)
+                x11.XSync(display, 0)
+                self.assertEqual(readiness(), 0)
+            finally:
+                x11.XCloseDisplay(display)
+            self.assertNotEqual(readiness(), 0)
+        finally:
+            os.close(read_fd)
+            server.terminate()
+            server.wait(timeout=5)
+
+    def test_plasma_readiness_marker_requires_stable_session(self):
+        for failure in (False, True):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                commands = root / "bin"
+                commands.mkdir()
+                for name, body in {
+                    "cat": 'echo "fixture script"',
+                    "sleep": "exec /bin/sleep 0.02",
+                    "qdbus6": (
+                        'case "$3" in\n'
+                        "  org.freedesktop.DBus.GetId) echo bus-id ;;\n"
+                        "  org.freedesktop.DBus.GetNameOwner)\n"
+                        '    if [ "$FAIL_CONFIG" = 1 ]; then echo :1.9; '
+                        'elif [ -f "$NEW_OWNER" ]; then echo :1.10; '
+                        'elif [ ! -f "$SEEN_OWNER" ]; then touch "$SEEN_OWNER"; echo :1.8; '
+                        "else echo :1.9; fi ;;\n"
+                        "  org.kde.PlasmaShell.evaluateScript)\n"
+                        '    echo evaluation >> "$EVAL_LOG"\n'
+                        '    if [ "$FAIL_CONFIG" = 1 ]; then echo waiting; else echo configured; fi ;;\n'
+                        "  *) exit 1 ;;\n"
+                        "esac"
+                    ),
+                }.items():
+                    path = commands / name
+                    path.write_text(f"#!/bin/sh\n{body}\n")
+                    path.chmod(0o755)
+                marker = root / "byond-plasma-ready"
+                marker.write_text("old-bus\n:1.2\n")
+                args = {
+                    "env": {
+                        **os.environ,
+                        "PATH": f"{commands}:{os.environ['PATH']}",
+                        "XDG_RUNTIME_DIR": str(root),
+                        "FAIL_CONFIG": "1" if failure else "0",
+                        "SEEN_OWNER": str(root / "seen-owner"),
+                        "NEW_OWNER": str(root / "new-owner"),
+                        "EVAL_LOG": str(root / "evaluations"),
+                    },
+                    "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL,
+                }
+
+                process = subprocess.Popen(
+                    ["sh", str(ROOT / "container/configure-plasma.sh")], **args
+                )
+                try:
+
+                    def wait_until(predicate):
+                        deadline = time.monotonic() + 10
+                        while not predicate():
+                            self.assertIsNone(process.poll(), "Plasma monitor exited")
+                            self.assertLess(time.monotonic(), deadline)
+                            time.sleep(0.02)
+
+                    evaluations = root / "evaluations"
+                    if failure:
+                        wait_until(
+                            lambda: (
+                                evaluations.exists()
+                                and evaluations.read_text().count("\n") >= 2
+                            )
+                        )
+                        self.assertEqual(marker.read_text(), "old-bus\n:1.2\n")
+                        continue
+
+                    wait_until(lambda: marker.read_text() == "bus-id\n:1.9\n")
+                    self.assertEqual(marker.read_text(), "bus-id\n:1.9\n")
+                    self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+                    self.assertEqual(evaluations.read_text().count("\n"), 2)
+                    self.assertIsNone(process.poll())
+                    (root / "new-owner").touch()
+                    wait_until(lambda: marker.read_text() == "bus-id\n:1.10\n")
+                    self.assertEqual(evaluations.read_text().count("\n"), 3)
+                finally:
+                    process.terminate()
+                    process.wait(timeout=5)
+
     def test_plasma_task_manager_and_tray_are_configured_at_login(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         layout = (ROOT / "container/plasma-layout.js").read_text()
@@ -92,12 +246,14 @@ class DesktopSessionTest(unittest.TestCase):
                     **os.environ,
                     "PATH": f"{root}:{os.environ['PATH']}",
                     "RESET_LOG": str(root / "reset-log"),
+                    "XDG_RUNTIME_DIR": str(root),
                 },
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
             self.assertEqual(result.returncode, 23)
+            self.assertFalse((root / "byond-reset-requested").exists())
             self.assertEqual(
                 (root / "reset-log").read_text().splitlines(),
                 ["-k", "/etc/service/byond"],
@@ -173,6 +329,21 @@ class DesktopSessionTest(unittest.TestCase):
     def test_selkies_uses_stock_presence_without_reset_hook(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         compose = (ROOT / "examples/compose.yaml").read_text()
+        self.assertIn(
+            "container/run-game-connection.sh /etc/service/byond-connect/run",
+            dockerfile,
+        )
+        self.assertIn(
+            "container/connect-on-selkies.py /usr/local/bin/connect-on-selkies.py",
+            dockerfile,
+        )
+        self.assertIn(
+            "container/byond-key-check.py /usr/local/bin/byond-key-check.py",
+            dockerfile,
+        )
+        self.assertIn(
+            "container/byond-game.sh /usr/local/bin/byond-game.sh", dockerfile
+        )
         self.assertNotIn("SELKIES_RUN_AFTER_CONNECT", dockerfile)
         self.assertNotIn("SELKIES_RUN_AFTER_CONTROLLER_", dockerfile)
         self.assertNotIn("selkies-controller-presence.patch", dockerfile)

@@ -2,13 +2,10 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import stat
 import subprocess
 import sys
 import tempfile
 import time
-from types import SimpleNamespace
-from unittest.mock import patch
 import unittest
 import uuid
 
@@ -25,6 +22,11 @@ class FixedSlotsTest(unittest.TestCase):
         return {
             "PATH": os.environ["PATH"],
             "HOME": os.environ["HOME"],
+            **(
+                {"DOCKER_CONFIG": os.environ["DOCKER_CONFIG"]}
+                if "DOCKER_CONFIG" in os.environ
+                else {}
+            ),
             "GATEWAY_SLOT_COUNT": "2",
             "GATEWAY_SLOT_PATH": "/{account}/",
             "GATEWAY_PORT": "18080",
@@ -40,6 +42,8 @@ class FixedSlotsTest(unittest.TestCase):
         self.assertEqual(second["ports"][0]["published"], "18081")
         self.assertEqual(first["environment"]["SELKIES_SUBFOLDER"], "/LGplayer01/")
         self.assertEqual(second["environment"]["SELKIES_SUBFOLDER"], "/LGplayer02/")
+        self.assertEqual(first["environment"]["BYOND_ACCOUNT"], "LGplayer01")
+        self.assertEqual(second["environment"]["BYOND_ACCOUNT"], "LGplayer02")
         self.assertEqual(first["ports"][0]["host_ip"], "127.0.0.1")
         self.assertEqual(first["restart"], "unless-stopped")
         self.assertEqual(second["restart"], "unless-stopped")
@@ -61,27 +65,10 @@ class FixedSlotsTest(unittest.TestCase):
             self.environment(GATEWAY_ACCOUNT_PREFIX="Other")
         )
         self.assertNotEqual(set(result["volumes"]), set(changed["volumes"]))
-
-    def test_each_slot_receives_only_its_own_key_path(self):
-        with tempfile.TemporaryDirectory() as directory:
-            for account in ("LGplayer01", "LGplayer02"):
-                (Path(directory) / f"{account}_key.txt").write_text("private\n")
-            result = fixed_slots.compose_config(
-                self.environment(GATEWAY_SECRET_DIRECTORY=directory)
-            )
-            for index in (1, 2):
-                service = result["services"][f"player{index:02}"]
-                secret = next(
-                    mount
-                    for mount in service["volumes"]
-                    if mount["target"] == "/run/secrets/byond_key.txt"
-                )
-                self.assertEqual(
-                    secret["source"], f"{directory}/LGplayer{index:02}_key.txt"
-                )
-                self.assertTrue(secret["read_only"])
-                self.assertFalse(secret["bind"]["create_host_path"])
-            self.assertNotIn("private", json.dumps(result))
+        self.assertEqual(
+            changed["services"]["player01"]["environment"]["BYOND_ACCOUNT"],
+            "Other01",
+        )
 
     def test_configured_capacity_and_resource_limits(self):
         for count in (1, 3, 99):
@@ -100,54 +87,21 @@ class FixedSlotsTest(unittest.TestCase):
                     )
                     self.assertEqual(service["mem_limit"], "4g")
                     self.assertEqual(service["cpus"], 2)
-                    self.assertEqual(service["pids_limit"], 512)
+                    self.assertEqual(service["pids_limit"], 2048)
                     self.assertEqual(int(service["shm_size"]), 2 * 1024**3)
 
-    def test_invalid_key_port_or_slot_configuration_fails(self):
+    def test_invalid_port_or_slot_configuration_fails(self):
         for overrides in (
             {"GATEWAY_PORT": "65535"},
             {"GATEWAY_PORT": "0"},
             {"GATEWAY_SLOT_PATH": "/"},
             {"GATEWAY_SLOT_PATH": "/{account}"},
-            {"GATEWAY_SECRET_DIRECTORY": "relative"},
             {"BYOND_SERVER": ""},
             {"GATEWAY_FIXED_LANDING": "1", "GATEWAY_LANDING_PORT": "18081"},
         ):
             with self.subTest(overrides=overrides):
                 with self.assertRaises(fixed_slots.ConfigError):
                     fixed_slots.compose_config(self.environment(**overrides))
-        with tempfile.TemporaryDirectory() as directory:
-            (Path(directory) / "LGplayer01_key.txt").write_text("key")
-            (Path(directory) / "LGplayer02_key.txt").symlink_to(
-                Path(directory) / "LGplayer01_key.txt"
-            )
-            with self.assertRaises(fixed_slots.ConfigError):
-                fixed_slots.compose_config(
-                    self.environment(GATEWAY_SECRET_DIRECTORY=directory)
-                )
-        with tempfile.TemporaryDirectory() as directory:
-            for account in ("LGplayer01", "LGplayer02"):
-                (Path(directory) / f"{account}_key.txt").write_text("key")
-            owner_group_only = SimpleNamespace(
-                st_mode=stat.S_IFREG | 0o604,
-                st_size=3,
-                st_nlink=1,
-                st_uid=0,
-            )
-            with patch.object(fixed_slots.os, "fstat", return_value=owner_group_only):
-                with self.assertRaises(fixed_slots.ConfigError):
-                    fixed_slots.compose_config(
-                        self.environment(GATEWAY_SECRET_DIRECTORY=directory)
-                    )
-            (Path(directory) / "LGplayer02_key.txt").unlink()
-            os.link(
-                Path(directory) / "LGplayer01_key.txt",
-                Path(directory) / "LGplayer02_key.txt",
-            )
-            with self.assertRaises(fixed_slots.ConfigError):
-                fixed_slots.compose_config(
-                    self.environment(GATEWAY_SECRET_DIRECTORY=directory)
-                )
 
     def test_compose_interpolation_is_escaped(self):
         value = {"environment": {"VALUE": "literal $VARIABLE"}}
@@ -425,12 +379,7 @@ class FixedSlotsDockerTest(FixedSlotsTest):
 
     def test_isolation_and_recreation_with_persistent_account_data(self):
         with tempfile.TemporaryDirectory() as directory:
-            for number in (1, 2):
-                key = Path(directory) / f"LGplayer{number:02}_key.txt"
-                key.write_text(f"fixture-{number}")
-                key.chmod(0o644)
             env = self.environment(
-                GATEWAY_SECRET_DIRECTORY=directory,
                 GATEWAY_DEPLOYMENT_ID=uuid.uuid4().hex,
             )
             config = fixed_slots.compose_config(env)
@@ -455,28 +404,6 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                 run("up", "-d")
                 for number in (1, 2):
                     service = f"player{number:02}"
-                    self.assertEqual(
-                        run("exec", "-T", service, "cat", "/run/secrets/byond_key.txt"),
-                        f"fixture-{number}",
-                    )
-                    write_secret = subprocess.run(
-                        [
-                            *compose,
-                            "exec",
-                            "-T",
-                            service,
-                            "sh",
-                            "-c",
-                            "echo changed > /run/secrets/byond_key.txt",
-                        ],
-                        capture_output=True,
-                        text=True,
-                    )
-                    self.assertNotEqual(write_secret.returncode, 0)
-                    self.assertEqual(
-                        (Path(directory) / f"LGplayer{number:02}_key.txt").read_text(),
-                        f"fixture-{number}",
-                    )
                     container_id = run("ps", "-q", service)
                     host_config = json.loads(
                         subprocess.run(
@@ -494,7 +421,7 @@ class FixedSlotsDockerTest(FixedSlotsTest):
                     )
                     self.assertEqual(host_config["Memory"], 4 * 1024**3)
                     self.assertEqual(host_config["NanoCpus"], 2 * 10**9)
-                    self.assertEqual(host_config["PidsLimit"], 512)
+                    self.assertEqual(host_config["PidsLimit"], 2048)
                     self.assertEqual(host_config["ShmSize"], 2 * 1024**3)
                     run(
                         "exec",

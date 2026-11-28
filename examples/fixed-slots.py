@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import re
-import stat
 import subprocess
 import sys
 
@@ -30,9 +29,6 @@ def compose_config(env):
     first_port = int(port_text)
     if first_port < 1 or first_port + len(config.slots) - 1 > 65535:
         raise ConfigError("Player ports exceed the TCP port range")
-    secret_dir = env.get("GATEWAY_SECRET_DIRECTORY", "")
-    if secret_dir and not os.path.isabs(secret_dir):
-        raise ConfigError("GATEWAY_SECRET_DIRECTORY must be an absolute path")
     command = [
         "docker",
         "compose",
@@ -60,7 +56,7 @@ def compose_config(env):
     player["restart"] = "unless-stopped"
     player["mem_limit"] = "4g"
     player["cpus"] = 2
-    player["pids_limit"] = 512
+    player["pids_limit"] = 2048
     services = {}
     volumes = {}
     networks = {}
@@ -71,6 +67,7 @@ def compose_config(env):
         service["networks"] = {network: None}
         service["ports"][0]["published"] = str(first_port + slot.number - 1)
         service["environment"]["SELKIES_SUBFOLDER"] = slot.path
+        service["environment"]["BYOND_ACCOUNT"] = slot.account
         service["labels"] = {
             "io.tgstation-gateway.project": "tgstation-gateway",
             "io.tgstation-gateway.deployment": config.deployment_id,
@@ -88,41 +85,6 @@ def compose_config(env):
             service["volumes"].append(
                 {"type": "volume", "source": name, "target": target}
             )
-        if secret_dir:
-            path = Path(secret_dir) / f"{slot.account}_key.txt"
-            try:
-                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                try:
-                    info = os.fstat(fd)
-                    valid = (
-                        stat.S_ISREG(info.st_mode)
-                        and info.st_size > 0
-                        and info.st_nlink == 1
-                        and (
-                            (info.st_uid == 1000 and info.st_mode & stat.S_IRUSR)
-                            or (
-                                info.st_uid != 1000
-                                and info.st_mode & stat.S_IRGRP
-                                and info.st_mode & stat.S_IROTH
-                            )
-                        )
-                    )
-                finally:
-                    os.close(fd)
-            except OSError:
-                valid = False
-            if not valid:
-                raise ConfigError(f"Missing or invalid key file for {slot.account}")
-            service["volumes"].append(
-                {
-                    "type": "bind",
-                    "source": str(path),
-                    "target": "/run/secrets/byond_key.txt",
-                    "read_only": True,
-                    "bind": {"create_host_path": False},
-                }
-            )
-            service["environment"]["BYOND_KEY_FILE"] = "/run/secrets/byond_key.txt"
         services[f"player{slot.number:02}"] = service
     if env.get("GATEWAY_FIXED_LANDING") == "1":
         landing = base["services"]["landing"]

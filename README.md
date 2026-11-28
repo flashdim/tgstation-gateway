@@ -206,7 +206,7 @@ exited container and, when the daemon starts, restarts containers that were not
 manually stopped. A manual stop persists across daemon restarts; an unhealthy
 but running container is not restarted by this policy. Removing a container
 externally also requires another `up`. The example sets 4 GiB memory, two CPUs,
-512 PIDs and 2 GiB shared memory per player; these are not measured recommendations. Monitor
+2048 PIDs (Dream Seeker with WebView2 exhausted 512 and crashed) and 2 GiB shared memory per player; these are not measured recommendations. Monitor
 startup and health and ensure sufficient host resources and Docker bridge address
 pools for all slots. `docker compose -f
 /tmp/gateway-compose.json down` stops the deployment but retains the named
@@ -244,7 +244,7 @@ mounts the Docker socket; the landing page and player containers do
 not. Do not mount that socket in other services or use this deployment on an
 untrusted Docker host.
 
-From a repository checkout, with Docker Compose 2.23.1 or newer and an existing
+From a repository checkout, with Docker Engine 28 or newer, Docker Compose 2.23.1 or newer and an existing
 `public` network shared by Traefik and the BYOND server:
 
 ```sh
@@ -289,15 +289,79 @@ Compose project, `docker compose -f examples/compose.traefik.yaml up -d
 orphan services in that project. Inspect them before using it.
 
 Set `GATEWAY_SLOT_COUNT` to 1–99 and rerun `docker compose ... up -d` after
-changing it. The manager removes extra owned containers but retains their Wine
-and data volumes; increasing the count restores those account volumes. It
+changing it. The manager removes extra owned containers but retains their BYOND
+and data volumes until those slots are configured again. It
 refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
-To update an existing image tag, pull it first and restart the manager.
+By default (`GATEWAY_IMAGE_POLICY=pull`), the manager pulls the configured
+player image on every startup; restart it to update an existing image tag. The
+registry must be reachable and accessible to the manager, which does not
+automatically use the host's Docker login credentials. To use a locally built
+or privately pre-pulled image instead, build or pull it on the Docker host,
+set `GATEWAY_IMAGE` to its exact local tag or digest and set
+`GATEWAY_IMAGE_POLICY=local` before running Compose. In local mode the manager
+never pulls and fails before changing players if the image is missing. To
+update it, build or pull the new image on the host and restart the manager.
+Ensure the host image supports `linux/amd64`, as required by managed players.
+**A new manager startup recreates all configured owned player containers,
+retaining their BYOND documents and data volumes.** This interrupts active sessions but
+preserves saved logins, settings and player data. Before making changes, the
+manager validates ownership of all configured containers and volumes. If
+startup is interrupted, retries resume that startup without resetting players
+already recreated for it. The startup journal is stored in the Compose
+`manager_lock` volume; deleting that volume during an interrupted startup loses
+the progress record. Volumes left behind by missing containers are reused
+after checking their ownership labels. Unowned containers and volumes are
+rejected, not deleted. Subsequent reconciliation passes only start stopped
+players or recreate missing or changed ones, also retaining their volumes.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
-resource limits; this deployment does not provision per-account BYOND key
-files. Container startup does not establish playable sessions.
+resource limits. Container startup does not establish playable sessions.
+
+Log in once through each player's desktop using its intended BYOND account
+(`LGplayer01`, `LGplayer02`, etc.). If the pager starts as Guest, use **Logout**
+or **Ctrl+L**, then **Login**. Enter credentials yourself and check **Save password**
+and **Automatically login when program starts**. The saved login remains in that
+player's BYOND documents volume across container recreation and manager restarts. To rotate
+credentials, sign out and save the replacement through that player's pager.
+Until a matching `key.txt` exists, only the pager runs. After saving the login,
+click **Reset Session** (or disconnect and reconnect) to start Dream Seeker.
+
+The key-file check is not proof of an authenticated session: saved keys for
+multiple accounts can coexist, and the pager may still be signed in as Guest
+or another account. The launcher does not fill dialogs, send account shortcuts,
+or verify which account is active. Check the pager and the game account yourself.
+
+Password-file provisioning and the native login helper have been removed.
+When upgrading, remove `examples/compose.traefik.passwords.yaml` from your Compose
+commands and unset `GATEWAY_SECRET_DIRECTORY` and `BYOND_PASSWORD_FILE`.
+The manager now sets `BYOND_ACCOUNT` to each slot's account name. Use the player
+and manager images from the same revision.
+**Stop the old manager before upgrading:** restarting the old manager still
+erases player volumes. Do not use `down -v` or delete player volumes when updating.
+Previously erased login data cannot be recovered by this change.
+
+For each managed slot, the manager copies
+`drive_c/users/steamuser/Documents/BYOND` from its ownership-validated legacy
+`-wine` volume into a separate `-byond` volume once, after stopping the old
+player. It retains the old volume as a sensitive backup. Interrupted copies are
+retried before the player starts; a symlinked legacy Documents or BYOND directory
+is rejected and requires operator inspection. Back up the old volumes before
+upgrading and verify each saved login and settings afterward. Data elsewhere in
+the old Wine prefix is not migrated. Remove a legacy volume only after verification
+and according to your data-retention policy; it may contain credentials.
+
+The managed player mounts only the BYOND documents volume into the image's Wine
+prefix, so recreating a player uses the BYOND installation and Wine prefix from
+the new image. A container restart without recreation does not replace its image.
+The generated fixed-slot deployment described above still mounts the entire Wine
+prefix and therefore retains its old BYOND installation on image updates; its
+prefix must be upgraded separately while preserving saved credentials.
+
+The launcher sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
+Treat BYOND documents, legacy Wine volumes and their backups as sensitive: they contain saved credentials.
+Use dedicated accounts, restrict access to each desktop, and never commit credentials
+or put them in environment variables, command lines, Compose files, images or logs.
 
 For managed players, Docker health checks the Selkies endpoint, not Dream
 Seeker. This lets Traefik route to the desktop even if the BYOND pager needs
@@ -322,8 +386,9 @@ in the shell or Compose `.env` file. Obtain that override with
 `stat -c '%g' /dev/dri/renderD128`, using your intended GPU's render node.
 The manager passes `/dev/dri:/dev/dri` and that supplementary group to
 every player, not to the landing container. GPU access is disabled
-by default. Changing the GPU setting or group ID recreates owned players while
-retaining their volumes. Enabling it requires `/dev/dri` on the daemon host;
+by default. Changing the GPU setting or group ID requires a manager restart,
+which recreates configured players while retaining their volumes as described above.
+Enabling it requires `/dev/dri` on the daemon host;
 Compose refuses a missing bind-mount source rather than creating it.
 Use both Compose files for subsequent GPU deployment commands.
 This exposes all host DRI devices to
@@ -558,32 +623,18 @@ real login and gameplay verification first, as required by the roadmap, and
 record the environment and results separately from the fixtures.
 
 For credential rotation on a disposable deployment, record non-sensitive
-markers in both accounts' volumes, stop the intended service, replace its key,
-and recreate that service as described below. Verify only the intended
-account receives the replacement, its data persists, and the other account
-is unchanged; do not log key contents. For resource exhaustion, use a
+markers in both accounts' volumes, sign out in the intended account's pager,
+enter and save its replacement credentials, and recreate that service.
+Verify only the intended account receives the replacement, its data persists,
+and the other account is unchanged; do not log credentials. For resource exhaustion, use a
 disposable host with bounded test workloads and monitoring; record the
 triggered limit, service and host behavior, retained data and recovery after
 restoring capacity. Do not intentionally exhaust a shared or production host.
 Neither procedure has been verified against the player image.
 
-Optionally set `GATEWAY_SECRET_DIRECTORY` to an absolute, protected host
-directory containing a nonempty `<account>_key.txt` for every slot. The
-generator mounts only the matching file read-only and sets `BYOND_KEY_FILE` to
-its container path. Keys must be readable by the generator and container UID
-1000; owner UID 1000 and mode `0400` is one option. Final symlinks and hard
-links are rejected. Protect parent directories from untrusted changes and keep
-files stable until containers stop; validation and Docker mounting are not
-atomic. User namespace remapping and remote daemons require separate permission
-validation. Match keys to accounts manually; never store credentials in
-environment values, command lines, images, logs or build caches. Docker
-metadata contains the host paths. To rotate a key, stop its service, replace
-the source file, and recreate it with Compose.
-
 The fixed account volumes retain login and desktop data across container
 recreation. Never reassign an account's data to a different person without an
-explicit operator-controlled cleanup. The launcher copies an optional key into
-its Wine prefix; using it for login in a fresh prefix remains unverified.
+explicit operator-controlled cleanup.
 
 The image prefix is initialized at build time and then copied into each new
 Wine volume. Consequently, any machine identifiers, registry values, or
@@ -602,30 +653,63 @@ for same-repository pull requests. Releases publish a version tag matching the
 release and `latest` for non-prereleases. CI development tags are pushed before
 image validation and may refer to a build that later fails validation.
 
-## Connect directly to a server
+## Start a game when a viewer connects
 
-To request a connection to a server through the BYOND pager, provide its address and port:
+For a standalone player, set the server and the expected BYOND account:
 
 ```sh
-BYOND_SERVER=server.example.org:1337 docker compose -f examples/compose.yaml up
+BYOND_ACCOUNT=LGplayer01 BYOND_SERVER=server.example.org:1337 \
+  docker compose -f examples/compose.yaml up
 ```
 
-At each client startup, the launcher enables `auto-login on` in BYOND's
-`cfg/pager.txt` and `graphics-hwmode on` in `cfg/seeker.txt`, retaining other
-settings. It starts `byond.exe` with the server URL; the pager is expected to
-log in and launch Dream Seeker. The key file is optional; without it, BYOND
-may require interactive pager login. A BYOND account or server-side
-authentication may still be required. Automatic login and joining through the
-pager have not yet been verified against a real server. In direct-server mode,
-the healthcheck still requires a Dream Seeker process; it does not prove login
-or gameplay.
+Session behavior:
+
+- **Container start:** only the BYOND pager (`byond.exe`) starts, in the system tray.
+- **Reset Session** (taskbar): kills all BYOND, Dream Seeker and WebView2
+  processes, sets `auto-login on` in BYOND's `cfg/pager.txt` and `graphics-hwmode on`
+  and `guest-login off` in `cfg/seeker.txt` (retaining other settings), and
+  restarts the pager. The watcher then starts `dreamseeker.exe` targeting
+  `BYOND_SERVER` only if a viewer is connected and
+  `$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt` has a nonempty,
+  complete `BEGIN KEY <account>` / `END KEY` block matching `BYOND_ACCOUNT`
+  case-insensitively. Without that key only the pager starts; log in and save the
+  password.
+- **Selkies client disconnects:** only Dream Seeker is stopped; the pager stays.
+- **Selkies client connects or reconnects:** only Dream Seeker is started, under
+  the same key check, if it is not already running. Launch attempts hold the
+  session cleanup lock until a Dream Seeker process is observed; a failed or
+  timed-out start is retried while a viewer remains connected. The watcher
+  reconciles each successful viewer observation, including after watcher or
+  pager restarts. Viewer presence is checked again after the cleanup lock is
+  acquired; if Selkies cannot be queried, a new game is not started. Starts
+  wait for pager configuration and a running pager
+  observed after a short startup delay. This is a startup heuristic: process
+  observation does not confirm pager login, initialization, or connection to
+  the server.
+
+Without both `BYOND_SERVER` and `BYOND_ACCOUNT`, only the pager starts automatically.
+An invalid `BYOND_SERVER` prevents Dream Seeker from starting but leaves the
+pager running. The managed deployment and fixed-slot
+generator set `BYOND_ACCOUNT` per slot. Any Selkies client, including a viewer,
+counts as connected; Dream Seeker stops only when no client remains. The check confirms only that a key block is present, not that BYOND
+authenticated or selected that account.
+
+The standalone example does not mount persistent BYOND documents by default;
+add a volume at `/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND`
+to retain saved logins across container recreation while using the new image's
+Wine prefix. An existing full-prefix volume requires a separate backup and
+migration of that directory. The player healthcheck requires the pager and Selkies, not Dream
+Seeker, so waiting for a viewer or saved login does not make the desktop unhealthy.
 
 ## Customize the session
 
 The panel pins only **Reset Session**. Use it to stop BYOND and Wine so the
-supervised client can restart. Each service launch first stops the Wine
-server for its prefix, then terminates and checks for remaining BYOND and
-WebView2 processes owned by the container user. This also covers processes reparented
+supervised client can restart. Before starting BYOND, the service waits for
+the current Plasma session's panel configuration, the registered tray host,
+and an X11 tray selection owner. If they do not become ready, the service
+logs a timeout and retries under supervision. Each service launch first stops
+the Wine server for its prefix, then terminates and checks for remaining
+BYOND and WebView2 processes owned by the container user. This also covers processes reparented
 after a client exits. Cleanup is serialized, and the launcher refuses to
 start BYOND if it cannot confirm shutdown. Because the process cleanup is
 user-wide rather than prefix-specific, do not run unrelated BYOND or WebView2

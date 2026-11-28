@@ -49,6 +49,7 @@ services:
       GATEWAY_TRAEFIK_ENTRYPOINT: ${GATEWAY_TRAEFIK_ENTRYPOINT:-https}
       GATEWAY_PLAY_HOST: ${GATEWAY_PLAY_HOST:?Set GATEWAY_PLAY_HOST to your Traefik hostname}
       GATEWAY_IMAGE: ${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}
+      GATEWAY_IMAGE_POLICY: ${GATEWAY_IMAGE_POLICY:-pull}
       BYOND_SERVER: ${BYOND_SERVER:?Set BYOND_SERVER to your game server host and port}
       SELKIES_WAYLAND: ${SELKIES_WAYLAND:-true}
       GATEWAY_MANAGER_GPU: ${GATEWAY_MANAGER_GPU:-false}
