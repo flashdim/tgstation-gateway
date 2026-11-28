@@ -5,6 +5,7 @@ import select
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -92,12 +93,13 @@ class DesktopSessionTest(unittest.TestCase):
                 commands.mkdir()
                 for name, body in {
                     "cat": 'echo "fixture script"',
-                    "sleep": "exit 0",
+                    "sleep": "exec /bin/sleep 0.02",
                     "qdbus6": (
                         'case "$3" in\n'
                         "  org.freedesktop.DBus.GetId) echo bus-id ;;\n"
                         "  org.freedesktop.DBus.GetNameOwner)\n"
                         '    if [ "$FAIL_CONFIG" = 1 ]; then echo :1.9; '
+                        'elif [ -f "$NEW_OWNER" ]; then echo :1.10; '
                         'elif [ ! -f "$SEEN_OWNER" ]; then touch "$SEEN_OWNER"; echo :1.8; '
                         "else echo :1.9; fi ;;\n"
                         "  org.kde.PlasmaShell.evaluateScript)\n"
@@ -119,29 +121,47 @@ class DesktopSessionTest(unittest.TestCase):
                         "XDG_RUNTIME_DIR": str(root),
                         "FAIL_CONFIG": "1" if failure else "0",
                         "SEEN_OWNER": str(root / "seen-owner"),
+                        "NEW_OWNER": str(root / "new-owner"),
                         "EVAL_LOG": str(root / "evaluations"),
                     },
-                    "capture_output": True,
-                    "text": True,
+                    "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL,
                 }
-                if failure:
-                    with self.assertRaises(subprocess.TimeoutExpired):
-                        subprocess.run(
-                            ["sh", str(ROOT / "container/configure-plasma.sh")],
-                            timeout=2,
-                            **args,
+
+                process = subprocess.Popen(
+                    ["sh", str(ROOT / "container/configure-plasma.sh")], **args
+                )
+                try:
+
+                    def wait_until(predicate):
+                        deadline = time.monotonic() + 10
+                        while not predicate():
+                            self.assertIsNone(process.poll(), "Plasma monitor exited")
+                            self.assertLess(time.monotonic(), deadline)
+                            time.sleep(0.02)
+
+                    evaluations = root / "evaluations"
+                    if failure:
+                        wait_until(
+                            lambda: (
+                                evaluations.exists()
+                                and evaluations.read_text().count("\n") >= 2
+                            )
                         )
-                    self.assertEqual(marker.read_text(), "old-bus\n:1.2\n")
-                else:
-                    result = subprocess.run(
-                        ["sh", str(ROOT / "container/configure-plasma.sh")],
-                        timeout=10,
-                        **args,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(marker.read_text(), "old-bus\n:1.2\n")
+                        continue
+
+                    wait_until(lambda: marker.read_text() == "bus-id\n:1.9\n")
                     self.assertEqual(marker.read_text(), "bus-id\n:1.9\n")
                     self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
-                    self.assertEqual((root / "evaluations").read_text().count("\n"), 2)
+                    self.assertEqual(evaluations.read_text().count("\n"), 2)
+                    self.assertIsNone(process.poll())
+                    (root / "new-owner").touch()
+                    wait_until(lambda: marker.read_text() == "bus-id\n:1.10\n")
+                    self.assertEqual(evaluations.read_text().count("\n"), 3)
+                finally:
+                    process.terminate()
+                    process.wait(timeout=5)
 
     def test_plasma_task_manager_and_tray_are_configured_at_login(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
