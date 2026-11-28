@@ -169,7 +169,7 @@ class ComposeTest(unittest.TestCase):
                 '  "pull "*) [ "$FAIL_PULL" != true ] || exit 41 ;;\n'
                 '  "image inspect") [ "$MISSING_IMAGE" != true ] || exit 42; echo sha256:fixture ;;\n'
                 '  "volume inspect") case "$4" in *deployment*) echo gatewaytest;; '
-                '*slot*) echo 01;; *role*) case "$5" in *wine) echo wine;; *) echo data;; esac;; esac ;;\n'
+                '*slot*) echo 01;; *role*) case "$5" in *wine) echo wine;; *byond) echo byond;; *) echo data;; esac;; esac ;;\n'
                 '  "run -d") exit 43 ;;\n'
                 "esac\n"
             )
@@ -226,6 +226,52 @@ class ComposeTest(unittest.TestCase):
                             )
                         )
 
+    def test_documents_migration_retries_and_does_not_restore_stale_data(self):
+        manager = (ROOT / "examples/slot-manager.sh").read_text()
+        script = manager.split('"$@" "$image_id" -ec \'', 1)[1].split(
+            "' >/dev/null", 1
+        )[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "legacy/drive_c/users/steamuser/Documents/BYOND"
+            target = root / "target"
+            source.mkdir(parents=True)
+            target.mkdir()
+            (source / "key.txt").write_text("saved key")
+            (root / "chown").write_text("#!/bin/sh\nexit 0\n")
+            (root / "cp").write_text(
+                '#!/bin/sh\n/bin/cp "$@" || exit $?\n'
+                '[ "${FAIL_COPY:-false}" != true ]\n'
+            )
+            (root / "chown").chmod(0o755)
+            (root / "cp").chmod(0o755)
+            script = script.replace("/legacy", str(root / "legacy")).replace(
+                "/target", str(target)
+            )
+            env = {**os.environ, "PATH": f"{root}:{os.environ['PATH']}"}
+
+            def migrate(**extra):
+                return subprocess.run(
+                    ["sh", "-ec", script],
+                    env={**env, **extra},
+                    capture_output=True,
+                    text=True,
+                )
+
+            self.assertNotEqual(migrate(FAIL_COPY="true").returncode, 0)
+            self.assertFalse((target / ".gateway-migration-complete").exists())
+            self.assertEqual(migrate().returncode, 0)
+            self.assertEqual((target / "documents/key.txt").read_text(), "saved key")
+            (target / "documents/key.txt").write_text("new key")
+            self.assertEqual(migrate().returncode, 0)
+            self.assertEqual((target / "documents/key.txt").read_text(), "new key")
+
+            (target / ".gateway-migration-complete").unlink()
+            source.rename(source.with_name("old"))
+            source.symlink_to(source.with_name("old"), target_is_directory=True)
+            self.assertNotEqual(migrate().returncode, 0)
+            self.assertFalse((target / ".gateway-migration-complete").exists())
+
     def test_manager_recreates_players_on_startup_preserving_volumes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -267,7 +313,7 @@ class ComposeTest(unittest.TestCase):
                 '      case "$4" in\n'
                 '        *deployment*) echo "${VOLUME_OWNER:-gatewaytest}" ;;\n'
                 '        *slot*) echo "${VOLUME_SLOT:-01}" ;;\n'
-                '        *role*) case "$5" in *-wine) echo wine;; *) echo data;; esac ;;\n'
+                '        *role*) case "$5" in *-wine) echo wine;; *-byond) echo byond;; *) echo data;; esac ;;\n'
                 "      esac\n"
                 "    else\n"
                 '      test -f "$STATE/$3"\n'
@@ -319,12 +365,21 @@ class ComposeTest(unittest.TestCase):
 
             result, events = run()
             self.assertEqual(result.returncode, 23, result.stderr)
+            self.assertTrue(
+                any(
+                    "source=gatewaytest-player01-byond,target=/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND,volume-subpath=documents"
+                    in event
+                    for event in events
+                    if event.startswith("run -d ")
+                )
+            )
             self.assertFalse(
                 any(event.startswith(("rm ", "volume rm ")) for event in events)
             )
             settings = (root / "settings").read_text()
-            for role in ("wine", "data"):
+            for role in ("byond", "data"):
                 (root / f"gatewaytest-player01-{role}").write_text("saved login")
+            (root / "gatewaytest-player01-wine").write_text("legacy")
             for running in ("true", "false", "missing"):
                 with self.subTest(container=running):
                     (root / "running").write_text(running)
@@ -335,7 +390,7 @@ class ComposeTest(unittest.TestCase):
                     self.assertEqual(
                         events.count("rm -f fixture-id"), int(running != "missing")
                     )
-                    for role in ("wine", "data"):
+                    for role in ("byond", "data"):
                         volume = f"gatewaytest-player01-{role}"
                         self.assertEqual((root / volume).read_text(), "saved login")
                         self.assertNotIn(f"volume rm {volume}", events)
@@ -344,6 +399,16 @@ class ComposeTest(unittest.TestCase):
                         )
                     self.assertEqual(
                         sum(event.startswith("run -d ") for event in events), 1
+                    )
+                    self.assertTrue(
+                        any(
+                            "source=gatewaytest-player01-wine,target=/legacy,readonly,volume-nocopy"
+                            in event
+                            for event in events
+                        )
+                    )
+                    self.assertEqual(
+                        (root / "gatewaytest-player01-wine").read_text(), "legacy"
                     )
             result, events = run(FAIL_REMOVE="true")
             self.assertEqual(result.returncode, 42)
@@ -413,10 +478,12 @@ class ComposeTest(unittest.TestCase):
                 '      case "$4" in\n'
                 '        *deployment*) if [ "$slot" = 02 ] && [ "${CONFLICT:-0}" = 1 ]; then echo other; else echo gatewaytest; fi ;;\n'
                 '        *slot*) echo "$slot" ;;\n'
-                '        *role*) case "$5" in *-wine) echo wine;; *) echo data;; esac ;;\n'
+                '        *role*) case "$5" in *-wine) echo wine;; *-byond) echo byond;; *) echo data;; esac ;;\n'
                 "      esac\n"
                 "    fi ;;\n"
                 '  "rm -f") rm "$STATE/exists${3#id}" ;;\n'
+                '  "run --rm") case "$*" in *gatewaytest-player02-migration*) '
+                '[ "${FAIL:-}" != migration ] || exit 42;; esac ;;\n'
                 '  "run -d")\n'
                 '    for arg in "$@"; do\n'
                 '      case "$arg" in\n'
@@ -471,12 +538,12 @@ class ComposeTest(unittest.TestCase):
                     any(event.startswith(("rm ", "run -d ")) for event in events)
                 )
 
-            result, events = run(FAIL="before")
+            result, events = run(FAIL="migration")
             self.assertEqual(result.returncode, 42, result.stderr)
             self.assertIn("rm -f id01", events)
             generation = (root / "startup-generation").read_text()
             self.assertEqual((root / "generation01").read_text(), generation)
-            for failure in ("before", "after"):
+            for failure in ("migration", "before", "after"):
                 result, events = run(FAIL=failure)
                 self.assertEqual(result.returncode, 42, result.stderr)
                 self.assertNotIn("rm -f id01", events)
@@ -512,7 +579,7 @@ class ComposeTest(unittest.TestCase):
                 '  "volume inspect") case "$4" in\n'
                 "    *deployment*) echo gatewaytest ;;\n"
                 "    *slot*) echo 01 ;;\n"
-                '    *role*) case "$5" in *-wine) echo wine;; *) echo data;; esac ;;\n'
+                '    *role*) case "$5" in *-wine) echo wine;; *-byond) echo byond;; *) echo data;; esac ;;\n'
                 "  esac ;;\n"
                 '  "run -d") printf "%s\\n" "$@" > "$ARGUMENTS"; exit 23 ;;\n'
                 "esac\n"
@@ -600,6 +667,102 @@ class ComposeTest(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 23, result.stderr)
+
+
+@unittest.skipUnless(
+    os.environ.get("GATEWAY_DOCKER_TEST_IMAGE"),
+    "Set GATEWAY_DOCKER_TEST_IMAGE to a local shell-capable fixture image",
+)
+class DocumentsMigrationDockerTest(unittest.TestCase):
+    def test_existing_documents_are_copied_once(self):
+        image = os.environ["GATEWAY_DOCKER_TEST_IMAGE"]
+        legacy = f"gateway-migration-{uuid.uuid4().hex}"
+        target = f"{legacy}-target"
+        script = (
+            (ROOT / "examples/slot-manager.sh")
+            .read_text()
+            .split('"$@" "$image_id" -ec \'', 1)[1]
+            .split("' >/dev/null", 1)[0]
+        )
+
+        def docker(*args):
+            return subprocess.run(
+                ["docker", *args], check=True, capture_output=True, text=True
+            )
+
+        try:
+            docker("volume", "create", legacy)
+            docker("volume", "create", target)
+            docker(
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--entrypoint",
+                "sh",
+                "-v",
+                f"{legacy}:/legacy",
+                image,
+                "-ec",
+                "mkdir -p /legacy/drive_c/users/steamuser/Documents/BYOND && "
+                "echo old > /legacy/drive_c/users/steamuser/Documents/BYOND/key.txt && "
+                "echo obsolete > /legacy/old-client",
+            )
+
+            def migrate():
+                docker(
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
+                    "--user",
+                    "0:0",
+                    "--entrypoint",
+                    "sh",
+                    "--mount",
+                    f"type=volume,source={legacy},target=/legacy,readonly,volume-nocopy",
+                    "--mount",
+                    f"type=volume,source={target},target=/target,volume-nocopy",
+                    image,
+                    "-ec",
+                    script,
+                )
+
+            migrate()
+            docker(
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--entrypoint",
+                "sh",
+                "--mount",
+                f"type=volume,source={target},target=/byond,volume-subpath=documents",
+                image,
+                "-ec",
+                'test "$(cat /byond/key.txt)" = old && '
+                "test ! -e /byond/old-client && "
+                "test ! -e /byond/.gateway-migration-complete && "
+                "echo new > /byond/key.txt",
+            )
+            migrate()
+            docker(
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--entrypoint",
+                "sh",
+                "-v",
+                f"{target}:/target",
+                image,
+                "-ec",
+                'test "$(cat /target/documents/key.txt)" = new',
+            )
+        finally:
+            subprocess.run(
+                ["docker", "volume", "rm", legacy, target], capture_output=True
+            )
 
 
 @unittest.skipUnless(
@@ -707,6 +870,8 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 (context / "Dockerfile").write_text(
                     f"FROM {os.environ['GATEWAY_TEST_BACKEND_IMAGE']}\n"
                     "COPY app.py /app.py\nCOPY --chmod=755 curl /usr/local/bin/curl\n"
+                    "RUN mkdir -p /home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND"
+                    " && echo fresh > /home/ubuntu/.wine/marker\n"
                     'HEALTHCHECK CMD exit 1\nCMD ["python3", "-u", "/app.py"]\n'
                 )
                 build = subprocess.run(
@@ -718,6 +883,43 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                 self.assertEqual(build.returncode, 0, build.stderr)
                 subprocess.run(
                     ["docker", "push", fixture_image],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
+                legacy = f"{project}-player02-wine"
+                subprocess.run(
+                    [
+                        "docker",
+                        "volume",
+                        "create",
+                        "--label",
+                        f"io.tgstation-gateway.deployment={project}",
+                        "--label",
+                        "io.tgstation-gateway.slot=02",
+                        "--label",
+                        "io.tgstation-gateway.role=wine",
+                        legacy,
+                    ],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
+                subprocess.run(
+                    [
+                        "docker",
+                        "run",
+                        "--rm",
+                        "--entrypoint",
+                        "sh",
+                        "-v",
+                        f"{legacy}:/legacy",
+                        fixture_image,
+                        "-c",
+                        "mkdir -p /legacy/drive_c/users/steamuser/Documents/BYOND && "
+                        "echo migrated > /legacy/drive_c/users/steamuser/Documents/BYOND/marker && "
+                        "echo obsolete > /legacy/marker",
+                    ],
                     env=env,
                     check=True,
                     capture_output=True,
@@ -845,7 +1047,9 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                             player,
                             "sh",
                             "-c",
-                            "echo stale > /home/ubuntu/.wine/marker; "
+                            'test "$(cat /home/ubuntu/.wine/marker)" = fresh && '
+                            'test "$(cat /home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/marker)" = migrated && '
+                            "echo stale > /home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/marker && "
                             "echo stale > /home/ubuntu/.local/share/marker",
                         ],
                         env=env,
@@ -872,7 +1076,8 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                                 player,
                                 "sh",
                                 "-c",
-                                'test "$(cat /home/ubuntu/.wine/marker)" = stale && '
+                                'test "$(cat /home/ubuntu/.wine/marker)" = fresh && '
+                                'test "$(cat /home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/marker)" = stale && '
                                 'test "$(cat /home/ubuntu/.local/share/marker)" = stale',
                             ],
                             env=env,
@@ -919,7 +1124,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                             player,
                             "sh",
                             "-c",
-                            "echo stale > /home/ubuntu/.wine/marker; "
+                            "echo stale > /home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND/marker; "
                             "echo stale > /home/ubuntu/.local/share/marker",
                         ],
                         env=env,
@@ -949,7 +1154,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         original_id,
                     )
                     volume = subprocess.run(
-                        ["docker", "volume", "inspect", f"{player}-wine"],
+                        ["docker", "volume", "inspect", f"{player}-byond"],
                         env=env,
                         capture_output=True,
                     )
@@ -1040,6 +1245,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                                 "volume",
                                 "rm",
                                 f"{player}-wine",
+                                f"{player}-byond",
                                 f"{player}-data",
                             ],
                             env=env,

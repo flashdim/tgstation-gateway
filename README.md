@@ -244,7 +244,7 @@ mounts the Docker socket; the landing page and player containers do
 not. Do not mount that socket in other services or use this deployment on an
 untrusted Docker host.
 
-From a repository checkout, with Docker Compose 2.23.1 or newer and an existing
+From a repository checkout, with Docker Engine 28 or newer, Docker Compose 2.23.1 or newer and an existing
 `public` network shared by Traefik and the BYOND server:
 
 ```sh
@@ -289,7 +289,7 @@ Compose project, `docker compose -f examples/compose.traefik.yaml up -d
 orphan services in that project. Inspect them before using it.
 
 Set `GATEWAY_SLOT_COUNT` to 1–99 and rerun `docker compose ... up -d` after
-changing it. The manager removes extra owned containers but retains their Wine
+changing it. The manager removes extra owned containers but retains their BYOND
 and data volumes until those slots are configured again. It
 refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
@@ -305,7 +305,7 @@ never pulls and fails before changing players if the image is missing. To
 update it, build or pull the new image on the host and restart the manager.
 Ensure the host image supports `linux/amd64`, as required by managed players.
 **A new manager startup recreates all configured owned player containers,
-retaining their Wine and data volumes.** This interrupts active sessions but
+retaining their BYOND documents and data volumes.** This interrupts active sessions but
 preserves saved logins, settings and player data. Before making changes, the
 manager validates ownership of all configured containers and volumes. If
 startup is interrupted, retries resume that startup without resetting players
@@ -322,7 +322,7 @@ Log in once through each player's desktop using its intended BYOND account
 (`LGplayer01`, `LGplayer02`, etc.). If the pager starts as Guest, use **Logout**
 or **Ctrl+L**, then **Login**. Enter credentials yourself and check **Save password**
 and **Automatically login when program starts**. The saved login remains in that
-player's Wine volume across container recreation and manager restarts. To rotate
+player's BYOND documents volume across container recreation and manager restarts. To rotate
 credentials, sign out and save the replacement through that player's pager.
 Until a matching `key.txt` exists, only the pager runs. After saving the login,
 click **Reset Session** (or disconnect and reconnect) to start Dream Seeker.
@@ -341,8 +341,25 @@ and manager images from the same revision.
 erases player volumes. Do not use `down -v` or delete player volumes when updating.
 Previously erased login data cannot be recovered by this change.
 
+For each managed slot, the manager copies
+`drive_c/users/steamuser/Documents/BYOND` from its ownership-validated legacy
+`-wine` volume into a separate `-byond` volume once, after stopping the old
+player. It retains the old volume as a sensitive backup. Interrupted copies are
+retried before the player starts; a symlinked legacy Documents or BYOND directory
+is rejected and requires operator inspection. Back up the old volumes before
+upgrading and verify each saved login and settings afterward. Data elsewhere in
+the old Wine prefix is not migrated. Remove a legacy volume only after verification
+and according to your data-retention policy; it may contain credentials.
+
+The managed player mounts only the BYOND documents volume into the image's Wine
+prefix, so recreating a player uses the BYOND installation and Wine prefix from
+the new image. A container restart without recreation does not replace its image.
+The generated fixed-slot deployment described above still mounts the entire Wine
+prefix and therefore retains its old BYOND installation on image updates; its
+prefix must be upgraded separately while preserving saved credentials.
+
 The launcher sets BYOND's `userpath` to `C:\users\steamuser\Documents\BYOND\`.
-Treat Wine volumes and their backups as sensitive: they contain saved credentials.
+Treat BYOND documents, legacy Wine volumes and their backups as sensitive: they contain saved credentials.
 Use dedicated accounts, restrict access to each desktop, and never commit credentials
 or put them in environment variables, command lines, Compose files, images or logs.
 
@@ -676,9 +693,11 @@ generator set `BYOND_ACCOUNT` per slot. Any Selkies client, including a viewer,
 counts as connected; Dream Seeker stops only when no client remains. The check confirms only that a key block is present, not that BYOND
 authenticated or selected that account.
 
-The standalone example does not mount a persistent Wine volume by default;
-add one at `/home/ubuntu/.wine` to retain saved logins across container
-recreation. The player healthcheck requires the pager and Selkies, not Dream
+The standalone example does not mount persistent BYOND documents by default;
+add a volume at `/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND`
+to retain saved logins across container recreation while using the new image's
+Wine prefix. An existing full-prefix volume requires a separate backup and
+migration of that directory. The player healthcheck requires the pager and Selkies, not Dream
 Seeker, so waiting for a viewer or saved login does not make the desktop unhealthy.
 
 ## Customize the session

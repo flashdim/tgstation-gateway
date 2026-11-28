@@ -96,7 +96,7 @@ if ! image_id="$(docker image inspect --format '{{.Id}}' "$image")"; then
 fi
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
 settings="$(
-    printf '%s\n' v4 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
+    printf '%s\n' v5 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
         sha256sum | cut -d ' ' -f 1
 )"
 
@@ -175,6 +175,7 @@ reconcile() {
             validate_container
         fi
         validate_volume "$deployment-player$slot-wine" wine
+        validate_volume "$deployment-player$slot-byond" byond
         validate_volume "$deployment-player$slot-data" data
         number=$((number + 1))
     done
@@ -220,9 +221,32 @@ reconcile() {
         fi
         if [ -z "$id" ]; then
             wine="$deployment-player$slot-wine"
+            byond="$deployment-player$slot-byond"
             data="$deployment-player$slot-data"
-            ensure_volume "$wine" wine
+            ensure_volume "$byond" byond
             ensure_volume "$data" data
+            set --
+            if volume_exists "$wine"; then
+                check_volume "$wine" wine
+                set -- --mount "type=volume,source=$wine,target=/legacy,readonly,volume-nocopy"
+            fi
+            docker run --rm --name "$name-migration" --network none --user 0:0 --entrypoint /bin/sh \
+                --mount "type=volume,source=$byond,target=/target,volume-nocopy" \
+                "$@" "$image_id" -ec '
+                    if [ ! -f /target/.gateway-migration-complete ]; then
+                        source=/legacy/drive_c/users/steamuser/Documents/BYOND
+                        if [ -L "$source" ] || [ -L /legacy/drive_c/users/steamuser/Documents ]; then
+                            echo "Cannot migrate a symlinked BYOND documents directory" >&2
+                            exit 1
+                        fi
+                        mkdir -p /target/documents
+                        if [ -d "$source" ]; then
+                            cp -a "$source/." /target/documents/
+                        fi
+                        chown 1000:1000 /target/documents
+                        touch /target/.gateway-migration-complete
+                    fi
+                ' >/dev/null
             echo "Starting player $name"
             set --
             if [ "$gpu" = true ]; then
@@ -262,7 +286,8 @@ reconcile() {
                 -e SELKIES_GAMEPAD_ENABLED=false -e SELKIES_MICROPHONE_ENABLED=false \
                 -e SELKIES_WEBCAM_ENABLED=false -e SELKIES_FILE_TRANSFERS=none \
                 -e SELKIES_PRINTING_ENABLED=false \
-                -v "$wine:/home/ubuntu/.wine" -v "$data:/home/ubuntu/.local/share" \
+                --mount "type=volume,source=$byond,target=/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND,volume-subpath=documents" \
+                -v "$data:/home/ubuntu/.local/share" \
                 "$image_id" >/dev/null
         fi
         number=$((number + 1))
