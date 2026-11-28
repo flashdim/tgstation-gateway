@@ -95,8 +95,17 @@ if ! image_id="$(docker image inspect --format '{{.Id}}' "$image")"; then
     exit 1
 fi
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
+selkies_env() {
+    env -0 | grep -zE '^SELKIES_[A-Za-z0-9_]+=' | grep -zv '^SELKIES_SUBFOLDER=' | LC_ALL=C sort -z
+}
+selkies_hash="$(selkies_env | sha256sum | cut -d ' ' -f 1)"
+selkies_names="$(selkies_env | xargs -0 -r sh -c '
+    for entry do
+        printf "%s\n" "${entry%%=*}"
+    done
+' sh)"
 settings="$(
-    printf '%s\n' v5 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
+    printf '%s\n' v6 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" "$selkies_hash" |
         sha256sum | cut -d ' ' -f 1
 )"
 
@@ -252,8 +261,10 @@ reconcile() {
             if [ "$gpu" = true ]; then
                 set -- --device /dev/dri:/dev/dri --group-add "$render_gid"
             fi
+            for variable in $selkies_names; do
+                set -- "$@" -e "$variable"
+            done
             docker run -d --name "$name" --platform linux/amd64 --init \
-                "$@" \
                 --restart unless-stopped --network "$network" \
                 --memory 4g --cpus 2 --pids-limit 2048 --shm-size 2g \
                 --security-opt seccomp=/opt/gateway/seccomp.json \
@@ -281,11 +292,11 @@ reconcile() {
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Id=" \
                 --label "traefik.http.middlewares.$name-sanitize.headers.customrequestheaders.Cf-Access-Client-Secret=" \
                 -e "BYOND_SERVER=$server" -e "BYOND_ACCOUNT=LGplayer$slot" \
-                -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
                 -e "SELKIES_MODE=websockets" -e "SELKIES_WAYLAND=$wayland" \
                 -e SELKIES_GAMEPAD_ENABLED=false -e SELKIES_MICROPHONE_ENABLED=false \
                 -e SELKIES_WEBCAM_ENABLED=false -e SELKIES_FILE_TRANSFERS=none \
                 -e SELKIES_PRINTING_ENABLED=false \
+                "$@" -e "SELKIES_SUBFOLDER=/LGplayer$slot/" \
                 --mount "type=volume,source=$byond,target=/home/ubuntu/.wine/drive_c/users/steamuser/Documents/BYOND,volume-subpath=documents" \
                 -v "$data:/home/ubuntu/.local/share" \
                 "$image_id" >/dev/null
