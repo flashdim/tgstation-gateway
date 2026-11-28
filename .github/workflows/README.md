@@ -1,5 +1,18 @@
 # GitHub Actions workflows
 
+For pull requests, `ci.yml` compares the checked-out merge result with the
+current base commit. For pushes to main it compares the previous and new
+commits, covering the whole push rather than just its final commit. Changes
+under `container/`, `landing/`, `examples/` or `tests/`, the root Dockerfile
+or `.dockerignore`, the pre-commit configuration, or either workflow run the
+full CI pipeline. These conservative paths also cover validation and build
+configuration changes. Update them when image inputs or validation move.
+Other changes, such as documentation-only changes, leave the formatting job
+successful and the remaining jobs skipped (which GitHub treats as successful
+required checks). No development images or screenshots are produced in that
+case. If the comparison base is unavailable, CI runs in full; manually
+dispatching the workflow also runs it in full. Release publishing is unaffected.
+
 `ci.yml` runs formatting, image builds, unit tests, Compose validation, smoke
 tests for both display modes, and Wine runtime checks. The X11 player smoke test
 also queries Wine's BYOND `userpath` registry value. After formatting passes,
