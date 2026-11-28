@@ -642,19 +642,22 @@ Session behavior:
 - **Container start:** only the BYOND pager (`byond.exe`) starts, in the system tray.
 - **Reset Session** (taskbar): kills all BYOND, Dream Seeker and WebView2
   processes, sets `auto-login on` in BYOND's `cfg/pager.txt` and `graphics-hwmode on`
-  and `guest-login off` in `cfg/seeker.txt` (retaining other settings), starts the
-  pager, then starts `dreamseeker.exe` targeting `BYOND_SERVER` if
+  and `guest-login off` in `cfg/seeker.txt` (retaining other settings), and
+  restarts the pager. The watcher then starts `dreamseeker.exe` targeting
+  `BYOND_SERVER` only if a viewer is connected and
   `$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt` has a nonempty,
   complete `BEGIN KEY <account>` / `END KEY` block matching `BYOND_ACCOUNT`
-  case-insensitively. Without that key only the pager starts; log in, save the
-  password and reset again.
+  case-insensitively. Without that key only the pager starts; log in and save the
+  password.
 - **Selkies client disconnects:** only Dream Seeker is stopped; the pager stays.
 - **Selkies client connects or reconnects:** only Dream Seeker is started, under
   the same key check, if it is not already running. Launch attempts hold the
   session cleanup lock until a Dream Seeker process is observed; a failed or
   timed-out start is retried while a viewer remains connected. The watcher
   reconciles each successful viewer observation, including after watcher or
-  pager restarts. Starts wait for pager configuration and a running pager
+  pager restarts. Viewer presence is checked again after the cleanup lock is
+  acquired; if Selkies cannot be queried, a new game is not started. Starts
+  wait for pager configuration and a running pager
   observed after a short startup delay. This is a startup heuristic: process
   observation does not confirm pager login, initialization, or connection to
   the server.

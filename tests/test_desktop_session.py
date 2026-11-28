@@ -253,7 +253,7 @@ class DesktopSessionTest(unittest.TestCase):
                 timeout=5,
             )
             self.assertEqual(result.returncode, 23)
-            self.assertTrue((root / "byond-reset-requested").exists())
+            self.assertFalse((root / "byond-reset-requested").exists())
             self.assertEqual(
                 (root / "reset-log").read_text().splitlines(),
                 ["-k", "/etc/service/byond"],

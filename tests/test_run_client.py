@@ -1,9 +1,12 @@
 import os
 import importlib.util
+import fcntl
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -77,6 +80,7 @@ class RunClientTest(unittest.TestCase):
                     "exit 1"
                 ),
                 "sleep": "exit 0",
+                "s6-svc": 'exec bash "$RUN_CLIENT_SCRIPT"',
                 "xdpyinfo": (
                     'test "$1" = "-display" && test "$2" = "$EXPECTED_DISPLAY" && '
                     'test "${XAUTHORITY:-}" = "$EXPECTED_XAUTHORITY" || exit 1\n'
@@ -158,6 +162,7 @@ class RunClientTest(unittest.TestCase):
                 "XDG_RUNTIME_DIR": str(runtime),
                 "BYOND_GAME_CONTROL": str(ROOT / "container/byond-game.sh"),
                 "BYOND_KEY_CHECK": str(ROOT / "container/byond-key-check.py"),
+                "RUN_CLIENT_SCRIPT": str(ROOT / "container/run-client.sh"),
                 "WINE_LOG": str(root / "wine-log"),
                 "EVENT_LOG": str(root / "event-log"),
                 "CLEANUP_LOG": str(root / "cleanup-log"),
@@ -203,8 +208,6 @@ class RunClientTest(unittest.TestCase):
             if bad_config_directory:
                 cfg.parent.mkdir(parents=True, exist_ok=True)
                 cfg.write_text("not a directory")
-            if reset:
-                (runtime / "byond-reset-requested").touch()
             if key is not None:
                 key_path = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
                 key_path.parent.mkdir(parents=True, exist_ok=True)
@@ -225,8 +228,9 @@ class RunClientTest(unittest.TestCase):
                 handoff = runtime / "byond-xwayland"
                 self.assertEqual(handoff.stat().st_mode & 0o777, 0o600)
                 self.assertNotIn("test cookie", handoff.read_text())
+            script = "reset-session.sh" if reset else "run-client.sh"
             result = subprocess.run(
-                ["bash", str(ROOT / "container/run-client.sh")],
+                ["bash", str(ROOT / "container" / script)],
                 env=env,
                 capture_output=True,
                 text=True,
@@ -416,13 +420,12 @@ class RunClientTest(unittest.TestCase):
                         str(prefix / "drive_c/Program Files (x86)/BYOND/bin/byond.exe"),
                     ],
                 )
-                self.assertIn("log in as LGplayer01", result.stderr)
 
-    def test_reset_launches_pager_and_dreamseeker_with_matching_key(self):
-        for server, url in (
-            ("ss13.lazorgator.party:1337", "byond://ss13.lazorgator.party:1337"),
-            ("byond://example.org:1234", "byond://example.org:1234"),
-            ("[::1]:1337", "byond://[::1]:1337"),
+    def test_reset_launches_only_pager_even_with_matching_key(self):
+        for server in (
+            "ss13.lazorgator.party:1337",
+            "byond://example.org:1234",
+            "[::1]:1337",
         ):
             with self.subTest(server=server):
                 result, prefix, _, events, _, _ = self.run_client(
@@ -432,16 +435,13 @@ class RunClientTest(unittest.TestCase):
                     reset=True,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(events, ["launch", "launch"])
+                self.assertEqual(events, ["launch"])
                 bin_dir = prefix / "drive_c/Program Files (x86)/BYOND/bin"
-                self.assertCountEqual(
+                self.assertEqual(
                     result.stdout.splitlines(),
                     [
                         ":42",
                         str(bin_dir / "byond.exe"),
-                        ":42",
-                        str(bin_dir / "dreamseeker.exe"),
-                        url,
                     ],
                 )
 
@@ -451,7 +451,6 @@ class RunClientTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(events, ["launch"])
-        self.assertIn("Invalid BYOND_SERVER", result.stderr)
 
     def test_configures_webview2_gpu_before_launch(self):
         result, prefix, registry, events, _, _ = self.run_client(
@@ -624,7 +623,9 @@ class GameStartTest(unittest.TestCase):
             "XDG_RUNTIME_DIR": str(runtime),
             "TEST_ROOT": str(self.root),
             "BYOND_KEY_CHECK": str(ROOT / "container/byond-key-check.py"),
+            "BYOND_VIEWER_CHECK": str(self.root / "viewer-check.py"),
         }
+        (self.root / "viewer-check.py").write_text("import sys\nsys.exit(0)\n")
         (self.root / "pager").touch()
         start_time = Path(f"/proc/{os.getpid()}/stat").read_text().split()[21]
         (runtime / "byond-pager-ready").write_text(f"{os.getpid()} {start_time}\n")
@@ -737,6 +738,68 @@ class GameStartTest(unittest.TestCase):
         with patch.object(connector, "sessions_present", return_value=False):
             connector.SessionWatcher({}, control=control).step()
             self.assertFalse((self.root / "observed").exists())
+
+    def test_viewer_rechecked_after_waiting_for_reset_lock(self):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = self.server.body
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(body)
+                self.server.requested.set()
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        server.body = b'{"sessions": [{}]}'
+        server.requested = threading.Event()
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.env["BYOND_VIEWER_CHECK"] = str(ROOT / "container/connect-on-selkies.py")
+        self.env["SELKIES_PORT"] = str(server.server_address[1])
+        (self.root / "ready").touch()
+        spec = importlib.util.spec_from_file_location(
+            "connector_race", ROOT / "container/connect-on-selkies.py"
+        )
+        connector = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(connector)
+
+        def control(action):
+            subprocess.run(
+                ["bash", str(ROOT / "container/byond-game.sh"), action],
+                env=self.env,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+
+        watcher = connector.SessionWatcher(self.env, control=control)
+        lock_path = self.root / "runtime/byond-cleanup.lock"
+        with lock_path.open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            pending = threading.Thread(target=watcher.step)
+            pending.start()
+            self.assertTrue(server.requested.wait(timeout=5))
+            server.body = b'{"sessions": []}'
+            server.requested.clear()
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            pending.join(timeout=5)
+            self.assertFalse(pending.is_alive())
+        self.assertTrue(server.requested.is_set())
+        self.assertFalse((self.root / "launches").exists())
+
+        server.body = b"invalid"
+        self.assertEqual(self.start().wait(timeout=5), 75)
+        self.assertFalse((self.root / "launches").exists())
+
+        server.body = b'{"sessions": [{}]}'
+        self.assertEqual(self.start().wait(timeout=5), 0)
+        self.assertTrue((self.root / "observed").exists())
 
 
 if __name__ == "__main__":

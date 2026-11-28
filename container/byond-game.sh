@@ -59,6 +59,13 @@ if [[ ! "$server" =~ ^([a-zA-Z0-9._-]+|\[[0-9a-fA-F:.]+\]):([0-9]{1,5})$ ]] ||
     exit 1
 fi
 
+# The viewer observation must happen after waiting for any reset to finish.
+if [ "${BYOND_GAME_QUIET:-0}" = 1 ]; then
+    python3 "${BYOND_VIEWER_CHECK:-/usr/local/bin/connect-on-selkies.py}" --check-viewer 2>/dev/null || exit $?
+else
+    python3 "${BYOND_VIEWER_CHECK:-/usr/local/bin/connect-on-selkies.py}" --check-viewer || exit $?
+fi
+
 pager_ready="$XDG_RUNTIME_DIR/byond-pager-ready"
 pager_supervisor=""
 pager_start=""

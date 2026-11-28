@@ -65,13 +65,6 @@ if [ "$clients_stopped" != true ]; then
     exit 1
 fi
 
-reset_flag="$XDG_RUNTIME_DIR/byond-reset-requested"
-reset_requested=false
-if [ -e "$reset_flag" ]; then
-    reset_requested=true
-    rm -f -- "$reset_flag"
-fi
-
 display_ready() {
     if [ "${SELKIES_WAYLAND:-false}" = true ]; then
         # KWin sets these after Selkies writes container-env.
@@ -317,9 +310,6 @@ exec 9>&-
 if [ ! -f "$pager_ready" ] && kill -0 "$pager_pid" 2>/dev/null; then
     echo "Timed out waiting for the BYOND pager" >&2
     stop_pager 1
-fi
-if [ "$reset_requested" = true ]; then
-    "${BYOND_GAME_CONTROL:-/usr/local/bin/byond-game.sh}" start || true
 fi
 status=0
 wait "$pager_pid" || status=$?

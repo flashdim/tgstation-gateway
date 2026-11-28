@@ -103,6 +103,11 @@ class SessionWatcher:
         except (OSError, subprocess.SubprocessError) as error:
             if (
                 isinstance(error, subprocess.CalledProcessError)
+                and error.returncode == 77
+            ):
+                return
+            elif (
+                isinstance(error, subprocess.CalledProcessError)
                 and error.returncode == 76
             ):
                 self.notice("Waiting for a saved BYOND key matching the slot account")
@@ -126,12 +131,20 @@ def main():
         watcher = SessionWatcher(os.environ)
     except ValueError as error:
         print(f"Selkies session watcher disabled: {error}", file=sys.stderr, flush=True)
+        if sys.argv[1:] == ["--check-viewer"]:
+            return 75
         while True:
             time.sleep(3600)
+    if sys.argv[1:] == ["--check-viewer"]:
+        try:
+            return 0 if sessions_present(watcher.port, watcher.sessions_path) else 77
+        except ObservationError as error:
+            print(f"Waiting for Selkies: {error}", file=sys.stderr, flush=True)
+            return 75
     while True:
         watcher.step()
         time.sleep(2)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
