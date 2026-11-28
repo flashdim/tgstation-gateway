@@ -687,8 +687,9 @@ Session behavior:
   observation does not confirm pager login, initialization, or connection to
   the server.
 
-Without `BYOND_SERVER` and `BYOND_ACCOUNT` the pager always starts. An invalid
-`BYOND_SERVER` stops the launcher. The managed deployment and fixed-slot
+Without both `BYOND_SERVER` and `BYOND_ACCOUNT`, only the pager starts automatically.
+An invalid `BYOND_SERVER` prevents Dream Seeker from starting but leaves the
+pager running. The managed deployment and fixed-slot
 generator set `BYOND_ACCOUNT` per slot. Any Selkies client, including a viewer,
 counts as connected; Dream Seeker stops only when no client remains. The check confirms only that a key block is present, not that BYOND
 authenticated or selected that account.
