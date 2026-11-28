@@ -146,6 +146,9 @@ class ComposeTest(unittest.TestCase):
             script = script.replace(
                 "/run/gateway-lock/manager.lock", str(root / "lock")
             )
+            script = script.replace(
+                "/run/gateway-lock/startup-generation", str(root / "startup-generation")
+            )
             script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
             (root / "manager.sh").write_text(script)
             (root / "seccomp").write_text("{}")
@@ -166,8 +169,12 @@ class ComposeTest(unittest.TestCase):
                 '      *role*) echo "${ROLE:-player}" ;;\n'
                 "      *slot*) echo 01 ;;\n"
                 '      *settings*) cat "$STATE/settings" ;;\n'
+                '      *startup-generation*) cat "$STATE/generation" ;;\n'
                 '      *Running*) cat "$STATE/running" ;;\n'
                 "    esac ;;\n"
+                '  "volume ls")\n'
+                '    volume="${4#name=^}"; volume="${volume%$}"\n'
+                '    [ ! -f "$STATE/$volume" ] || echo "$volume" ;;\n'
                 '  "volume inspect")\n'
                 '    if [ "$3" = --format ]; then\n'
                 '      case "$4" in\n'
@@ -185,6 +192,8 @@ class ComposeTest(unittest.TestCase):
                 '    for arg in "$@"; do\n'
                 '      case "$arg" in io.tgstation-gateway.settings=*)\n'
                 '        echo "${arg#*=}" > "$STATE/settings" ;;\n'
+                "      io.tgstation-gateway.startup-generation=*)\n"
+                '        echo "${arg#*=}" > "$STATE/generation" ;;\n'
                 "      esac\n"
                 "    done\n"
                 '    touch "$STATE/exists"\n'
@@ -272,12 +281,136 @@ class ComposeTest(unittest.TestCase):
             self.assertNotIn("restart fixture-id", events)
             self.assertEqual((root / "settings").read_text(), settings)
 
+    def test_manager_preflights_and_resumes_interrupted_startup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace(
+                "/run/gateway-lock/startup-generation", str(root / "startup-generation")
+            )
+            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            (root / "manager.sh").write_text(script)
+            (root / "seccomp").write_text("{}")
+            docker = root / "docker"
+            docker.write_text(
+                "#!/bin/sh\n"
+                'echo "$*" >> "$STATE/events"\n'
+                'case "$1 $2" in\n'
+                '  "image inspect") echo fixture-image ;;\n'
+                '  "container ls")\n'
+                '    case "$*" in *--no-trunc*)\n'
+                '      case "$*" in *player01*) slot=01;; *player02*) slot=02;; esac\n'
+                '      [ ! -f "$STATE/exists$slot" ] || echo "id$slot" ;;\n'
+                "    esac ;;\n"
+                '  "inspect --format")\n'
+                '    slot="${4#id}"\n'
+                '    case "$3" in\n'
+                "      *project*) echo tgstation-gateway ;;\n"
+                "      *deployment*) echo gatewaytest ;;\n"
+                "      *role*) echo player ;;\n"
+                '      *slot*) echo "$slot" ;;\n'
+                '      *settings*) cat "$STATE/settings$slot" ;;\n'
+                '      *startup-generation*) cat "$STATE/generation$slot" ;;\n'
+                "      *Running*) echo true ;;\n"
+                "    esac ;;\n"
+                '  "volume ls")\n'
+                '    [ "${FAIL_LIST:-0}" != 1 ] || exit 42\n'
+                '    volume="${4#name=^}"; echo "${volume%$}" ;;\n'
+                '  "volume inspect")\n'
+                '    [ "${FAIL_INSPECT:-0}" != 1 ] || exit 42\n'
+                '    if [ "$3" = --format ]; then\n'
+                '      case "$5" in *player01*) slot=01;; *) slot=02;; esac\n'
+                '      case "$4" in\n'
+                '        *deployment*) if [ "$slot" = 02 ] && [ "${CONFLICT:-0}" = 1 ]; then echo other; else echo gatewaytest; fi ;;\n'
+                '        *slot*) echo "$slot" ;;\n'
+                '        *role*) case "$5" in *-wine) echo wine;; *) echo data;; esac ;;\n'
+                "      esac\n"
+                "    fi ;;\n"
+                '  "rm -f") rm "$STATE/exists${3#id}" ;;\n'
+                '  "run -d")\n'
+                '    for arg in "$@"; do\n'
+                '      case "$arg" in\n'
+                "        gatewaytest-player01) slot=01;; gatewaytest-player02) slot=02;;\n"
+                '        io.tgstation-gateway.settings=*) settings="${arg#*=}" ;;\n'
+                '        io.tgstation-gateway.startup-generation=*) generation="${arg#*=}" ;;\n'
+                "      esac\n"
+                "    done\n"
+                '    if [ "$slot" = 02 ] && [ "${FAIL:-}" = before ]; then exit 42; fi\n'
+                '    echo "$settings" > "$STATE/settings$slot"\n'
+                '    echo "$generation" > "$STATE/generation$slot"\n'
+                '    touch "$STATE/exists$slot"\n'
+                '    if [ "$slot" = 02 ] && [ "${FAIL:-}" = after ]; then exit 42; fi ;;\n'
+                "esac\n"
+            )
+            docker.chmod(0o755)
+            sleep = root / "sleep"
+            sleep.write_text("#!/bin/sh\nexit 23\n")
+            sleep.chmod(0o755)
+            for slot in ("01", "02"):
+                (root / f"exists{slot}").touch()
+                (root / f"settings{slot}").write_text("old")
+                (root / f"generation{slot}").write_text("old")
+            env = {
+                **self.env,
+                "GATEWAY_SLOT_COUNT": "2",
+                "STATE": str(root),
+                "PATH": f"{root}:{os.environ['PATH']}",
+            }
+
+            def run(**overrides):
+                (root / "events").write_text("")
+                result = subprocess.run(
+                    ["sh", str(root / "manager.sh")],
+                    env={**env, **overrides},
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                return result, (root / "events").read_text().splitlines()
+
+            result, events = run(CONFLICT="1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Refusing to use unowned volume", result.stderr)
+            self.assertFalse(
+                any(event.startswith(("rm ", "run -d ")) for event in events)
+            )
+            for failure in ("FAIL_LIST", "FAIL_INSPECT"):
+                result, events = run(**{failure: "1"})
+                self.assertEqual(result.returncode, 42, result.stderr)
+                self.assertFalse(
+                    any(event.startswith(("rm ", "run -d ")) for event in events)
+                )
+
+            result, events = run(FAIL="before")
+            self.assertEqual(result.returncode, 42, result.stderr)
+            self.assertIn("rm -f id01", events)
+            generation = (root / "startup-generation").read_text()
+            self.assertEqual((root / "generation01").read_text(), generation)
+            for failure in ("before", "after"):
+                result, events = run(FAIL=failure)
+                self.assertEqual(result.returncode, 42, result.stderr)
+                self.assertNotIn("rm -f id01", events)
+                self.assertEqual((root / "startup-generation").read_text(), generation)
+
+            result, events = run()
+            self.assertEqual(result.returncode, 23, result.stderr)
+            self.assertNotIn("rm -f id01", events)
+            self.assertNotIn("rm -f id02", events)
+            self.assertFalse(any(event.startswith("run -d ") for event in events))
+            self.assertFalse((root / "startup-generation").exists())
+
     def test_manager_gpu_arguments_and_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = (ROOT / "examples/slot-manager.sh").read_text()
             script = script.replace(
                 "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace(
+                "/run/gateway-lock/startup-generation", str(root / "startup-generation")
             )
             script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
             script = script.replace("/dev/dri/renderD", str(root / "renderD"))
@@ -288,7 +421,12 @@ class ComposeTest(unittest.TestCase):
                 "#!/bin/sh\n"
                 'case "$1 $2" in\n'
                 '  "image inspect") echo fixture-image ;;\n'
-                '  "volume inspect") exit 1 ;;\n'
+                '  "volume ls") ;;\n'
+                '  "volume inspect") case "$4" in\n'
+                "    *deployment*) echo gatewaytest ;;\n"
+                "    *slot*) echo 01 ;;\n"
+                '    *role*) case "$5" in *-wine) echo wine;; *) echo data;; esac ;;\n'
+                "  esac ;;\n"
                 '  "run -d") printf "%s\\n" "$@" > "$ARGUMENTS"; exit 23 ;;\n'
                 "esac\n"
             )
@@ -759,6 +897,7 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         check=True,
                         capture_output=True,
                     )
+                    before_conflict = [state["Id"] for state in player_state()]
                     env["GATEWAY_SLOT_COUNT"] = "3"
                     up = subprocess.run(
                         [*command, "up", "-d"], env=env, capture_output=True, text=True
@@ -781,6 +920,16 @@ ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("FIXTURE_PORT", "8080"))), Ha
                         self.fail(
                             f"Manager did not reject name collision: {logs.stdout}"
                         )
+                    subprocess.run(
+                        [*command, "restart", "manager"],
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                    )
+                    time.sleep(2)
+                    self.assertEqual(
+                        [state["Id"] for state in player_state()], before_conflict
+                    )
                     state = subprocess.check_output(
                         ["docker", "inspect", "-f", "{{.State.Running}}", unrelated],
                         env=env,

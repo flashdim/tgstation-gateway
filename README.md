@@ -296,10 +296,14 @@ BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
 The manager pulls the configured player image on every startup; restart it to
 update an existing image tag. The registry must be reachable and accessible.
-**Every manager startup removes and recreates all configured owned player
-containers, retaining their Wine and data volumes.** This interrupts active
-sessions, including on automatic manager restarts, but preserves saved logins,
-settings and player data. Volumes left behind by missing containers are reused
+**A new manager startup recreates all configured owned player containers,
+retaining their Wine and data volumes.** This interrupts active sessions but
+preserves saved logins, settings and player data. Before making changes, the
+manager validates ownership of all configured containers and volumes. If
+startup is interrupted, retries resume that startup without resetting players
+already recreated for it. The startup journal is stored in the Compose
+`manager_lock` volume; deleting that volume during an interrupted startup loses
+the progress record. Volumes left behind by missing containers are reused
 after checking their ownership labels. Unowned containers and volumes are
 rejected, not deleted. Subsequent reconciliation passes only start stopped
 players or recreate missing or changed ones, also retaining their volumes.

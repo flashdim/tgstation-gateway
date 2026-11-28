@@ -91,20 +91,45 @@ owner_label="io.tgstation-gateway.deployment"
 role_label="io.tgstation-gateway.role"
 slot_label="io.tgstation-gateway.slot"
 
-ensure_volume() {
+volume_exists() {
+    volumes="$(docker volume ls --filter "name=^$1\$" --format '{{.Name}}')" || exit $?
+    [ "$volumes" = "$1" ]
+}
+
+check_volume() {
     volume="$1"
-    if docker volume inspect "$volume" >/dev/null 2>&1; then
-        owner="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.deployment"}}' "$volume")"
-        volume_slot="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.slot"}}' "$volume")"
-        volume_role="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.role"}}' "$volume")"
-        if [ "$owner" != "$deployment" ] || [ "$volume_slot" != "$slot" ] || [ "$volume_role" != "$2" ]; then
-            echo "Refusing to use unowned volume $volume" >&2
-            exit 1
-        fi
-        return
+    owner="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.deployment"}}' "$volume")"
+    volume_slot="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.slot"}}' "$volume")"
+    volume_role="$(docker volume inspect --format '{{index .Labels "io.tgstation-gateway.role"}}' "$volume")"
+    if [ "$owner" != "$deployment" ] || [ "$volume_slot" != "$slot" ] || [ "$volume_role" != "$2" ]; then
+        echo "Refusing to use unowned volume $volume" >&2
+        exit 1
     fi
-    docker volume create --label "$owner_label=$deployment" --label "$slot_label=$slot" \
-        --label "$role_label=$2" "$volume" >/dev/null
+}
+
+validate_volume() {
+    if volume_exists "$1"; then
+        check_volume "$1" "$2"
+    fi
+}
+
+ensure_volume() {
+    if ! volume_exists "$1"; then
+        docker volume create --label "$owner_label=$deployment" --label "$slot_label=$slot" \
+            --label "$role_label=$2" "$1" >/dev/null
+    fi
+    check_volume "$1" "$2"
+}
+
+validate_container() {
+    project="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.project"}}' "$id")"
+    owner="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.deployment"}}' "$id")"
+    role="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.role"}}' "$id")"
+    owned_slot="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.slot"}}' "$id")"
+    if [ "$project" != tgstation-gateway ] || [ "$owner" != "$deployment" ] || [ "$role" != player ] || [ "$owned_slot" != "$slot" ]; then
+        echo "Refusing to modify unowned container $name" >&2
+        exit 1
+    fi
 }
 
 reconcile() {
@@ -125,6 +150,29 @@ reconcile() {
                     echo "Refusing to modify $name with mismatched ownership labels" >&2
                     exit 1
                 fi
+                ;;
+        esac
+    done
+    number=1
+    while [ "$number" -le "$count" ]; do
+        slot="$(printf '%02d' "$number")"
+        name="$deployment-player$slot"
+        id="$(docker container ls -a --no-trunc --filter "name=^/$name\$" --format '{{.ID}}')"
+        if [ -n "$id" ]; then
+            validate_container
+        fi
+        validate_volume "$deployment-player$slot-wine" wine
+        validate_volume "$deployment-player$slot-data" data
+        number=$((number + 1))
+    done
+    for name in $existing; do
+        case "$name" in
+            "$deployment"-player[0-9][0-9])
+                number="${name#"$deployment"-player}"
+                case "$number" in
+                    0[1-9] | [1-9][0-9]) ;;
+                    *) continue ;;
+                esac
                 numeric="${number#0}"
                 if [ "$numeric" -gt "$count" ]; then
                     echo "Removing extra player $name; retaining its volumes"
@@ -139,16 +187,10 @@ reconcile() {
         name="$deployment-player$slot"
         id="$(docker container ls -a --no-trunc --filter "name=^/$name\$" --format '{{.ID}}')"
         if [ -n "$id" ]; then
-            project="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.project"}}' "$id")"
-            owner="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.deployment"}}' "$id")"
-            role="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.role"}}' "$id")"
-            owned_slot="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.slot"}}' "$id")"
-            if [ "$project" != tgstation-gateway ] || [ "$owner" != "$deployment" ] || [ "$role" != player ] || [ "$owned_slot" != "$slot" ]; then
-                echo "Refusing to modify unowned container $name" >&2
-                exit 1
-            fi
+            validate_container
             old_settings="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.settings"}}' "$id")"
-            if [ "$reset_players" = true ]; then
+            old_generation="$(docker inspect --format '{{index .Config.Labels "io.tgstation-gateway.startup-generation"}}' "$id")"
+            if [ "$reset_players" = true ] && [ "$old_generation" != "$generation" ]; then
                 echo "Recreating player $name with retained data after manager startup"
                 docker rm -f "$id" >/dev/null
                 id=""
@@ -185,6 +227,7 @@ reconcile() {
                 --label "$slot_label=$slot" \
                 --label "io.tgstation-gateway.account=LGplayer$slot" \
                 --label "io.tgstation-gateway.settings=$settings" \
+                --label "io.tgstation-gateway.startup-generation=$generation" \
                 --label traefik.enable=true \
                 --label "traefik.docker.network=$network" \
                 --label "traefik.http.routers.$name.rule=Host(\`$host\`) && PathPrefix(\`/LGplayer$slot/\`)" \
@@ -213,9 +256,18 @@ reconcile() {
     done
 }
 
+generation_file=/run/gateway-lock/startup-generation
+if [ ! -f "$generation_file" ]; then
+    cat /proc/sys/kernel/random/uuid >"$generation_file.tmp"
+    mv -f "$generation_file.tmp" "$generation_file"
+fi
+generation="$(cat "$generation_file")"
 reset_players=true
 while :; do
     reconcile
+    if [ "$reset_players" = true ]; then
+        rm -f "$generation_file"
+    fi
     reset_players=false
     sleep 10
 done

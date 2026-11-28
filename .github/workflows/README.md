@@ -57,6 +57,8 @@ The mock player image is pushed to a temporary loopback-only registry so the
 manager exercises its startup pull, including on restarts.
 Restarting the manager must recreate both players and retain markers in their
 Wine and data volumes; subsequent reconciliation must not recreate them again.
+An unowned later-slot container must leave existing players untouched across
+manager retries; unit fixtures also exercise interrupted startup recovery.
 The test verifies the running manager uses the image built for that job. This
 does not exercise Cloudflare or live gameplay.
 
