@@ -62,8 +62,14 @@ key_file="$WINEPREFIX/drive_c/users/steamuser/Documents/BYOND/key.txt"
 if ! python3 "${BYOND_KEY_CHECK:-/usr/local/bin/byond-key-check.py}" "$key_file" "$BYOND_ACCOUNT"; then
     exit 0
 fi
-if pgrep -i -f -u "$EUID" "$game_pattern" >/dev/null; then
+if pgrep -i -x -u "$EUID" dreamseeker.exe >/dev/null; then
     exit 0
+else
+    status=$?
+    if [ "$status" -ne 1 ]; then
+        echo "Failed to check Dream Seeker" >&2
+        exit 75
+    fi
 fi
 
 if [ "${SELKIES_WAYLAND:-false}" = true ]; then
@@ -79,6 +85,31 @@ else
     export DISPLAY="${DISPLAY:-:20}"
 fi
 
-# The lock descriptor must not leak into the long-lived game process.
-setsid wine "$bin_dir/dreamseeker.exe" "byond://$server" 9>&- &
-exit 0
+# The monitor inherits the lock even if its caller is interrupted. Wine must
+# not inherit it, since the game can outlive the monitor.
+(
+    setsid wine "$bin_dir/dreamseeker.exe" "byond://$server" 9>&- &
+    launch_pid=$!
+    for attempt in {1..15}; do
+        if pgrep -i -x -u "$EUID" dreamseeker.exe >/dev/null; then
+            exit 0
+        else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+                break
+            fi
+        fi
+        if ! kill -0 "$launch_pid" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    kill -KILL -- "-$launch_pid" 2>/dev/null || true
+    kill -KILL "$launch_pid" 2>/dev/null || true
+    wait "$launch_pid" 2>/dev/null || true
+    echo "Dream Seeker did not start; retrying on the next viewer poll" >&2
+    exit 75
+) &
+monitor_pid=$!
+exec 9>&-
+wait "$monitor_pid"

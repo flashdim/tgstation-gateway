@@ -650,7 +650,10 @@ Session behavior:
   password and reset again.
 - **Selkies client disconnects:** only Dream Seeker is stopped; the pager stays.
 - **Selkies client connects or reconnects:** only Dream Seeker is started, under
-  the same key check, if it is not already running.
+  the same key check, if it is not already running. Launch attempts hold the
+  session cleanup lock until a Dream Seeker process is observed; a failed or
+  timed-out start is retried while a viewer remains connected. Process
+  observation does not confirm login or connection to the server.
 
 Without `BYOND_SERVER` and `BYOND_ACCOUNT` the pager always starts. An invalid
 `BYOND_SERVER` stops the launcher. The managed deployment and fixed-slot

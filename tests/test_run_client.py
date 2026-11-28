@@ -63,6 +63,8 @@ class RunClientTest(unittest.TestCase):
                 ),
                 "pgrep": (
                     'printf "pgrep %s\\n" "$*" >> "$CLEANUP_LOG"\n'
+                    'if [ "$1" = -i ] && [ "$2" = -x ]; then '
+                    'test -f "$GAME_STARTED"; exit $?; fi\n'
                     'case "$CLEANUP_FAILURE" in pgrep) exit 2;; '
                     "survives) exit 0;; exiting) "
                     'if [ ! -f "$PGREP_SEEN" ]; then touch "$PGREP_SEEN"; '
@@ -115,7 +117,9 @@ class RunClientTest(unittest.TestCase):
                     "  exit $?\n"
                     "fi\n"
                     'printf "launch\\n" >> "$EVENT_LOG"\n'
+                    'case "$1" in */dreamseeker.exe) touch "$GAME_STARTED";; esac\n'
                     'printf "%s\\n" "$DISPLAY" "$@"\n'
+                    'case "$1" in */dreamseeker.exe) /bin/sleep 0.1;; esac\n'
                     'exit "$MOCK_WINE_EXIT_CODE"'
                 ),
             }.items():
@@ -146,6 +150,7 @@ class RunClientTest(unittest.TestCase):
                 "EVENT_LOG": str(root / "event-log"),
                 "CLEANUP_LOG": str(root / "cleanup-log"),
                 "PGREP_SEEN": str(root / "pgrep-seen"),
+                "GAME_STARTED": str(root / "game-started"),
                 "CLEANUP_FAILURE": cleanup_failure or "",
                 "EXPECTED_PREFIX": str(prefix),
                 "FAIL_REGISTRY": fail_registry or "",
@@ -540,6 +545,116 @@ class RunClientTest(unittest.TestCase):
                 finally:
                     process.terminate()
                     process.wait(timeout=5)
+
+
+class GameStartTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        commands = self.root / "bin"
+        commands.mkdir()
+        runtime = self.root / "runtime"
+        runtime.mkdir()
+        prefix = self.root / "prefix"
+        key = prefix / "drive_c/users/steamuser/Documents/BYOND/key.txt"
+        key.parent.mkdir(parents=True)
+        key.write_text("BEGIN KEY LGplayer01\nsecret\nEND KEY\n")
+        (runtime / "container-env").write_text(
+            f"export WINEPREFIX='{prefix}'\n"
+            "export BYOND_SERVER='example.org:1337'\n"
+            "export BYOND_ACCOUNT='LGplayer01'\n"
+        )
+        for name, body in {
+            "pgrep": (
+                'if [ -f "$TEST_ROOT/pgrep-error" ]; then exit 2; fi\n'
+                'test "$1" = -i && test "$2" = -x && test "$3" = -u && '
+                'test "$5" = dreamseeker.exe || exit 2\n'
+                'test -f "$TEST_ROOT/observed"'
+            ),
+            "sleep": "exec /bin/sleep 0.05",
+            "wine": (
+                'test ! -e "/proc/$$/fd/9" || exit 99\n'
+                'echo "$$" >> "$TEST_ROOT/pids"\n'
+                'echo launch >> "$TEST_ROOT/launches"\n'
+                'if [ -f "$TEST_ROOT/fail" ]; then exit 42; fi\n'
+                'while [ ! -f "$TEST_ROOT/ready" ]; do /bin/sleep 0.05; done\n'
+                'touch "$TEST_ROOT/observed"\n'
+                "exec /bin/sleep 30"
+            ),
+        }.items():
+            path = commands / name
+            path.write_text(f"#!/bin/sh\n{body}\n")
+            path.chmod(0o755)
+        self.env = {
+            **os.environ,
+            "PATH": f"{commands}:{os.environ['PATH']}",
+            "XDG_RUNTIME_DIR": str(runtime),
+            "TEST_ROOT": str(self.root),
+            "BYOND_KEY_CHECK": str(ROOT / "container/byond-key-check.py"),
+        }
+        self.addCleanup(self.stop_games)
+
+    def stop_games(self):
+        pids = self.root / "pids"
+        if pids.exists():
+            for pid in pids.read_text().splitlines():
+                subprocess.run(
+                    ["kill", "-KILL", pid],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+    def start(self):
+        return subprocess.Popen(
+            ["bash", str(ROOT / "container/byond-game.sh"), "start"],
+            env=self.env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def wait_for(self, path):
+        deadline = time.monotonic() + 5
+        while not path.exists():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+
+    def test_failed_launch_is_retryable(self):
+        (self.root / "fail").touch()
+        failed = self.start()
+        self.assertEqual(failed.wait(timeout=5), 75)
+        (self.root / "fail").unlink()
+        (self.root / "ready").touch()
+        retry = self.start()
+        self.assertEqual(retry.wait(timeout=5), 0)
+        self.assertEqual((self.root / "launches").read_text().count("launch"), 2)
+
+    def test_timeout_cancels_pending_launch(self):
+        failed = self.start()
+        self.assertEqual(failed.wait(timeout=5), 75)
+        (self.root / "ready").touch()
+        time.sleep(0.2)
+        self.assertFalse((self.root / "observed").exists())
+        retry = self.start()
+        self.assertEqual(retry.wait(timeout=5), 0)
+
+    def test_process_lookup_error_does_not_launch(self):
+        (self.root / "pgrep-error").touch()
+        self.assertEqual(self.start().wait(timeout=5), 75)
+        self.assertFalse((self.root / "launches").exists())
+
+    def test_concurrent_start_waits_for_interrupted_callers_monitor(self):
+        first = self.start()
+        self.wait_for(self.root / "launches")
+        first.kill()
+        first.wait(timeout=5)
+        second = self.start()
+        time.sleep(0.15)
+        self.assertIsNone(second.poll())
+        self.assertEqual((self.root / "launches").read_text().count("launch"), 1)
+        (self.root / "ready").touch()
+        self.assertEqual(second.wait(timeout=5), 0)
+        self.assertEqual((self.root / "launches").read_text().count("launch"), 1)
 
 
 if __name__ == "__main__":
