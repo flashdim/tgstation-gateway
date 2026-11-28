@@ -26,11 +26,16 @@ class ComposeTest(unittest.TestCase):
             "BYOND_SERVER": "tgstation:1337",
             "GATEWAY_MANAGER_IMAGE": "ghcr.io/flashdim/tgstation-gateway-manager:latest",
             "GATEWAY_MANAGER_GPU": "false",
+            "GATEWAY_IMAGE_POLICY": "pull",
             "DRI_RENDER_GID": "",
         }
 
     def test_compose_uses_one_manager_and_no_static_players(self):
-        self.env.update(GATEWAY_MANAGER_GPU="true", DRI_RENDER_GID="123")
+        self.env.update(
+            GATEWAY_MANAGER_GPU="true",
+            DRI_RENDER_GID="123",
+            GATEWAY_IMAGE_POLICY="local",
+        )
         result = subprocess.run(
             ["docker", "compose", "-f", str(COMPOSE), "config", "--format", "json"],
             env=self.env,
@@ -74,6 +79,9 @@ class ComposeTest(unittest.TestCase):
             services["manager"]["environment"]["GATEWAY_MANAGER_GPU"], "true"
         )
         self.assertEqual(services["manager"]["environment"]["DRI_RENDER_GID"], "123")
+        self.assertEqual(
+            services["manager"]["environment"]["GATEWAY_IMAGE_POLICY"], "local"
+        )
         self.assertNotIn("devices", services["manager"])
         self.assertNotIn("devices", services["landing"])
 
@@ -129,6 +137,7 @@ class ComposeTest(unittest.TestCase):
             ("GATEWAY_TRAEFIK_ENTRYPOINT", "https,other"),
             ("GATEWAY_TRAEFIK_NETWORK", "bad network"),
             ("GATEWAY_MANAGER_GPU", "invalid"),
+            ("GATEWAY_IMAGE_POLICY", "invalid"),
         ):
             result = subprocess.run(
                 ["sh", str(ROOT / "examples/slot-manager.sh")],
@@ -138,6 +147,84 @@ class ComposeTest(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
+
+    def test_manager_image_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace(
+                "/run/gateway-lock/startup-generation", str(root / "generation")
+            )
+            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            (root / "manager.sh").write_text(script)
+            (root / "seccomp").write_text("{}")
+            docker = root / "docker"
+            docker.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$*" >> "$EVENTS"\n'
+                'case "$1 $2" in\n'
+                '  "pull "*) [ "$FAIL_PULL" != true ] || exit 41 ;;\n'
+                '  "image inspect") [ "$MISSING_IMAGE" != true ] || exit 42; echo sha256:fixture ;;\n'
+                '  "volume inspect") case "$4" in *deployment*) echo gatewaytest;; '
+                '*slot*) echo 01;; *role*) case "$5" in *wine) echo wine;; *) echo data;; esac;; esac ;;\n'
+                '  "run -d") exit 43 ;;\n'
+                "esac\n"
+            )
+            docker.chmod(0o755)
+            for policy, fail_pull, missing, expected in (
+                (None, "false", "false", 43),
+                ("local", "true", "false", 43),
+                ("local", "false", "true", 1),
+                ("pull", "true", "false", 41),
+                ("pull", "false", "false", 43),
+            ):
+                with self.subTest(policy=policy, fail_pull=fail_pull, missing=missing):
+                    events = root / "events"
+                    events.unlink(missing_ok=True)
+                    env = {
+                        **self.env,
+                        "PATH": f"{root}:{os.environ['PATH']}",
+                        "EVENTS": str(events),
+                        "GATEWAY_SLOT_COUNT": "1",
+                        "GATEWAY_IMAGE": "private.example/player:local",
+                        "FAIL_PULL": fail_pull,
+                        "MISSING_IMAGE": missing,
+                    }
+                    if policy is None:
+                        env.pop("GATEWAY_IMAGE_POLICY")
+                    else:
+                        env["GATEWAY_IMAGE_POLICY"] = policy
+                    result = subprocess.run(
+                        ["sh", str(root / "manager.sh")],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    calls = events.read_text().splitlines()
+                    self.assertEqual(
+                        any(call.startswith("pull ") for call in calls),
+                        policy != "local",
+                    )
+                    if missing == "true":
+                        self.assertIn(
+                            "Player image is unavailable locally", result.stderr
+                        )
+                        self.assertFalse(
+                            any(call.startswith("container ls") for call in calls)
+                        )
+                    if expected == 43:
+                        self.assertTrue(
+                            any(
+                                call.startswith("run -d ")
+                                and call.endswith("sha256:fixture")
+                                for call in calls
+                            )
+                        )
 
     def test_manager_recreates_players_on_startup_preserving_volumes(self):
         with tempfile.TemporaryDirectory() as directory:

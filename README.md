@@ -294,8 +294,16 @@ and data volumes until those slots are configured again. It
 refuses containers or volumes with conflicting ownership labels. Changing the
 BYOND server, player image, network, hostname or Traefik entrypoint recreates
 the affected player containers.
-The manager pulls the configured player image on every startup; restart it to
-update an existing image tag. The registry must be reachable and accessible.
+By default (`GATEWAY_IMAGE_POLICY=pull`), the manager pulls the configured
+player image on every startup; restart it to update an existing image tag. The
+registry must be reachable and accessible to the manager, which does not
+automatically use the host's Docker login credentials. To use a locally built
+or privately pre-pulled image instead, build or pull it on the Docker host,
+set `GATEWAY_IMAGE` to its exact local tag or digest and set
+`GATEWAY_IMAGE_POLICY=local` before running Compose. In local mode the manager
+never pulls and fails before changing players if the image is missing. To
+update it, build or pull the new image on the host and restart the manager.
+Ensure the host image supports `linux/amd64`, as required by managed players.
 **A new manager startup recreates all configured owned player containers,
 retaining their Wine and data volumes.** This interrupts active sessions but
 preserves saved logins, settings and player data. Before making changes, the

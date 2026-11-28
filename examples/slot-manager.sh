@@ -7,6 +7,7 @@ network="${GATEWAY_TRAEFIK_NETWORK:-public}"
 entrypoint="${GATEWAY_TRAEFIK_ENTRYPOINT:-https}"
 host="${GATEWAY_PLAY_HOST:?GATEWAY_PLAY_HOST is required}"
 image="${GATEWAY_IMAGE:-ghcr.io/flashdim/tgstation-gateway:latest}"
+image_policy="${GATEWAY_IMAGE_POLICY:-pull}"
 server="${BYOND_SERVER:?BYOND_SERVER is required}"
 wayland="${SELKIES_WAYLAND:-true}"
 gpu="${GATEWAY_MANAGER_GPU:-false}"
@@ -48,6 +49,13 @@ case "$wayland" in
         exit 1
         ;;
 esac
+case "$image_policy" in
+    pull | local) ;;
+    *)
+        echo "GATEWAY_IMAGE_POLICY must be pull or local" >&2
+        exit 1
+        ;;
+esac
 case "$gpu" in
     true)
         if [ -z "$render_gid" ]; then
@@ -78,9 +86,14 @@ if ! flock -n 9; then
 fi
 docker info >/dev/null
 docker network inspect "$network" >/dev/null
-docker pull "$image"
+if [ "$image_policy" = pull ]; then
+    docker pull "$image"
+fi
 
-image_id="$(docker image inspect --format '{{.Id}}' "$image")"
+if ! image_id="$(docker image inspect --format '{{.Id}}' "$image")"; then
+    echo "Player image is unavailable locally: $image" >&2
+    exit 1
+fi
 profile_hash="$(sha256sum /opt/gateway/seccomp.json | cut -d ' ' -f 1)"
 settings="$(
     printf '%s\n' v4 "$image_id" "$server" "$network" "$wayland" "$profile_hash" "$host" "$entrypoint" "$gpu" "$render_gid" |
