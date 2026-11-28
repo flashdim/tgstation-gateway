@@ -119,6 +119,16 @@ class ComposeTest(unittest.TestCase):
         self.assertEqual(manager_env["SELKIES_MANUAL_WIDTH"], "1280")
 
     def test_manager_forwards_selkies_environment_and_hashes_values(self):
+        self.check_manager_selkies_environment()
+
+    @unittest.skipUnless(
+        os.environ.get("GATEWAY_TEST_MANAGER_IMAGE"),
+        "Set GATEWAY_TEST_MANAGER_IMAGE to test the manager image utilities",
+    )
+    def test_manager_image_forwards_selkies_environment_and_hashes_values(self):
+        self.check_manager_selkies_environment(os.environ["GATEWAY_TEST_MANAGER_IMAGE"])
+
+    def check_manager_selkies_environment(self, image=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = (ROOT / "examples/slot-manager.sh").read_text()
@@ -157,9 +167,31 @@ class ComposeTest(unittest.TestCase):
             }
 
             def run():
+                command = ["sh", str(root / "manager.sh")]
+                if image:
+                    command = [
+                        "docker",
+                        "run",
+                        "--rm",
+                        "--network",
+                        "none",
+                        "--entrypoint",
+                        "sh",
+                        "-v",
+                        f"{root}:{root}",
+                        "-e",
+                        f"PATH={root}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    ]
+                    for key, value in env.items():
+                        if key not in os.environ or key.startswith(
+                            ("GATEWAY_", "BYOND_", "SELKIES_", "DRI_")
+                        ):
+                            if key != "PATH":
+                                command.extend(["-e", f"{key}={value}"])
+                    command.extend([image, str(root / "manager.sh")])
                 result = subprocess.run(
-                    ["sh", str(root / "manager.sh")],
-                    env=env,
+                    command,
+                    env=os.environ if image else env,
                     capture_output=True,
                     text=True,
                     timeout=5,
