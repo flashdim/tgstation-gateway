@@ -98,6 +98,97 @@ class ComposeTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(key, result.stderr)
 
+    def test_manager_compose_selkies_defaults_and_overrides(self):
+        self.env.update(SELKIES_UI_TITLE="Custom title", SELKIES_MANUAL_WIDTH="1280")
+        configs = []
+        for compose in (COMPOSE, ROOT / "examples/compose.yaml"):
+            result = subprocess.run(
+                ["docker", "compose", "-f", str(compose), "config", "--format", "json"],
+                env=self.env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            services = json.loads(result.stdout)["services"]
+            configs.append(services["manager" if compose == COMPOSE else "player"])
+        manager_env, player_env = (service["environment"] for service in configs)
+        for key, value in player_env.items():
+            if key.startswith("SELKIES_"):
+                self.assertEqual(manager_env.get(key), value, key)
+        self.assertEqual(manager_env["SELKIES_UI_TITLE"], "Custom title")
+        self.assertEqual(manager_env["SELKIES_MANUAL_WIDTH"], "1280")
+
+    def test_manager_forwards_selkies_environment_and_hashes_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = (ROOT / "examples/slot-manager.sh").read_text()
+            script = script.replace(
+                "/run/gateway-lock/manager.lock", str(root / "lock")
+            )
+            script = script.replace(
+                "/run/gateway-lock/startup-generation", str(root / "generation")
+            )
+            script = script.replace("/opt/gateway/seccomp.json", str(root / "seccomp"))
+            (root / "manager.sh").write_text(script)
+            (root / "seccomp").write_text("{}")
+            docker = root / "docker"
+            docker.write_text(
+                "#!/bin/sh\n"
+                'case "$1 $2" in\n'
+                '  "image inspect") echo sha256:fixture ;;\n'
+                '  "volume inspect") case "$4" in *deployment*) echo gatewaytest;; '
+                '*slot*) echo 01;; *role*) case "$5" in *wine) echo wine;; *byond) echo byond;; *) echo data;; esac;; esac ;;\n'
+                '  "run -d") printf "%s\\0" "$@" > "$ARGS"; '
+                'printenv SELKIES_CUSTOM > "$VALUE"; exit 43 ;;\n'
+                "esac\n"
+            )
+            docker.chmod(0o755)
+            env = {
+                **self.env,
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "ARGS": str(root / "args"),
+                "VALUE": str(root / "value"),
+                "GATEWAY_SLOT_COUNT": "1",
+                "GATEWAY_IMAGE_POLICY": "local",
+                "SELKIES_CUSTOM": "value with spaces\nSELKIES_FAKE=injected",
+                "SELKIES_EMPTY": "",
+                "SELKIES_SUBFOLDER": "/wrong/",
+                "UNRELATED_SETTING": "ignored",
+            }
+
+            def run():
+                result = subprocess.run(
+                    ["sh", str(root / "manager.sh")],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 43, result.stderr)
+                args = (root / "args").read_bytes().decode().split("\0")[:-1]
+                settings = next(
+                    arg
+                    for arg in args
+                    if arg.startswith("io.tgstation-gateway.settings=")
+                )
+                return args, settings
+
+            args, settings = run()
+            self.assertEqual(
+                (root / "value").read_text(),
+                "value with spaces\nSELKIES_FAKE=injected\n",
+            )
+            self.assertIn("SELKIES_CUSTOM", args)
+            self.assertIn("SELKIES_EMPTY", args)
+            self.assertNotIn("SELKIES_FAKE", args)
+            self.assertNotIn("UNRELATED_SETTING", args)
+            self.assertNotIn("SELKIES_SUBFOLDER", args)
+            self.assertIn("SELKIES_SUBFOLDER=/LGplayer01/", args)
+            env["SELKIES_SUBFOLDER"] = "/another/"
+            self.assertEqual(run()[1], settings)
+            env["SELKIES_CUSTOM"] = "changed"
+            self.assertNotEqual(run()[1], settings)
+
     def test_gpu_override_mounts_metadata_only_in_manager(self):
         result = subprocess.run(
             [

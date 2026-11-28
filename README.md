@@ -316,7 +316,17 @@ after checking their ownership labels. Unowned containers and volumes are
 rejected, not deleted. Subsequent reconciliation passes only start stopped
 players or recreate missing or changed ones, also retaining their volumes.
 Managed players use WebSocket mode, the project's seccomp profile, and fixed
-resource limits. Container startup does not establish playable sessions.
+resource limits by default. The manager forwards its `SELKIES_` environment
+variables to every player; the Compose example supplies the same defaults as
+the standalone player. Set these in the shell or Compose `.env` file and rerun
+`docker compose -f examples/compose.traefik.yaml up -d` to apply changes;
+players are recreated with their data retained. For additional Selkies settings,
+add them to the manager service's environment in a Compose override. The
+manager always assigns `SELKIES_SUBFOLDER` per slot, ignoring any supplied
+value, so Traefik routing and health checks remain aligned. Changing streaming
+settings or enabling devices and file transfer may require additional proxy
+configuration and security review. Container startup does not establish
+playable sessions.
 
 Log in once through each player's desktop using its intended BYOND account
 (`LGplayer01`, `LGplayer02`, etc.). If the pager starts as Guest, use **Logout**
